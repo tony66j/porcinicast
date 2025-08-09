@@ -3,38 +3,36 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>TrovaPorcini v0.96 – by Antonio Pio D’Aloia</title>
+<title>TrovaPorcini v0.97 – by Antonio Pio D’Aloia</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
-  :root { --bg:#0f1720; --panel:#17212b; --txt:#e7f0f6; --muted:#9ab0bf; --acc:#2ecc71; --warn:#f1c40f; --bad:#e74c3c;}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;}
-  .wrap{max-width:1180px;margin:0 auto;padding:16px;}
-  .hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-  .logo{font-size:28px}
-  .badge{background:#203040;color:#9fd; border-radius:6px;padding:3px 8px;margin-left:8px}
-  .by{margin-left:auto;color:var(--muted);font-size:14px}
-  .card{background:var(--panel);border-radius:10px;padding:14px;margin:10px 0}
-  .row{display:grid;grid-template-columns:1fr 1fr; gap:12px}
-  .lab{font-size:14px;color:var(--muted);margin-bottom:6px}
-  input{width:100%;padding:10px;border-radius:8px;border:1px solid #2a3b4a;background:#0c141b;color:var(--txt)}
-  .btn{background:var(--acc);color:#003014;border:0;border-radius:8px;padding:10px 14px;cursor:pointer;font-weight:600}
-  .btn.muted{background:#25374a;color:#cfe}
-  .pill{display:inline-block;background:#0c141b;border:1px solid #2b3e4c;border-radius:999px;padding:6px 10px;margin:4px 4px 0 0;color:#bfe}
-  .grid2{display:grid;grid-template-columns:1.1fr 1fr; gap:14px}
-  .score{font-size:44px;font-weight:700;margin:6px 0}
-  .dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:8px}
-  .good{background:var(--acc)} .mid{background:var(--warn)} .bad{background:var(--bad)}
-  #map{height:520px;border-radius:10px;overflow:hidden}
-  .sec-h{font-weight:700;margin:12px 0 6px}
-  .small{color:var(--muted);font-size:13px}
-  .split{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .slider{width:100%}
+:root{--bg:#0e141b;--panel:#16202a;--txt:#eaf3fa;--mut:#99aebb;--acc:#2ecc71;--warn:#f1c40f;--bad:#e74c3c}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+.hdr{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.logo{font-size:28px} .badge{background:#203243;color:#9ef;border-radius:6px;padding:3px 8px;margin-left:8px}
+.by{margin-left:auto;color:var(--mut)}
+.card{background:var(--panel);border-radius:10px;padding:14px;margin:10px 0}
+.row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.lab{font-size:13px;color:var(--mut);margin-bottom:6px}
+input{width:100%;padding:10px;border-radius:8px;border:1px solid #2a3a48;background:#0b1218;color:var(--txt)}
+.btn{background:var(--acc);color:#012; border:0;border-radius:8px;padding:10px 14px;cursor:pointer;font-weight:600}
+.btn.muted{background:#263748;color:#dfe}
+.grid2{display:grid;grid-template-columns:1.1fr 1fr; gap:14px}
+.score{font-size:44px;font-weight:800;margin:6px 0}
+.small{color:var(--mut);font-size:13px}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:8px}
+.good{background:var(--acc)} .mid{background:var(--warn)} .bad{background:var(--bad)}
+#map{height:520px;border-radius:10px;overflow:hidden}
+.pill{display:inline-block;background:#0b1218;border:1px solid #2b3e4c;border-radius:999px;padding:6px 10px;margin:4px 4px 0 0;color:#bfe}
+.slider{width:100%}
+canvas{background:#0b1218;border:1px solid #2a3b4a;border-radius:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="hdr">
-    <div class="logo">🍄 TrovaPorcini <span class="badge">v0.96</span></div>
+    <div class="logo">🍄 TrovaPorcini <span class="badge">v0.97</span></div>
     <div class="by">by <strong>Antonio Pio D’Aloia</strong></div>
   </div>
 
@@ -42,172 +40,215 @@
     <div class="row">
       <div>
         <div class="lab">Località</div>
-        <input id="place" placeholder="es. Bocca della Selva"/>
+        <input id="place" placeholder="es. Bocca della Selva">
       </div>
       <div>
-        <div class="lab">Coordinate (lat,lon – accetta formato Google, virgole decimali)</div>
-        <input id="coords" placeholder="es. 41,4170010, 14,4707168"/>
+        <div class="lab">Coordinate (lat,lon – anche formato Google con virgole decimali)</div>
+        <input id="coords" placeholder="es. 41,4170010, 14,4707168">
+      </div>
+      <div>
+        <div class="lab">Confronta con (opzionale: località o coordinate)</div>
+        <input id="compare" placeholder="es. 41.3, 14.55 oppure nome località">
       </div>
     </div>
-    <div class="split" style="margin-top:10px">
+    <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
       <button class="btn" id="go">Calcola idoneità</button>
       <button class="btn muted" id="clr">Pulisci</button>
-      <span class="small">La barra coordinate ha priorità se compilata.</span>
+      <span class="small">Se inserisci le coordinate, hanno priorità sulla località.</span>
     </div>
   </div>
 
   <div class="grid2">
     <div class="card">
-      <div class="split">
-        <div id="dot" class="dot mid"></div>
-        <div class="small">Indice oggi</div>
-      </div>
+      <div class="small" id="loclabel">—</div>
+      <div style="display:flex;gap:10px;align-items:center"><div id="dot" class="dot mid"></div><div class="small">Indice <span id="daylab">oggi</span></div></div>
       <div class="score" id="score">–</div>
+      <div class="small" id="verdict">–</div>
+      <div class="pill" id="kgpill">Stima 3h: –</div>
 
-      <div class="split small" style="margin:6px 0 10px">
-        <div id="verdict">–</div>
-        <span id="kg" class="pill" title="stima prudente kg in 3h">kg 3h: –</span>
+      <div style="margin-top:8px" class="small">Previsione (10 giorni)</div>
+      <input type="range" class="slider" min="0" max="9" value="0" id="day">
+      <div class="small">Finestra migliore (3 gg): <span id="bestwin">–</span></div>
+
+      <details open style="margin-top:8px">
+        <summary><strong>Consigli pratici</strong> (dipendono dal giorno)</summary>
+        <div class="small" id="tips">–</div>
+      </details>
+
+      <details style="margin-top:8px">
+        <summary><strong>Perché questa stima</strong></summary>
+        <div class="small" id="why">–</div>
+      </details>
+
+      <details style="margin-top:8px">
+        <summary><strong>Specie di porcini probabili</strong></summary>
+        <div class="small" id="species">–</div>
+      </details>
+
+      <details style="margin-top:8px">
+        <summary><strong>Dati tecnici</strong></summary>
+        <div class="small" id="tech">–</div>
+      </details>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+        <div>
+          <div class="small">Score prossimi 10 gg</div>
+          <canvas id="chartScore" width="520" height="120"></canvas>
+        </div>
+        <div>
+          <div class="small">Pioggia (mm) prossimi 10 gg</div>
+          <canvas id="chartRain" width="520" height="120"></canvas>
+        </div>
       </div>
-
-      <div class="sec-h">Previsione (prossimi 10 giorni)</div>
-      <input type="range" min="0" max="9" value="0" class="slider" id="day"/>
-      <div class="small">Giorno selezionato: <span id="daylab">oggi</span> · Finestra migliore (3 gg): <span id="bestwin">–</span></div>
-
-      <details open style="margin-top:10px">
-        <summary class="sec-h">Consigli pratici (dipendono dalle condizioni)</summary>
-        <div id="tips" class="small">–</div>
-      </details>
-
-      <details style="margin-top:10px">
-        <summary class="sec-h">Specie di porcini probabili</summary>
-        <div id="species" class="small">–</div>
-      </details>
-
-      <details style="margin-top:10px">
-        <summary class="sec-h">Perché questa stima</summary>
-        <div id="why" class="small">–</div>
-      </details>
-
-      <details style="margin-top:10px">
-        <summary class="sec-h">Dati tecnici</summary>
-        <div id="tech" class="small">–</div>
-      </details>
     </div>
 
     <div class="card">
       <div id="map"></div>
-      <div class="small" style="margin-top:6px">Mappa solo Italia; il cerchio cambia colore in base al giorno selezionato. <span id="metanote"></span></div>
+      <div class="small" style="margin-top:6px">Mappa centrata Italia; cerchio colorato = indice del giorno selezionato. Attiva heatmap locale: <button class="btn muted" id="heatbtn" style="padding:4px 8px">ON/OFF</button></div>
+      <div class="small" id="comp" style="margin-top:6px">—</div>
     </div>
   </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 <script>
-const api = (p)=> fetch(p).then(r=>{ if(!r.ok) throw new Error("API "+r.status); return r.json(); });
+const api = (p)=>fetch(p).then(r=>{if(!r.ok)throw new Error("API "+r.status);return r.json();});
 
 function parseCoords(txt){
   if(!txt) return null;
-  // accetta "41,4170010, 14,4707168" (Google) oppure "41.4170010,14.4707168"
-  let s = txt.trim()
-    .replace(/;/g,",")
-    .replace(/\s+/g," ")
-    .replace(/^lat\s*[:=]\s*/i,"").replace(/^lon\s*[:=]\s*/i,""); // pulizia
-  // se ci sono due virgole e nessun punto, sostituisci la prima virgola decimale con punto
-  // e lascia la virgola come separatore
-  // più robusto: prendi i primi due numeri (accetta , o . come decimali)
-  let nums = s.match(/-?\d+[.,]?\d*/g);
-  if(!nums || nums.length<2) return null;
-  let lat = nums[0].replace(",",".");
-  let lon = nums[1].replace(",",".");
-  let la = parseFloat(lat), lo = parseFloat(lon);
-  if(Number.isNaN(la)||Number.isNaN(lo)) return null;
-  return {lat:la, lon:lo};
+  const nums=(txt.replace(/;/g,',').match(/-?\d+[.,]?\d*/g)||[]);
+  if(nums.length<2) return null;
+  const lat=parseFloat(nums[0].replace(',','.'));
+  const lon=parseFloat(nums[1].replace(',','.'));
+  if(Number.isNaN(lat)||Number.isNaN(lon)) return null;
+  return {lat,lon};
 }
 
-async function geocode(q){
-  const j = await api(`/api/geocode?q=${encodeURIComponent(q)}`);
-  if(!j || j.lat===undefined) throw new Error("Località non trovata");
-  return {lat:j.lat, lon:j.lon, display:j.display};
+async function resolvePlaceOrCoords(str){
+  const c=parseCoords(str);
+  if(c) return {...c, display:null};
+  const g=await api(`/api/geocode?q=${encodeURIComponent(str)}`);
+  if(!g||g.lat===undefined) throw new Error("Località non trovata");
+  return {lat:g.lat, lon:g.lon, display:g.display};
 }
 
-let map, marker, ring;
+let map, marker, ring, heat, last;
 function initMap(){
-  map = L.map('map',{scrollWheelZoom:true}).setView([42.0, 13.5], 6);
-  // limiti Italia
-  const b = L.latLngBounds([35.2,6.5],[47.3,18.8]);
-  map.setMaxBounds(b); map.on('drag', ()=> map.panInsideBounds(b,{animate:false}));
+  map=L.map('map').setView([42,13.5],6);
+  const bounds=L.latLngBounds([35.2,6.5],[47.3,18.8]);
+  map.setMaxBounds(bounds); map.on('drag',()=>map.panInsideBounds(bounds,{animate:false}));
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:16}).addTo(map);
 }
 
-function setPoint(lat,lon, color="#f1c40f"){
-  if(!marker){ marker=L.marker([lat,lon]).addTo(map); }
-  else marker.setLatLng([lat,lon]);
-  if(!ring){ ring=L.circle([lat,lon],{radius:1200,color:color,fillColor:color,fillOpacity:0.15}).addTo(map); }
-  else { ring.setLatLng([lat,lon]); ring.setStyle({color:color,fillColor:color}); }
-  map.setView([lat,lon], 12, {animate:true});
+function setPoint(lat,lon,color){
+  if(!marker) marker=L.marker([lat,lon]).addTo(map); else marker.setLatLng([lat,lon]);
+  if(!ring) ring=L.circle([lat,lon],{radius:1200,color,fillColor:color,fillOpacity:0.15}).addTo(map);
+  else { ring.setLatLng([lat,lon]); ring.setStyle({color,fillColor:color}); }
+  map.setView([lat,lon],12,{animate:true});
 }
 
 function verdict(score){
-  if(score>=70) return {txt:"Consigliato oggi", cls:"good"};
-  if(score>=45) return {txt:"Possibile", cls:"mid"};
-  return {txt:"Sconsigliato oggi", cls:"bad"};
+  if(score>=70) return {txt:"Consigliato", cls:"good", col:"#2ecc71"};
+  if(score>=45) return {txt:"Possibile", cls:"mid", col:"#f1c40f"};
+  return {txt:"Sconsigliato", cls:"bad", col:"#e74c3c"};
 }
 
-function dayLabel(v){ return v==0 ? "oggi" : `D+${v}` }
+function drawLine(canvasId, arr, color){
+  const c=document.getElementById(canvasId); const ctx=c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  const w=c.width, h=c.height, n=arr.length;
+  const min=Math.min(...arr), max=Math.max(...arr);
+  const sx=w/(n-1||1), range=(max-min)||1;
+  ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2;
+  arr.forEach((v,i)=>{const x=i*sx, y=h-8-(h-16)*(v-min)/range; if(i==0)ctx.moveTo(x,y); else ctx.lineTo(x,y);});
+  ctx.stroke();
+  ctx.fillStyle="#89a"; ctx.font="11px system-ui"; ctx.fillText(min+"",4,h-4); ctx.fillText(max+"",4,12);
+}
 
-async function run(){
-  try{
-    document.getElementById('go').disabled = true;
-    let lat, lon, disp=null;
-    const coords = parseCoords(document.getElementById('coords').value);
-    if(coords){ lat=coords.lat; lon=coords.lon; }
-    else{
-      const q = document.getElementById('place').value.trim();
-      if(!q) { alert("Inserisci località o coordinate"); return; }
-      const g = await geocode(q); lat=g.lat; lon=g.lon; disp=g.display;
-    }
-    let day = parseInt(document.getElementById('day').value,10) || 0;
-    const j = await api(`/api/score?lat=${lat}&lon=${lon}&day=${day}`);
-
-    const sc = j.score_selected ?? j.score_today ?? 0;
-    const v = verdict(sc);
-    document.getElementById('dot').className = "dot "+v.cls;
-    document.getElementById('score').textContent = sc;
-    document.getElementById('verdict').textContent = v.txt;
-    document.getElementById('kg').textContent = `kg 3h: ${j.kg_estimate_3h} (${j.kg_note})`;
-
-    const bw = j.best_window ? `D+${j.best_window.start} → D+${j.best_window.end} (media ${j.best_window.mean})` : "–";
-    document.getElementById('bestwin').textContent = bw;
-
-    const dlab = dayLabel(day);
-    document.getElementById('daylab').textContent = dlab;
-
-    const tip = (j.tips||"–");
-    document.getElementById('tips').textContent = tip + (j.window_note? " · "+j.window_note : "");
-
-    document.getElementById('species').textContent = (j.species_probable||[]).join(", ") || "–";
-    document.getElementById('why').textContent = j.why || "–";
-
-    const tech = `P14: ${j.tech?.P14_mm??"–"} mm · Tmean7: ${j.tech?.Tmean7_C??"–"} °C · pendenza: ${j.slope_deg??"–"}° · esposizione: ${j.aspect_octant??"–"} · quota: ${Math.round(j.elevation_m??0)} m · ultima pioggia: ${j.last_rain_days??"–"} gg · prossima pioggia (5 gg): ${j.next_rain_mm_5d??"–"} mm`;
-    document.getElementById('tech').textContent = tech;
-
-    const col = sc>=70 ? "#2ecc71" : (sc>=45 ? "#f1c40f" : "#e74c3c");
-    setPoint(j.elevation_m? (disp? lat:lat) : lat, lon, col);
-    document.getElementById('metanote').textContent = disp ? `Località: ${disp}` : "";
-  }catch(e){
-    alert("Errore: "+e.message);
-    console.error(e);
-  }finally{
-    document.getElementById('go').disabled = false;
+function buildHeat(lat,lon,score){
+  // heat locale sintetica attorno al punto (non chiamiamo altre API)
+  const pts=[]; const r=0.06; // ~6 km
+  for(let a=0;a<360;a+=12){
+    const rad=a*Math.PI/180, d= r*(0.5+Math.random()*0.5);
+    pts.push([lat+ Math.cos(rad)*d, lon+ Math.sin(rad)*d, Math.max(0.1,score/100)]);
   }
+  if(heat) { map.removeLayer(heat); heat=null; }
+  heat=L.heatLayer(pts,{radius:18, blur:22});
 }
 
-document.getElementById('go').addEventListener('click', run);
-document.getElementById('clr').addEventListener('click', ()=>{
-  document.getElementById('place').value="";
-  document.getElementById('coords').value="";
+function updateUI(res, day){
+  last={...last, res, day}; // cache
+  const sc = res.scores_next10[day];
+  const v = verdict(sc);
+  document.getElementById('dot').className="dot "+v.cls;
+  document.getElementById('score').textContent=sc;
+  document.getElementById('verdict').textContent=v.txt;
+  document.getElementById('daylab').textContent = day===0? "oggi" : `D+${day}`;
+  document.getElementById('kgpill').textContent = `Stima 3h: ${res.kg10[day]} kg (${res.kg_note10[day]})`;
+  document.getElementById('bestwin').textContent = `D+${res.best_window.start} → D+${res.best_window.end} (media ${res.best_window.mean})`;
+  document.getElementById('tips').textContent = res.tips10[day];
+  document.getElementById('why').textContent  = res.why10[day] + `; ultima pioggia ~${res.last_rain_days} gg fa; prossima (5 gg): ${res.next_rain_mm_5d} mm`;
+  document.getElementById('species').textContent = (res.species_probable||[]).join(", ") || "–";
+  const tech = `quota ${Math.round(res.elevation_m)} m · pendenza ${res.slope_deg}° · esposizione ${res.aspect_octant} · P14 ultimi 14g ~${(res.series.precip_past14||[]).reduce((a,b)=>a+b,0).toFixed(1)} mm`;
+  document.getElementById('tech').textContent = tech;
+  drawLine('chartScore', res.scores_next10, v.col);
+  drawLine('chartRain',  res.series.precip_next10, '#4aa3ff');
+}
+
+async function fetchAll(mainStr, compareStr){
+  const A = await resolvePlaceOrCoords(mainStr);
+  document.getElementById('loclabel').textContent=A.display? A.display : `(${A.lat.toFixed(4)}, ${A.lon.toFixed(4)})`;
+  const resA = await api(`/api/score?lat=${A.lat}&lon=${A.lon}&day=0`);
+  const day = parseInt(document.getElementById('day').value,10)||0;
+  updateUI(resA, day);
+  const col = verdict(resA.scores_next10[day]).col;
+  setPoint(A.lat, A.lon, col);
+  if(document.getElementById('heatbtn').dataset.on==="1") buildHeat(A.lat,A.lon,resA.scores_next10[day]);
+
+  // confronto opzionale
+  const cmpEl=document.getElementById('comp');
+  if(compareStr && compareStr.trim()){
+    const B = await resolvePlaceOrCoords(compareStr);
+    const resB = await api(`/api/score?lat=${B.lat}&lon=${B.lon}&day=${day}`);
+    const sA=resA.scores_next10[day], sB=resB.scores_next10[day];
+    const better = sA===sB ? "Simili" : (sA>sB? "Meglio qui" : "Meglio seconda località");
+    cmpEl.textContent = `Confronto D+${day}: qui=${sA} vs altrove=${sB} → ${better}. Stima 3h: ${resA.kg10[day]} kg vs ${resB.kg10[day]} kg.`;
+  } else cmpEl.textContent="—";
+  return resA;
+}
+
+// ---- events
+let heatOn=false;
+document.getElementById('heatbtn').addEventListener('click',()=>{
+  heatOn=!heatOn; document.getElementById('heatbtn').dataset.on=heatOn?"1":"0";
+  if(!heatOn && heat){ map.removeLayer(heat); heat=null; }
+  if(heatOn && last?.res){ buildHeat(marker.getLatLng().lat, marker.getLatLng().lng, last.res.scores_next10[last.day||0]); heat.addTo(map); }
 });
-document.getElementById('day').addEventListener('input', run);
+document.getElementById('go').addEventListener('click', async ()=>{
+  try{
+    document.getElementById('go').disabled=true;
+    const mainStr = (document.getElementById('coords').value.trim() || document.getElementById('place').value.trim());
+    if(!mainStr){ alert("Inserisci località o coordinate"); return; }
+    const cmpStr  = document.getElementById('compare').value.trim();
+    const res = await fetchAll(mainStr, cmpStr);
+    last={res, day:parseInt(document.getElementById('day').value,10)||0};
+  }catch(e){ alert("Errore: "+e.message); console.error(e); }
+  finally{ document.getElementById('go').disabled=false; }
+});
+document.getElementById('clr').addEventListener('click', ()=>{
+  ["place","coords","compare"].forEach(id=>document.getElementById(id).value="");
+});
+document.getElementById('day').addEventListener('input', ()=>{
+  if(!last?.res) return; // niente pop-up
+  const d=parseInt(document.getElementById('day').value,10)||0;
+  updateUI(last.res, d);
+  const col=verdict(last.res.scores_next10[d]).col;
+  ring && ring.setStyle({color:col,fillColor:col});
+  if(heat){ map.removeLayer(heat); heat=null; }
+  if(document.getElementById('heatbtn').dataset.on==="1")
+    buildHeat(marker.getLatLng().lat, marker.getLatLng().lng, last.res.scores_next10[d]).addTo(map);
+});
 
 initMap();
 </script>
