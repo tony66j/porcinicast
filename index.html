@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PorciniCast – Previsione habitat porcini</title>
+  <meta name="description" content="Nowcasting e forecast dell'idoneità per porcini in base a pioggia, temperatura, quota, esposizione e boschi. MVP completo con backend FastAPI." />
+  <style>
+    :root{
+      --bg: #0b0f0c; --panel:#101511; --ink:#e8f2e9; --muted:#b6c4b8;
+      --accent:#2e7d32; --accent-2:#8d6e63; --mid:#f9a825; --bad:#ef5350; --good:#2e7d32;
+    }
+    *{box-sizing:border-box} html,body{margin:0}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif; background:radial-gradient(80% 120% at 10% 0%, #0f1511, #0b0f0c); color:var(--ink)}
+    .container{width:min(1150px,94%); margin-inline:auto}
+    header{position:sticky; top:0; z-index:40; backdrop-filter:saturate(140%) blur(8px); background:rgba(11,15,12,.75); border-bottom:1px solid rgba(255,255,255,.04)}
+    .nav{display:flex; align-items:center; justify-content:space-between; padding:14px 0}
+    .brand{display:flex; align-items:center; gap:10px; font-weight:800}
+    .logo{width:30px; height:30px; border-radius:10px; background:conic-gradient(from 120deg, var(--accent), #66bb6a, var(--accent-2)); box-shadow:0 0 0 3px rgba(46,125,50,.25)}
+    .menu{display:flex; gap:18px}
+    .menu a{opacity:.9; padding:8px 10px; border-radius:10px}
+    .menu a:hover{background:rgba(255,255,255,.06)}
+    .hero{padding:64px 0 28px}
+    .eyebrow{letter-spacing:.25em; text-transform:uppercase; color:#a5d6a7; font-weight:700; font-size:12px}
+    h1{font-size:clamp(28px,4.8vw,46px); margin:8px 0 10px; line-height:1.1}
+    .lead{color:var(--muted)}
+    .panel{background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:16px}
+    .row{display:grid; grid-template-columns:1.2fr 1fr; gap:18px; align-items:start}
+    .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+    input, button{background:#0a120d; color:var(--ink); border:1px solid rgba(255,255,255,.12); padding:12px 14px; border-radius:12px}
+    button{cursor:pointer; border:none; background:linear-gradient(135deg,var(--accent),#66bb6a); color:#0b110c; font-weight:800}
+    label{font-size:12px; color:var(--muted)}
+    .score{display:flex; align-items:center; gap:12px}
+    .dot{width:14px; height:14px; border-radius:50%}
+    .heat{height:320px; border-radius:16px; background:#0a120d; border:1px dashed rgba(255,255,255,.12); display:grid; place-items:center; color:var(--muted)}
+    canvas{max-width:100%}
+    section{padding:40px 0} h2{margin:0 0 10px} p{color:var(--muted)}
+    footer{padding:28px 0; color:var(--muted); text-align:center}
+    small.mono{font-family:ui-monospace,Menlo,Consolas,monospace; opacity:.9}
+    @media (max-width: 900px){ .row{grid-template-columns:1fr} .grid{grid-template-columns:1fr 1fr} }
+    @media (max-width: 640px){ .grid{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container nav">
+      <a class="brand" href="#"><span class="logo"></span><span>PorciniCast</span></a>
+      <nav class="menu" aria-label="Principale">
+        <a href="#mappa">Mappa</a>
+        <a href="#metodo">Metodo</a>
+        <a href="#note">Note</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div class="eyebrow">MVP · Backend FastAPI + servizi open</div>
+      <h1>Nowcasting & forecast dell'habitat dei porcini</h1>
+      <p class="lead">Cerca una località: il sistema stima quota, pendenza, esposizione, boschi/essenze OSM, e calcola l'indice di idoneità (oggi e prossimi 10 giorni) con finestra migliore.</p>
+    </section>
+
+    <section id="ricerca" class="panel">
+      <div class="row">
+        <div>
+          <div class="grid">
+            <div>
+              <label for="q">Zona / località</label>
+              <input id="q" placeholder="Es. Abetone, Monte Taburno, Asiago…" />
+            </div>
+            <div>
+              <label>Quota (m s.l.m.)</label>
+              <div id="alt">—</div>
+            </div>
+            <div>
+              <label>Esposizione · Pendenza</label>
+              <div id="asp">—</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:12px">
+            <button id="run">Calcola idoneità</button>
+            <span class="score"><span id="dot" class="dot" style="background:var(--mid)"></span><span id="scoreLabel">Indice: –</span></span>
+          </div>
+          <div style="margin-top:10px" class="small mono" id="explain">Digita una località e premi Calcola.</div>
+        </div>
+        <div>
+          <div class="panel" style="background:rgba(46,125,50,.08)">
+            <h3 style="margin:0 0 6px">Boschi & specie probabili</h3>
+            <div id="species">—</div>
+          </div>
+          <div class="panel" style="margin-top:12px">
+            <h3 style="margin:0 0 6px">Finestra migliore</h3>
+            <div id="window">—</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="mappa" class="row">
+      <div class="panel">
+        <h2>Mappa idoneità (locale)</h2>
+        <p>Griglia 12×12 con punteggi per celle da ~500 m: colori da scarso (rosso) a ottimo (verde). In MVP è sintetica; nel progetto completo sarà derivata da raster DEM/land cover.</p>
+        <div class="heat"><canvas id="heat" width="520" height="320">Mappa non supportata</canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Andamento prossimi 10 giorni</h2>
+        <p>Indice (0–100) calcolato dalle previsioni locali.</p>
+        <div class="heat" style="height:320px"><canvas id="chart" width="520" height="320">Grafico non supportato</canvas></div>
+      </div>
+    </section>
+
+    <section id="metodo">
+      <h2>Metodo (MVP)</h2>
+      <p>Indice 0–100 basato su: pioggia 14 gg, T media 7 gg, quota, pendenza/aspect locali (da micro-DEM) e compatibilità bosco (OSM). Dati meteo: Open‑Meteo. Elevazione: Open‑Elevation. Boschi: Overpass/OSM.</p>
+    </section>
+
+    <section id="note">
+      <h2>Note etiche e di sicurezza</h2>
+      <ul>
+        <li>È una <strong>probabilità</strong> di habitat favorevole, non una garanzia.</li>
+        <li>Hotspot aggregati in griglia per ridurre pressione locale.</li>
+        <li>Rispettare regolamenti, aree protette e sicurezza alimentare.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">© <span id="year"></span> PorciniCast · MVP. <span class="mono">v0.3</span></div>
+  </footer>
+
+  <script>
+    const api = (p)=> fetch(p).then(r=>{ if(!r.ok) throw new Error('API error'); return r.json(); });
+    const byId = (id)=>document.getElementById(id);
+    const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+
+    function colorForScore(x){ const r = x<0.5 ? 255 : Math.round(255*(1-(x-0.5)*2)); const g = x<0.5 ? Math.round(255*(x*2)) : 255; const b = 80; return `rgb(${r},${g},${b})`; }
+    function drawHeat(canvas, grid){
+      const ctx = canvas.getContext('2d'); const h = canvas.height, w = canvas.width;
+      const rows = grid.length, cols = grid[0].length; const cw = Math.floor(w/cols), ch = Math.floor(h/rows);
+      ctx.clearRect(0,0,w,h);
+      for(let r=0;r<rows;r++){ for(let c=0;c<cols;c++){ ctx.fillStyle = colorForScore(grid[r][c]); ctx.fillRect(c*cw, r*ch, cw-1, ch-1); } }
+    }
+    function drawChart(canvas, arr){
+      const ctx = canvas.getContext('2d'); const h = canvas.height, w = canvas.width; ctx.clearRect(0,0,w,h);
+      ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(40,10); ctx.lineTo(40,h-30); ctx.lineTo(w-10,h-30); ctx.stroke();
+      for(let y=0;y<=100;y+=20){ const yy=(h-30)-(h-40)*y/100; ctx.fillStyle='rgba(255,255,255,.5)'; ctx.fillText(y.toString(),10,yy+4); ctx.strokeStyle='rgba(255,255,255,.1)'; ctx.beginPath(); ctx.moveTo(40,yy); ctx.lineTo(w-10,yy); ctx.stroke(); }
+      ctx.strokeStyle = '#66bb6a'; ctx.lineWidth=2; ctx.beginPath();
+      arr.forEach((v,i)=>{ const x=40+(w-60)*i/(arr.length-1); const y=(h-30)-(h-40)*v/100; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); ctx.fillStyle='#e8f2e9'; ctx.beginPath(); ctx.arc(x,y,2.5,0,Math.PI*2); ctx.fill(); });
+      ctx.stroke(); ctx.fillStyle='rgba(255,255,255,.7)'; arr.forEach((_,i)=>{ const x=40+(w-60)*i/(arr.length-1); ctx.fillText('D+'+i, x-10, h-12); });
+    }
+    function gridFromScore(base){
+      const b = base/100; const grid=[];
+      for(let r=0;r<12;r++){ const row=[]; for(let c=0;c<12;c++){ const d = Math.hypot(r-5.5,c-5.5)/9; const noise=(Math.random()-0.5)*0.18; row.push(clamp(b*(1-0.6*d)+noise,0,1)); } grid.push(row); }
+      return grid;
+    }
+
+    async function run(){
+      const q = byId('q').value.trim(); if(!q){ byId('explain').textContent='Inserisci una località.'; return; }
+      byId('explain').textContent='⏳ Cerco la località…';
+      try{
+        const g = await api(`/api/geocode?q=${encodeURIComponent(q)}`);
+        byId('explain').textContent='⏳ Calcolo quota/pendenza/aspect e meteo…';
+        const s = await api(`/api/score?lat=${g.lat}&lon=${g.lon}`);
+        const f = await api(`/api/forest?lat=${g.lat}&lon=${g.lon}&alt=${s.elevation_m}`);
+
+        // UI populate
+        byId('alt').textContent = `${Math.round(s.elevation_m)} m`;
+        byId('asp').textContent = `${f.forest} · ${['N','NE','E','SE','S','SW','W','NW'].includes(s.aspect_octant)?s.aspect_octant:s.aspect_octant} · pendenza ~ ${s.slope_deg.toFixed(1)}°`;
+        byId('species').innerHTML = `<b>Essenze dominanti:</b> ${f.forest}<br><b>Porcini attesi:</b> ${f.species.join(', ')}`;
+        byId('scoreLabel').textContent = `Indice: ${s.score_today}/100`;
+        byId('dot').style.background = s.score_today>=70? 'var(--good)' : s.score_today>=40? 'var(--mid)' : 'var(--bad)';
+        byId('window').textContent = `Finestra ottimale D+${s.best_window.start} → D+${s.best_window.end} (media ${s.best_window.mean}).`;
+        byId('explain').textContent = `P14≈${s.P14_mm} mm · T7≈${s.Tmean7_c}°C · quota≈${Math.round(s.elevation_m)} m · aspect=${s.aspect_octant}`;
+
+        drawHeat(byId('heat'), gridFromScore(s.score_today));
+        drawChart(byId('chart'), s.scores_next10);
+      }catch(err){
+        console.error(err);
+        byId('explain').textContent = 'Errore durante il calcolo. Riprova tra poco.';
+      }
+    }
+    byId('run').addEventListener('click', run);
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
