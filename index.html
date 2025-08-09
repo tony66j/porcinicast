@@ -1,234 +1,188 @@
 <!doctype html>
 <html lang="it">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TrovaPorcini v0.9.1</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrovaPorcini v0.9.2</title>
 <link rel="preconnect" href="https://unpkg.com">
 <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  body { background:#0f172a; color:#e2e8f0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial; }
-  .wrap { max-width: 1040px; margin: 18px auto 80px; padding: 0 16px; }
-  h1 { font-size: 28px; margin: 10px 0 22px; display:flex; align-items:center; gap:8px }
-  h1 .v { color:#60a5fa; font-size: 18px; font-weight:600 }
-  .bar { display:flex; gap:10px; flex-wrap: wrap; }
-  .card { background:#0b1220; border:1px solid #1f2937; border-radius:10px; padding:14px; }
-  input, button { border-radius: 10px; border:1px solid #364151; background:#0b1220; color:#e5e7eb; }
-  input { padding:12px 14px; width: 100%; }
-  label { font-size:13px; color:#93a2b8; display:block; margin-bottom:6px }
-  .btn { padding:12px 16px; background:#065f46; border-color:#0f766e; cursor:pointer; }
-  .btn:hover { filter:brightness(1.1) }
-  .btn2 { padding:12px 16px; background:#111827; border-color:#334155; cursor:pointer; }
-  .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-  @media (max-width:860px){ .grid{grid-template-columns:1fr;} }
-  .kpi { display:flex; align-items:center; gap:12px; }
-  .dot { width:14px; height:14px; border-radius:50% }
-  .bad { background:#ef4444 } .mid{ background:#eab308 } .good{ background:#10b981 }
-  .muted { color:#9ca3af; font-size:13px }
-  #map { height: 460px; border-radius: 12px; }
-  details { margin-top:18px }
-  .tag { background:#111827; border:1px solid #374151; padding:2px 8px; border-radius: 999px; font-size:12px }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-  .row { display:flex; gap:10px; align-items:end; flex-wrap:wrap }
-  .w50 { flex:1 1 420px }
+ body{background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+ .wrap{max-width:1040px;margin:18px auto 80px;padding:0 16px}
+ h1{font-size:28px;margin:10px 0 22px;display:flex;align-items:center;gap:8px}
+ .v{color:#60a5fa;font-size:18px;font-weight:600}
+ .card{background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:14px}
+ .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+ .w50{flex:1 1 420px}
+ label{font-size:13px;color:#93a2b8;margin-bottom:6px;display:block}
+ input,button{border-radius:10px;border:1px solid #364151;background:#0b1220;color:#e5e7eb}
+ input{padding:12px 14px;width:100%}
+ .btn{padding:12px 16px;background:#065f46;border-color:#0f766e;cursor:pointer}
+ .btn2{padding:12px 16px;background:#111827;border-color:#334155;cursor:pointer}
+ .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+ @media (max-width:860px){.grid{grid-template-columns:1fr}}
+ .kpi{display:flex;align-items:center;gap:12px}
+ .dot{width:14px;height:14px;border-radius:50%}
+ .bad{background:#ef4444}.mid{background:#eab308}.good{background:#10b981}
+ .muted{color:#9ca3af;font-size:13px}
+ #map{height:460px;border-radius:12px}
+ .tag{background:#111827;border:1px solid #374151;padding:2px 8px;border-radius:999px;font-size:12px;margin-right:6px}
+ .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+ ul{margin:8px 0 0 18px;line-height:1.5}
 </style>
 </head>
 <body>
 <div class="wrap">
-
-  <h1>🍄 TrovaPorcini <span class="v">v0.9.1</span></h1>
+  <h1>🍄 TrovaPorcini <span class="v">v0.9.2</span></h1>
 
   <div class="card">
     <div class="row">
-      <div class="w50">
-        <label>Località</label>
-        <input id="q" placeholder="es. Bocca della Selva">
-      </div>
-      <div class="w50">
-        <label>Coordinate (lat,lon) — accetta formati Google (anche con virgole decimali)</label>
-        <input id="coords" placeholder="es. 41,4170010, 14,4707168">
-      </div>
-      <div>
-        <button class="btn" id="go">Calcola idoneità</button>
-      </div>
-      <div>
-        <button class="btn2" id="clear">Pulisci</button>
-      </div>
+      <div class="w50"><label>Località</label><input id="q" placeholder="es. Bocca della Selva"></div>
+      <div class="w50"><label>Coordinate (lat,lon) – incolla anche formato Google con virgole</label><input id="coords" placeholder="es. 41,4170010, 14,4707168"></div>
+      <div><button class="btn" id="go">Calcola idoneità</button></div>
+      <div><button class="btn2" id="clear">Pulisci</button></div>
     </div>
-    <p class="muted">La barra coord. ha priorità; i dati arrivano dalle API del backend (<span class="mono">/api</span>).</p>
+    <p class="muted">La barra coord. ha priorità; i dati arrivano dal backend (<span class="mono">/api</span>).</p>
   </div>
 
   <div class="grid" style="margin-top:14px">
     <div class="card">
       <div class="kpi">
         <div class="dot bad" id="dot"></div>
-        <div>
-          <div style="font-size:14px; color:#9ca3af">Indice oggi</div>
-          <div style="font-size:36px; font-weight:700" id="score">—</div>
-        </div>
+        <div><div class="muted">Indice oggi</div><div style="font-size:36px;font-weight:700" id="score">—</div></div>
       </div>
       <div style="margin-top:8px" class="muted" id="badge">—</div>
 
-      <div style="margin-top:18px">
+      <div style="margin-top:12px" id="advice" class="muted"></div>
+
+      <div style="margin-top:16px">
         <label>Previsione (prossimi 10 giorni)</label>
         <input id="day" type="range" min="0" max="10" value="0" style="width:100%">
         <div class="muted">Giorno selezionato: <span id="selday">oggi</span></div>
         <div class="muted" id="bestwin">—</div>
       </div>
 
-      <details>
-        <summary>Spiegazione (perché)</summary>
-        <div id="reason" style="margin-top:8px"></div>
+      <details style="margin-top:12px" open>
+        <summary>Consigli pratici (dove cercare)</summary>
+        <div id="where" class="muted" style="margin-top:6px"></div>
       </details>
 
-      <details>
-        <summary>Dettagli tecnici</summary>
-        <div id="tech" style="margin-top:8px; font-size:14px"></div>
+      <details style="margin-top:12px">
+        <summary>Altre specie probabili</summary>
+        <ul id="species"></ul>
       </details>
+
+      <details style="margin-top:12px">
+        <summary>Spiegazione del perché</summary>
+        <div id="reason" class="muted" style="margin-top:6px"></div>
+      </details>
+
+      <details style="margin-top:12px">
+        <summary>Dati tecnici</summary>
+        <div id="tech" style="margin-top:6px;font-size:14px"></div>
+      </details>
+
+      <details style="margin-top:12px">
+        <summary>Stima raccolto (3h)</summary>
+        <div id="yield" class="muted" style="margin-top:6px"></div>
+      </details>
+
+      <div class="muted" style="margin-top:12px" id="lastrain">—</div>
     </div>
 
     <div class="card">
       <div id="map"></div>
-      <div class="muted" style="margin-top:8px">Mappa centrata sull'Italia; trascina/pinch per esplorare. Il cerchio cambia colore per il giorno selezionato.</div>
+      <div class="muted" style="margin-top:8px">Mappa centrata sull'Italia; il cerchio cambia colore per il giorno selezionato.</div>
     </div>
   </div>
-
-  <details>
-    <summary>Metodo (sintesi)</summary>
-    <div class="muted" style="margin-top:8px; line-height:1.5">
-      Indice 0–100 basato su piogge ultimi 14 gg (campana ottimale ~15–70 mm), temperatura media 7 gg (target 12–18°C), quota stagionale e compatibilità bosco/versante.
-      La serie a +10 giorni aggiorna il bilancio idrico (P14 “scorrevole”) con le precipitazioni previste.
-    </div>
-  </details>
-
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ---------- Utilità ----------
-function parseCoords(text){
-  // Estrae le prime due numbers consentendo virgole decimali o punti (formati Google)
-  if(!text) return null;
-  const nums = text.match(/-?\d+[.,]?\d*/g);
-  if(!nums || nums.length < 2) return null;
-  const lat = parseFloat(nums[0].replace(',', '.'));
-  const lon = parseFloat(nums[1].replace(',', '.'));
-  if (isNaN(lat) || isNaN(lon)) return null;
-  return {lat, lon};
-}
-function badge(score){
-  if(score >= 75) return {txt:"Consigliato", cls:"good"};
-  if(score >= 55) return {txt:"Possibile", cls:"mid"};
-  return {txt:"Sconsigliato", cls:"bad"};
-}
+// ------- util -------
+const el = id => document.getElementById(id);
+function parseCoords(t){ if(!t) return null; const m=t.match(/-?\d+[.,]?\d*/g); if(!m||m.length<2) return null; return {lat:parseFloat(m[0].replace(',','.')), lon:parseFloat(m[1].replace(',','.'))}; }
+function badge(score){ if(score>=75) return {txt:"Consigliato", cls:"good"}; if(score>=55) return {txt:"Possibile", cls:"mid"}; return {txt:"Sconsigliato", cls:"bad"}; }
 
-// ---------- Mappa ----------
-const italyCenter = [42.5, 12.5];
-const boundsIT = L.latLngBounds([35.0, 6.0],[47.5, 19.0]); // grosso modo Italia
-const map = L.map('map', { zoomControl:true, maxBounds: boundsIT, maxBoundsViscosity: 0.5 })
-  .setView(italyCenter, 5.7);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  attribution:'© OpenStreetMap'
-}).addTo(map);
-let marker = null, circle = null;
-function setPoint(lat, lon, score){
-  if(marker){ map.removeLayer(marker); }
-  if(circle){ map.removeLayer(circle); }
-  marker = L.marker([lat,lon]).addTo(map);
-  const col = score>=75? '#10b981' : score>=55? '#eab308' : '#ef4444';
-  circle = L.circle([lat,lon], {radius: 800, color: col, fillColor: col, fillOpacity: 0.25}).addTo(map);
-  map.flyTo([lat,lon], 11, {duration: 0.6});
+// ------- mappa -------
+const italyCenter=[42.5,12.5], boundsIT=L.latLngBounds([35,6],[47.5,19]);
+const map=L.map('map',{maxBounds:boundsIT,maxBoundsViscosity:0.5}).setView(italyCenter,5.7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+let marker=null,circle=null;
+function setPoint(lat,lon,score){
+  if(marker) map.removeLayer(marker); if(circle) map.removeLayer(circle);
+  marker=L.marker([lat,lon]).addTo(map);
+  const col=score>=75?'#10b981':score>=55?'#eab308':'#ef4444';
+  circle=L.circle([lat,lon],{radius:800,color:col,fillColor:col,fillOpacity:0.25}).addTo(map);
+  map.flyTo([lat,lon],11,{duration:0.5});
 }
 
-// ---------- UI ----------
-const el = (id)=>document.getElementById(id);
-const q = el('q'), coords = el('coords'), go = el('go'), clr = el('clear');
-const scoreEl = el('score'), dot = el('dot'), badgeEl = el('badge');
-const day = el('day'), selday = el('selday'), bestwin = el('bestwin');
-const reason = el('reason'), tech = el('tech');
+// ------- UI -------
+const q=el('q'), coords=el('coords'), go=el('go'), clr=el('clear');
+const scoreEl=el('score'), dot=el('dot'), badgeEl=el('badge');
+const day=el('day'), selday=el('selday'), bestwin=el('bestwin');
+const reason=el('reason'), tech=el('tech'), where=el('where'), species=el('species');
+const advice=el('advice'), yieldEl=el('yield'), lastrain=el('lastrain');
+let last=null;
 
-let last = null; // contiene ultimo payload API
-
-function setBadge(score){
-  const b = badge(score);
-  scoreEl.textContent = score;
-  badgeEl.textContent = b.txt === "Consigliato" ? "Consigliato oggi." :
-                        b.txt === "Possibile"   ? "Possibile oggi."   :
-                        "Sconsigliato oggi.";
-  dot.className = 'dot ' + (b.cls);
-}
+function setBadge(score){ const b=badge(score); scoreEl.textContent=score; badgeEl.textContent=b.txt; dot.className='dot '+b.cls; }
 function updateDayUI(idx){
   if(!last) return;
-  if(idx === 0){
-    selday.textContent = "oggi";
-    setBadge(last.score_today);
-    if(last._lat && last._lon) setPoint(last._lat, last._lon, last.score_today);
-  }else{
-    selday.textContent = `+${idx} gg`;
-    const sc = last.scores_next10[idx-1];
-    const b  = badge(sc);
-    scoreEl.textContent = sc;
-    badgeEl.textContent = b.txt + ` (giorno +${idx})`;
-    dot.className = 'dot ' + b.cls;
-    if(last._lat && last._lon) setPoint(last._lat, last._lon, sc);
-  }
+  if(idx===0){ selday.textContent="oggi"; setBadge(last.score_today); setPoint(last._lat,last._lon,last.score_today); }
+  else{ selday.textContent=`+${idx} gg`; const sc=last.scores_next10[idx-1]; setBadge(sc); setPoint(last._lat,last._lon,sc); }
 }
+day.addEventListener('input', ()=>updateDayUI(parseInt(day.value||"0")));
 
-day.addEventListener('input', ()=> updateDayUI(parseInt(day.value||"0")));
-
-async function callScore(lat, lon){
-  const url = `/api/score?lat=${lat}&lon=${lon}`;
-  const r = await fetch(url);
-  if(!r.ok){
-    const txt = await r.text();
-    throw new Error(`API ${r.status}: ${txt.slice(0,80)}`);
-  }
-  const j = await r.json();
-  j._lat = lat; j._lon = lon;
-  return j;
+async function callScore(lat,lon){
+  const r=await fetch(`/api/score?lat=${lat}&lon=${lon}`);
+  if(!r.ok){ throw new Error(`API ${r.status}`); }
+  const j=await r.json(); j._lat=lat; j._lon=lon; return j;
 }
 
 async function run(){
   try{
-    let latlon = parseCoords(coords.value.trim());
-    if(!latlon){
-      // geocoding
-      if(!q.value.trim()) { alert("Inserisci località o coordinate."); return; }
-      const g = await (await fetch(`/api/geocode?q=${encodeURIComponent(q.value.trim())}`)).json();
-      latlon = {lat: g.lat, lon: g.lon};
+    let ll=parseCoords(coords.value.trim());
+    if(!ll){
+      if(!q.value.trim()){ alert("Inserisci località o coordinate."); return; }
+      const g=await (await fetch(`/api/geocode?q=${encodeURIComponent(q.value.trim())}`)).json();
+      ll={lat:g.lat, lon:g.lon};
     }
-    const data = await callScore(latlon.lat, latlon.lon);
-    last = data;
+    const data=await callScore(ll.lat,ll.lon); last=data;
 
     setBadge(data.score_today);
-    reason.textContent = data.reason || "—";
+    where.textContent = data.where_to_search || "";
+    advice.textContent = data.advice || "";
+    reason.textContent = data.reason || "";
+    species.innerHTML = (data.other_species||[]).map(s=>`<li>${s}</li>`).join("");
+
     tech.innerHTML = `
-      <div class="tag">P14: ${data.P14_mm} mm</div>
-      <div class="tag">Tmean7: ${data.Tmean7_c} °C</div>
-      <div class="tag">quota: ${Math.round(data.elevation_m)} m</div>
-      <div class="tag">pendenza: ${data.slope_deg.toFixed(1)}°</div>
-      <div class="tag">esposizione: ${data.aspect_octant}</div>
-      <div class="tag">bosco: ${data.forest}</div>
+      <span class="tag">P14: ${data.P14_mm} mm</span>
+      <span class="tag">Tmean7: ${data.Tmean7_c} °C</span>
+      <span class="tag">quota: ${Math.round(data.elevation_m)} m</span>
+      <span class="tag">pendenza: ${data.slope_deg.toFixed(1)}°</span>
+      <span class="tag">esposizione: ${data.aspect_octant}</span>
+      <span class="tag">bosco: ${data.forest}</span>
     `;
+    const bw=data.best_window||{start:0,end:0,mean:0};
+    bestwin.textContent = `Finestra migliore (3 gg): D+${bw.start} → D+${bw.end} (media ${bw.mean})`;
 
-    bestwin.textContent = `Finestra migliore (3 gg): D+${data.best_window.start} → D+${data.best_window.end} (media ${data.best_window.mean})`;
+    const y=data.expected_yield||{};
+    yieldEl.textContent = (y.range_3h? `${y.range_3h}` : "—") + (y.note? ` — ${y.note}`:"");
 
-    setPoint(latlon.lat, latlon.lon, data.score_today);
-    day.value = 0; selday.textContent = "oggi";
-  }catch(e){
-    alert("Errore: " + e.message);
-  }
+    const lr=data.last_rain||{};
+    lastrain.textContent = (lr.days_since==null)? "Ultima pioggia: oltre 14 giorni fa" :
+                           `Ultima pioggia: ${lr.days_since} giorni fa (≈ ${lr.date||""})`;
+
+    setPoint(ll.lat,ll.lon,data.score_today);
+    day.value=0; selday.textContent="oggi";
+  }catch(e){ alert("Errore: "+e.message); }
 }
-
 go.addEventListener('click', run);
-clr.addEventListener('click', ()=>{
-  q.value=""; coords.value=""; last=null;
-  scoreEl.textContent="—"; badgeEl.textContent="—"; reason.textContent=""; tech.textContent="";
-  day.value=0; selday.textContent="oggi";
-  if(marker){ map.removeLayer(marker); marker=null; }
-  if(circle){ map.removeLayer(circle); circle=null; }
-  map.setView(italyCenter, 5.7);
+clr.addEventListener('click', ()=>{ q.value=""; coords.value=""; last=null; scoreEl.textContent="—"; badgeEl.textContent="—";
+  where.textContent=""; advice.textContent=""; reason.textContent=""; species.innerHTML=""; tech.textContent="";
+  yieldEl.textContent=""; lastrain.textContent="—"; day.value=0; selday.textContent="oggi";
+  if(marker){map.removeLayer(marker); marker=null;} if(circle){map.removeLayer(circle); circle=null;}
+  map.setView(italyCenter,5.7);
 });
 </script>
 </body>
