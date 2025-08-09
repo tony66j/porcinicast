@@ -3,94 +3,96 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>TrovaPorcini v2.0</title>
+<title>TrovaPorcini v3.0</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
-  :root{--bg:#0f1720;--panel:#111a24;--text:#e6edf3;--muted:#94a3b8;--accent:#22c55e;--warn:#f59e0b;--bad:#ef4444;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;}
-  header{display:flex;gap:.8rem;align-items:center;padding:16px 22px;border-bottom:1px solid #1f2a37;}
-  .brand{font-size:22px;font-weight:700}
-  .tag{background:#1f2a37;padding:4px 8px;border-radius:6px;margin-left:.5rem}
+  :root{--bg:#0b1220;--panel:#0f1724;--line:#1f2a37;--text:#e6edf3;--muted:#9fb0c3;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+  header{display:flex;gap:.8rem;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .brand{font-size:22px;font-weight:800}
+  .tag{background:#1d2837;border:1px solid var(--line);padding:2px 8px;border-radius:8px;margin-left:.5rem}
   .by{margin-left:auto;color:var(--muted);font-size:14px}
-  .wrap{max-width:1200px;margin:16px auto;padding:0 14px}
-  .row{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
-  .card{background:var(--panel);border:1px solid #1f2a37;border-radius:12px;padding:14px}
-  input,button{font-size:16px}
-  input[type=text]{width:100%;background:#0b1320;border:1px solid #1f2a37;color:var(--text);padding:10px 12px;border-radius:10px}
-  .btn{background:var(--accent);color:#072015;border:none;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:600}
-  .btn.gray{background:#243142;color:var(--text)}
-  .pill{display:inline-block;border-radius:20px;padding:6px 10px;margin-right:8px}
-  .ok{background:#203d2d}
-  .warn{background:#3b2f14}
-  .bad{background:#3a2020}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  #map{height:560px;border-radius:12px;overflow:hidden}
-  details{margin-top:8px}
-  canvas{background:#0b1320;border-radius:8px;padding:8px}
+  .wrap{max-width:1250px;margin:16px auto;padding:0 14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+  input[type=text]{width:100%;background:#0a1322;border:1px solid var(--line);color:var(--text);padding:12px;border-radius:12px}
+  .btn{background:var(--ok);border:none;color:#05280f;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer}
+  .btn.gray{background:#223046;color:var(--text)}
+  .grid2{display:grid;grid-template-columns:1fr auto;gap:12px}
+  .gridMain{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  @media(max-width:980px){ .gridMain{grid-template-columns:1fr} }
+  .pill{display:inline-block;border-radius:24px;padding:6px 10px;margin-right:8px}
+  .p-ok{background:#13351f} .p-warn{background:#3a2b12} .p-bad{background:#3a1f1f}
+  #map{height:600px;border-radius:12px;overflow:hidden}
+  @media(max-width:980px){ #map{height:420px} }
+  details{margin-top:10px}
+  summary{cursor:pointer}
+  .muted{color:var(--muted)}
+  canvas{background:#0a1322;border-radius:10px;padding:8px}
+  .kpi{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+  .k{background:#0a1322;border:1px solid var(--line);padding:6px 10px;border-radius:10px}
 </style>
 </head>
 <body>
 <header>
-  <div class="brand">🍄 TrovaPorcini <span class="tag">v2.0</span></div>
+  <div class="brand">🍄 TrovaPorcini <span class="tag">v3.0</span></div>
   <div class="by">by <strong>Antonio Pio D’Aloia</strong></div>
 </header>
 
 <div class="wrap">
   <div class="card">
     <div class="grid2">
-      <div>
-        <label>Località o coordinate (es. <i>41.35, 14.55</i>)</label>
-        <input id="q" type="text" placeholder="es. Bocca della Selva oppure 41.35, 14.55"/>
-      </div>
-      <div style="display:flex;gap:10px;align-items:end">
-        <button class="btn" id="go">Calcola idoneità</button>
-        <button class="btn gray" id="clr">Pulisci</button>
+      <input id="q" type="text" placeholder="Località oppure coord. es: 41.35, 14.55"/>
+      <div style="display:flex;gap:10px">
+        <button id="go" class="btn">Calcola</button>
+        <button id="clr" class="btn gray">Pulisci</button>
       </div>
     </div>
-    <small class="muted">Suggerimento: se inserisci coordinate, hanno priorità sulla località.</small>
+    <small class="muted">Se metti coordinate, hanno priorità. Link condivisibile: lat,lon,day nel frammento URL.</small>
   </div>
 
-  <div class="row">
-    <div class="card" id="left">
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
-        <div class="pill ok" id="idxPill">Indice oggi: –</div>
-        <div class="pill" id="capsPill">Stima 3h: – cappelli</div>
+  <div class="gridMain">
+    <div class="card">
+      <div class="kpi">
+        <div id="idxP" class="pill p-bad">Indice: –</div>
+        <div id="capsP" class="pill">Stima 3h: – cappelli</div>
+        <div id="rainP" class="pill">Pioggia: –</div>
       </div>
 
       <div style="margin:8px 0 2px">Previsione (prossimi 10 giorni)</div>
-      <input id="day" type="range" min="0" max="9" step="1" value="0" style="width:100%"/>
+      <input id="day" type="range" min="0" max="9" value="0" step="1" style="width:100%"/>
 
-      <div id="bestWin" style="margin:10px 0;color:#cbd5e1"></div>
+      <div id="best" class="muted" style="margin:10px 0"></div>
 
       <details open>
-        <summary><b>Consigli pratici</b> (dipendono dal giorno)</summary>
-        <div id="advice" style="margin-top:6px"></div>
+        <summary><b>Consigli pratici</b> (cambiano per il giorno selezionato)</summary>
+        <ul id="advice"></ul>
       </details>
 
       <details open>
         <summary><b>Perché questa stima</b></summary>
-        <div id="why" style="margin-top:6px"></div>
+        <ul id="why"></ul>
       </details>
 
       <details>
         <summary><b>Specie di porcini probabili</b></summary>
-        <div id="species" style="margin-top:6px"></div>
+        <div id="species"></div>
       </details>
 
       <details>
         <summary><b>Dati tecnici</b></summary>
-        <div id="tech" style="margin-top:6px"></div>
+        <div id="tech" class="kpi"></div>
       </details>
 
       <div class="grid2" style="margin-top:10px">
-        <canvas id="scoreChart" height="140"></canvas>
-        <canvas id="rainChart" height="140"></canvas>
+        <canvas id="scoreChart" height="150"></canvas>
+        <canvas id="rainChart" height="150"></canvas>
       </div>
     </div>
 
     <div class="card">
       <div id="map"></div>
-      <small style="color:#94a3b8">Mappa Italia con heatmap a griglia (giorno selezionato).</small>
+      <small class="muted">Mappa Italia con heatmap per il giorno selezionato.</small>
     </div>
   </div>
 </div>
@@ -98,111 +100,51 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-const API = (path, params={})=>{
-  const q = new URLSearchParams(params).toString();
-  return fetch(`/api/${path}${q?('?' + q):''}`).then(r=>{
-    if(!r.ok) throw new Error('API ' + r.status);
-    return r.json();
-  });
+const qs = (s)=>document.querySelector(s);
+const API = (p, o={})=>{
+  const q = new URLSearchParams(o).toString();
+  return fetch(`/api/${p}${q?('?' + q):''}`).then(r=>{ if(!r.ok) throw new Error('API '+r.status); return r.json(); });
 };
 
-let map = L.map('map',{zoomControl:true, attributionControl:true}).setView([42.3,12.3],6);
+let map = L.map('map',{zoomControl:true}).setView([42.3,12.3],6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
 let marker = L.marker([42.3,12.3]).addTo(map);
 let ring = L.circleMarker([42.3,12.3],{radius:10,color:'#22c55e'}).addTo(map);
 let heatLayer = L.layerGroup().addTo(map);
 
-const qInput = document.getElementById('q');
-const goBtn = document.getElementById('go');
-const clrBtn = document.getElementById('clr');
-const dayR = document.getElementById('day');
+const qI=qs('#q'), go=qs('#go'), clr=qs('#clr'), dayR=qs('#day');
+const idxP=qs('#idxP'), capsP=qs('#capsP'), rainP=qs('#rainP');
+const advice=qs('#advice'), why=qs('#why'), tech=qs('#tech'), best=qs('#best');
 
-const idxPill = document.getElementById('idxPill');
-const capsPill = document.getElementById('capsPill');
-const adviceDiv = document.getElementById('advice');
-const whyDiv = document.getElementById('why');
-const speciesDiv = document.getElementById('species');
-const techDiv = document.getElementById('tech');
-const bestWin = document.getElementById('bestWin');
+let last=null, scoreSeries=Array(10).fill(null), rainSeries=Array(10).fill(0);
 
-let last = null, scoreSeries = Array(10).fill(null), rainSeries = Array(10).fill(0);
-
-const scoreChart = new Chart(document.getElementById('scoreChart'), {
-  type: 'line', data: {labels:[...Array(10)].map((_,i)=>'D+'+i), datasets:[{label:'Indice', data:scoreSeries}]},
+const scoreChart = new Chart(qs('#scoreChart'), {type:'line',
+  data:{labels:[...Array(10)].map((_,i)=>'D+'+i), datasets:[{label:'Indice', data:scoreSeries}]},
   options:{responsive:true, scales:{y:{min:0,max:100}}}
 });
-const rainChart = new Chart(document.getElementById('rainChart'), {
-  type: 'bar', data: {labels:[...Array(10)].map((_,i)=>'D+'+i), datasets:[{label:'Pioggia (mm)', data:rainSeries}]},
+const rainChart = new Chart(qs('#rainChart'), {type:'bar',
+  data:{labels:[...Array(10)].map((_,i)=>'D+'+i), datasets:[{label:'Pioggia (mm)', data:rainSeries}]},
   options:{responsive:true, scales:{y:{beginAtZero:true}}}
 });
 
-function parseInput(v){
-  // se coordinate, formati accettati: "41.35, 14.55" o "41,35 14,55"
-  const m = v.trim().replace(/;/g,',').replace(/\s+/g,' ').replace(/,/g,'.').split(/[\s,]+/);
-  if(m.length===2 && !isNaN(m[0]) && !isNaN(m[1])) return {lat:parseFloat(m[0]), lon:parseFloat(m[1])};
+function parseCoord(v){
+  const t=v.trim().replace(/;/g,',').replace(/\s+/g,' ').replace(/,/g,'.').split(/[\s,]+/);
+  if(t.length===2 && !isNaN(t[0]) && !isNaN(t[1])) return {lat:+t[0], lon:+t[1]};
   return null;
 }
-
 async function geocodeOrCoords(){
-  const v = qInput.value;
-  const c = parseInput(v);
-  if(c) return {lat:c.lat, lon:c.lon, display: `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`};
-  if(!v) throw new Error("Inserisci località o coordinate");
-  const g = await API('geocode', {q:v});
-  return g;
+  const v=qI.value;
+  const c=parseCoord(v);
+  if(c) return {lat:c.lat, lon:c.lon, display:`${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`};
+  if(!v) throw new Error('Inserisci località o coordinate');
+  return await API('geocode',{q:v});
 }
 
-async function compute(day=0){
-  const g = await geocodeOrCoords();
-  last = g;
-  const s = await API('score', {lat:g.lat, lon:g.lon, day});
-  // UI
-  idxPill.textContent = `Indice D+${day}: ${s.score}`;
-  idxPill.className = 'pill ' + (s.score>=70?'ok':(s.score>=40?'warn':'bad'));
-  const c = s.caps_3h;
-  capsPill.textContent = `Stima 3h: ${c.mean} (${c.range[0]}–${c.range[1]}) cappelli`;
-  adviceDiv.textContent = s.advice || '-';
-  whyDiv.textContent = s.why || '-';
-  speciesDiv.textContent = (s.forest?`${s.forest}: `:'') + (s.species || ('')) ;
-  techDiv.innerHTML = [
-    `P14 (proxy): <b>${s.p14_proxy_mm} mm</b>`,
-    `Tmedia 7 gg: <b>${s.tmean7_c} °C</b>`,
-    `ET₀ 7 gg (stima): <b>${s.et0_7mm} mm</b>`,
-    `Quota: <b>${s.alt_m} m</b>`,
-    `Esp.: <b>${s.aspect_octant}</b>`,
-    s.note_next_window ? `<span style="color:#f59e0b">${s.note_next_window}</span>` : ''
-  ].join(' • ');
+function pillClass(s){ return s>=70?'p-ok':(s>=40?'p-warn':'p-bad'); }
+function bullets(list, el){ el.innerHTML = (list&&list.length)? list.map(x=>`<li>${x}</li>`).join('') : '<li>–</li>'; }
 
-  // serie grafici (ottengo sempre D+0 per avere le serie intere)
-  const s0 = await API('score', {lat:g.lat, lon:g.lon, day:0});
-  scoreSeries = s0.rain_next10_mm.map((_,i)=>null);
-  // ricavo score per tutti i giorni 0..9 (interroga rapidamente)
-  const arr = await Promise.all([...Array(10)].map((_,i)=>API('score',{lat:g.lat,lon:g.lon,day:i}).catch(()=>null)));
-  arr.forEach((x,i)=>{ if(x) scoreSeries[i] = x.score; });
-  rainSeries = s0.rain_next10_mm;
-
-  scoreChart.data.datasets[0].data = scoreSeries; scoreChart.update();
-  rainChart.data.datasets[0].data = rainSeries; rainChart.update();
-
-  // mappa puntuale
-  marker.setLatLng([g.lat, g.lon]);
-  ring.setLatLng([g.lat, g.lon]).setStyle({color: s.score>=70?'#22c55e':(s.score>=40?'#f59e0b':'#ef4444')});
-  map.setView([g.lat, g.lon], 11);
-
-  // heatmap Italia
-  const hm = await API('heatmap', {day});
-  heatLayer.clearLayers();
-  hm.points.forEach(p=>{
-    const color = p.s>=70?'#22c55e':(p.s>=40?'#f59e0b':'#ef4444');
-    L.circleMarker([p.lat,p.lon],{radius:6,color:color,opacity:0.8,weight:2,fillOpacity:0.2}).addTo(heatLayer);
-  });
-
-  bestWin.textContent = inferBestWindow(scoreSeries);
-}
-
-function inferBestWindow(arr){
-  // migliore finestra 3gg movente
-  let best=-1, bi=0;
+function bestWindow(arr){
+  let best=-1,bi=0;
   for(let i=0;i<=7;i++){
     const m = Math.round((arr[i]+arr[i+1]+arr[i+2])/3);
     if(m>best){best=m;bi=i}
@@ -210,12 +152,74 @@ function inferBestWindow(arr){
   return `Finestra migliore (3 gg): D+${bi} → D+${bi+2} (media ${best})`;
 }
 
-goBtn.onclick = ()=> compute(parseInt(dayR.value)).catch(e=>alert('Errore: '+e.message));
-clrBtn.onclick = ()=>{ qInput.value=''; };
+async function compute(day=0){
+  const g = await geocodeOrCoords();
+  last=g;
+  // query per giorno
+  const s = await API('score',{lat:g.lat, lon:g.lon, day});
+  idxP.textContent = `Indice D+${day}: ${s.score}`;
+  idxP.className = 'pill ' + pillClass(s.score);
+  capsP.textContent = `Stima 3h: ${s.caps_3h.mean} (${s.caps_3h.range[0]}–${s.caps_3h.range[1]}) cappelli`;
+  rainP.textContent = s.next_rain ? s.next_rain : 'Pioggia: nessuna imminente';
+
+  bullets(s.advice, advice);
+  bullets(s.why, why);
+
+  const techItems = [
+    `P14: <b>${s.p14_mm} mm</b>`,
+    `Tmedia 7 gg: <b>${s.tmean7_c} °C</b>`,
+    `ET₀ 7 gg: <b>${s.et0_7mm} mm</b>`,
+    `Quota: <b>${s.alt_m} m</b>`,
+    `Esp.: <b>${s.aspect_octant}</b>`,
+    `Bosco: <b>${s.forest}</b>`,
+    `Ultima pioggia: <b>${s.last_rain_days ?? '–'} gg fa</b>`
+  ];
+  tech.innerHTML = techItems.map(x=>`<div class="k">${x}</div>`).join('');
+
+  qs('#species').textContent = s.species.join(' • ');
+
+  // serie complete
+  const arr = await Promise.all([...Array(10)].map((_,i)=>API('score',{lat:g.lat,lon:g.lon,day:i}).catch(()=>null)));
+  scoreSeries = arr.map(x=>x?x.score:null);
+  rainSeries = arr[0]?.rain_next10_mm || Array(10).fill(0);
+
+  scoreChart.data.datasets[0].data = scoreSeries; scoreChart.update();
+  rainChart.data.datasets[0].data = rainSeries; rainChart.update();
+
+  best.textContent = bestWindow(scoreSeries);
+
+  // mappa
+  marker.setLatLng([g.lat,g.lon]); ring.setLatLng([g.lat,g.lon]).setStyle({color: s.score>=70?'#22c55e':(s.score>=40?'#f59e0b':'#ef4444')});
+  map.setView([g.lat,g.lon], 11);
+
+  // heatmap Italia
+  const hm = await API('heatmap',{day});
+  heatLayer.clearLayers();
+  hm.points.forEach(p=>{
+    const color = p.s>=70?'#22c55e':(p.s>=40?'#f59e0b':'#ef4444');
+    L.circleMarker([p.lat,p.lon],{radius:6,color:color,weight:2,fillOpacity:0.15}).addTo(heatLayer);
+  });
+
+  // deep-link & memory
+  location.hash = `${g.lat.toFixed(5)},${g.lon.toFixed(5)},${day}`;
+  localStorage.setItem('tp_last', JSON.stringify({lat:g.lat,lon:g.lon,day}));
+}
+
+go.onclick = ()=>compute(parseInt(dayR.value)).catch(e=>alert('Errore: '+e.message));
+clr.onclick = ()=>{ qI.value=''; };
 dayR.oninput = ()=>{ if(last) compute(parseInt(dayR.value)).catch(()=>{}); };
+
+window.addEventListener('load', ()=>{
+  // ripristina da hash o memoria
+  const h = location.hash.replace('#','').split(',');
+  if(h.length>=2 && !isNaN(h[0]) && !isNaN(h[1])){ qI.value = `${h[0]}, ${h[1]}`; if(h[2]) dayR.value=+h[2]; compute(+dayR.value).catch(()=>{}); return; }
+  const mem = localStorage.getItem('tp_last');
+  if(mem){ const m=JSON.parse(mem); qI.value=`${m.lat}, ${m.lon}`; dayR.value = m.day ?? 0; compute(+dayR.value).catch(()=>{}); }
+});
 </script>
 </body>
 </html>
+
 
 
 
