@@ -321,4 +321,3 @@ async def api_score(lat: float = Query(...), lon: float = Query(...), day: int =
 
 
 
-
