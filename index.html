@@ -4,221 +4,205 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>TrovaPorcini v3.0</title>
+<link rel="preconnect" href="https://unpkg.com">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  :root{--bg:#0b1220;--panel:#0f1724;--line:#1f2a37;--text:#e6edf3;--muted:#9fb0c3;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
-  header{display:flex;gap:.8rem;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
-  .brand{font-size:22px;font-weight:800}
-  .tag{background:#1d2837;border:1px solid var(--line);padding:2px 8px;border-radius:8px;margin-left:.5rem}
-  .by{margin-left:auto;color:var(--muted);font-size:14px}
-  .wrap{max-width:1250px;margin:16px auto;padding:0 14px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
-  input[type=text]{width:100%;background:#0a1322;border:1px solid var(--line);color:var(--text);padding:12px;border-radius:12px}
-  .btn{background:var(--ok);border:none;color:#05280f;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer}
-  .btn.gray{background:#223046;color:var(--text)}
-  .grid2{display:grid;grid-template-columns:1fr auto;gap:12px}
-  .gridMain{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
-  @media(max-width:980px){ .gridMain{grid-template-columns:1fr} }
-  .pill{display:inline-block;border-radius:24px;padding:6px 10px;margin-right:8px}
-  .p-ok{background:#13351f} .p-warn{background:#3a2b12} .p-bad{background:#3a1f1f}
-  #map{height:600px;border-radius:12px;overflow:hidden}
-  @media(max-width:980px){ #map{height:420px} }
-  details{margin-top:10px}
-  summary{cursor:pointer}
-  .muted{color:var(--muted)}
-  canvas{background:#0a1322;border-radius:10px;padding:8px}
-  .kpi{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
-  .k{background:#0a1322;border:1px solid var(--line);padding:6px 10px;border-radius:10px}
+  :root{
+    --bg:#0e1420;--card:#141c2b;--accent:#1f9d5a;--text:#e8eef6;--muted:#8fa6c3;
+  }
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
+  .wrap{max-width:1100px;margin:0 auto;padding:16px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  h1{font-size:22px;margin:0}
+  h1 small{background:#22314a;color:#cfe1ff;border-radius:6px;padding:2px 8px;margin-left:8px}
+  .by{color:var(--muted);font-size:14px}
+  .card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:12px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a3956;background:#0f1726;color:var(--text)}
+  .buttons{display:flex;gap:8px;margin-top:8px}
+  button{background:var(--accent);color:#fff;border:none;padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer}
+  button.secondary{background:#2a3956}
+  .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:12px}
+  .metric{display:flex;gap:10px;align-items:center}
+  .pill{background:#1a2740;color:#cfe1ff;border-radius:20px;padding:4px 10px;font-size:13px}
+  .section-title{font-weight:700;margin:8px 0}
+  #map{width:100%;height:420px;border-radius:12px}
+  .slider{width:100%}
+  details{margin:8px 0}
+  details>summary{cursor:pointer;color:#cfe1ff}
+  @media (max-width:900px){
+    .grid{grid-template-columns:1fr}
+    #map{height:50vh}
+  }
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">🍄 TrovaPorcini <span class="tag">v3.0</span></div>
-  <div class="by">by <strong>Antonio Pio D’Aloia</strong></div>
-</header>
-
 <div class="wrap">
+  <header>
+    <h1>🍄 TrovaPorcini <small>v3.0</small></h1>
+    <div class="by">by <b>Antonio Pio D'Aloia</b></div>
+  </header>
+
   <div class="card">
-    <div class="grid2">
-      <input id="q" type="text" placeholder="Località oppure coord. es: 41.35, 14.55"/>
-      <div style="display:flex;gap:10px">
-        <button id="go" class="btn">Calcola</button>
-        <button id="clr" class="btn gray">Pulisci</button>
-      </div>
+    <label for="q">Località o coordinate (lat,lon)</label>
+    <input id="q" placeholder="es. Bocca della Selva oppure 41.4170010, 14.4707168" />
+    <div class="buttons">
+      <button id="go">Calcola</button>
+      <button id="clear" class="secondary">Pulisci</button>
     </div>
-    <small class="muted">Se metti coordinate, hanno priorità. Link condivisibile: lat,lon,day nel frammento URL.</small>
   </div>
 
-  <div class="gridMain">
+  <div class="grid">
     <div class="card">
-      <div class="kpi">
-        <div id="idxP" class="pill p-bad">Indice: –</div>
-        <div id="capsP" class="pill">Stima 3h: – cappelli</div>
-        <div id="rainP" class="pill">Pioggia: –</div>
+      <div class="metric">
+        <div class="pill" id="indexPill">Indice: –</div>
+        <div class="pill" id="capsPill">Stima 3h: – cappelli</div>
+        <div class="pill" id="rainPill">Pioggia: –</div>
       </div>
 
-      <div style="margin:8px 0 2px">Previsione (prossimi 10 giorni)</div>
-      <input id="day" type="range" min="0" max="9" value="0" step="1" style="width:100%"/>
-
-      <div id="best" class="muted" style="margin:10px 0"></div>
-
-      <details open>
-        <summary><b>Consigli pratici</b> (cambiano per il giorno selezionato)</summary>
-        <ul id="advice"></ul>
-      </details>
+      <div class="section-title">Previsione (prossimi 10 giorni)</div>
+      <input id="day" class="slider" type="range" min="0" max="9" step="1" value="0"/>
+      <div style="font-size:13px;color:var(--muted)">Giorno selezionato: <span id="dayLbl">oggi</span></div>
 
       <details open>
-        <summary><b>Perché questa stima</b></summary>
-        <ul id="why"></ul>
+        <summary>Consigli pratici (cambiano per il giorno selezionato)</summary>
+        <ul id="advice" style="margin:8px 0 0 18px"></ul>
       </details>
 
       <details>
-        <summary><b>Specie di porcini probabili</b></summary>
-        <div id="species"></div>
+        <summary>Perché questa stima</summary>
+        <div id="why" style="margin-top:6px;color:#d9e7ff"></div>
       </details>
 
       <details>
-        <summary><b>Dati tecnici</b></summary>
-        <div id="tech" class="kpi"></div>
+        <summary>Specie di porcini probabili</summary>
+        <div id="species" style="margin-top:6px"></div>
       </details>
 
-      <div class="grid2" style="margin-top:10px">
-        <canvas id="scoreChart" height="150"></canvas>
-        <canvas id="rainChart" height="150"></canvas>
-      </div>
+      <details>
+        <summary>Dati tecnici</summary>
+        <pre id="tech" style="white-space:pre-wrap;margin-top:6px;color:#9fc6ff"></pre>
+      </details>
     </div>
 
     <div class="card">
       <div id="map"></div>
-      <small class="muted">Mappa Italia con heatmap per il giorno selezionato.</small>
     </div>
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-const qs = (s)=>document.querySelector(s);
-const API = (p, o={})=>{
-  const q = new URLSearchParams(o).toString();
-  return fetch(`/api/${p}${q?('?' + q):''}`).then(r=>{ if(!r.ok) throw new Error('API '+r.status); return r.json(); });
-};
+const apiBase = "/api"; // Netlify proxy / Render diretto
 
-let map = L.map('map',{zoomControl:true}).setView([42.3,12.3],6);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
-let marker = L.marker([42.3,12.3]).addTo(map);
-let ring = L.circleMarker([42.3,12.3],{radius:10,color:'#22c55e'}).addTo(map);
-let heatLayer = L.layerGroup().addTo(map);
+// --- Leaflet ---
+let map = L.map('map', {scrollWheelZoom:true});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap'}).addTo(map);
+let marker=null, circle=null;
 
-const qI=qs('#q'), go=qs('#go'), clr=qs('#clr'), dayR=qs('#day');
-const idxP=qs('#idxP'), capsP=qs('#capsP'), rainP=qs('#rainP');
-const advice=qs('#advice'), why=qs('#why'), tech=qs('#tech'), best=qs('#best');
+// --- UI ---
+const q   = document.getElementById('q');
+const go  = document.getElementById('go');
+const clr = document.getElementById('clear');
+const day = document.getElementById('day');
+const dayLbl = document.getElementById('dayLbl');
 
-let last=null, scoreSeries=Array(10).fill(null), rainSeries=Array(10).fill(0);
+const indexPill = document.getElementById('indexPill');
+const capsPill  = document.getElementById('capsPill');
+const rainPill  = document.getElementById('rainPill');
+const adviceEl  = document.getElementById('advice');
+const whyEl     = document.getElementById('why');
+const techEl    = document.getElementById('tech');
+const speciesEl = document.getElementById('species');
 
-const scoreChart = new Chart(qs('#scoreChart'), {type:'line',
-  data:{labels:[...Array(10)].map((_,i)=>'D+'+i), datasets:[{label:'Indice', data:scoreSeries}]},
-  options:{responsive:true, scales:{y:{min:0,max:100}}}
-});
-const rainChart = new Chart(qs('#rainChart'), {type:'bar',
-  data:{labels:[...Array(10)].map((_,i)=>'D+'+i), datasets:[{label:'Pioggia (mm)', data:rainSeries}]},
-  options:{responsive:true, scales:{y:{beginAtZero:true}}}
-});
-
-function parseCoord(v){
-  const t=v.trim().replace(/;/g,',').replace(/\s+/g,' ').replace(/,/g,'.').split(/[\s,]+/);
-  if(t.length===2 && !isNaN(t[0]) && !isNaN(t[1])) return {lat:+t[0], lon:+t[1]};
+function parseLatLon(s){
+  if(!s) return null;
+  const t = s.replace(/[°\s]/g,'').replace(';',',').split(',');
+  if(t.length!==2) return null;
+  let la = t[0].replace(',','.'), lo = t[1].replace(',','.');
+  const lat = parseFloat(la), lon = parseFloat(lo);
+  if(Number.isFinite(lat) && Number.isFinite(lon)) return {lat, lon};
   return null;
 }
-async function geocodeOrCoords(){
-  const v=qI.value;
-  const c=parseCoord(v);
-  if(c) return {lat:c.lat, lon:c.lon, display:`${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`};
-  if(!v) throw new Error('Inserisci località o coordinate');
-  return await API('geocode',{q:v});
+
+async function geocode(name){
+  const url = "https://nominatim.openstreetmap.org/search";
+  const params = new URLSearchParams({format:"json",q:name,limit:"1",addressdetails:"0"});
+  const r = await fetch(`${url}?${params.toString()}`, {headers:{"User-Agent":"TrovaPorcini/3.0"}});
+  const j = await r.json();
+  if(j && j[0]) return {lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon)};
+  throw new Error("Località non trovata");
 }
 
-function pillClass(s){ return s>=70?'p-ok':(s>=40?'p-warn':'p-bad'); }
-function bullets(list, el){ el.innerHTML = (list&&list.length)? list.map(x=>`<li>${x}</li>`).join('') : '<li>–</li>'; }
-
-function bestWindow(arr){
-  let best=-1,bi=0;
-  for(let i=0;i<=7;i++){
-    const m = Math.round((arr[i]+arr[i+1]+arr[i+2])/3);
-    if(m>best){best=m;bi=i}
+async function fetchScore(lat, lon, d){
+  const params = new URLSearchParams({lat,lon,day:d});
+  const r = await fetch(`${apiBase}/score?`+params.toString());
+  if(!r.ok){
+    const t = await r.text();
+    throw new Error(`API ${r.status}: ${t.substring(0,120)}`);
   }
-  return `Finestra migliore (3 gg): D+${bi} → D+${bi+2} (media ${best})`;
+  return await r.json();
 }
 
-async function compute(day=0){
-  const g = await geocodeOrCoords();
-  last=g;
-  // query per giorno
-  const s = await API('score',{lat:g.lat, lon:g.lon, day});
-  idxP.textContent = `Indice D+${day}: ${s.score}`;
-  idxP.className = 'pill ' + pillClass(s.score);
-  capsP.textContent = `Stima 3h: ${s.caps_3h.mean} (${s.caps_3h.range[0]}–${s.caps_3h.range[1]}) cappelli`;
-  rainP.textContent = s.next_rain ? s.next_rain : 'Pioggia: nessuna imminente';
+function setMap(lat, lon, idx){
+  if(!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  map.setView([lat,lon], 11);
+  if(marker) map.removeLayer(marker);
+  if(circle) map.removeLayer(circle);
+  marker = L.marker([lat,lon]).addTo(map);
+  const radius = 1500 + (100-idx)*15; // cerchio più grande se indice basso
+  circle = L.circle([lat,lon], {radius, color:"#1f9d5a", fillColor:"#1f9d5a", fillOpacity:0.15}).addTo(map);
+}
 
-  bullets(s.advice, advice);
-  bullets(s.why, why);
+function showResult(j){
+  indexPill.textContent = `Indice: ${j.index}`;
+  capsPill.textContent  = `Stima 3h: ${j.caps3h} cappelli`;
+  rainPill.textContent  = `Pioggia: ${j.tech.P14mm} mm (ult.14gg)`;
+  whyEl.textContent     = j.why || "—";
 
-  const techItems = [
-    `P14: <b>${s.p14_mm} mm</b>`,
-    `Tmedia 7 gg: <b>${s.tmean7_c} °C</b>`,
-    `ET₀ 7 gg: <b>${s.et0_7mm} mm</b>`,
-    `Quota: <b>${s.alt_m} m</b>`,
-    `Esp.: <b>${s.aspect_octant}</b>`,
-    `Bosco: <b>${s.forest}</b>`,
-    `Ultima pioggia: <b>${s.last_rain_days ?? '–'} gg fa</b>`
-  ];
-  tech.innerHTML = techItems.map(x=>`<div class="k">${x}</div>`).join('');
-
-  qs('#species').textContent = s.species.join(' • ');
-
-  // serie complete
-  const arr = await Promise.all([...Array(10)].map((_,i)=>API('score',{lat:g.lat,lon:g.lon,day:i}).catch(()=>null)));
-  scoreSeries = arr.map(x=>x?x.score:null);
-  rainSeries = arr[0]?.rain_next10_mm || Array(10).fill(0);
-
-  scoreChart.data.datasets[0].data = scoreSeries; scoreChart.update();
-  rainChart.data.datasets[0].data = rainSeries; rainChart.update();
-
-  best.textContent = bestWindow(scoreSeries);
-
-  // mappa
-  marker.setLatLng([g.lat,g.lon]); ring.setLatLng([g.lat,g.lon]).setStyle({color: s.score>=70?'#22c55e':(s.score>=40?'#f59e0b':'#ef4444')});
-  map.setView([g.lat,g.lon], 11);
-
-  // heatmap Italia
-  const hm = await API('heatmap',{day});
-  heatLayer.clearLayers();
-  hm.points.forEach(p=>{
-    const color = p.s>=70?'#22c55e':(p.s>=40?'#f59e0b':'#ef4444');
-    L.circleMarker([p.lat,p.lon],{radius:6,color:color,weight:2,fillOpacity:0.15}).addTo(heatLayer);
+  adviceEl.innerHTML = "";
+  (j.advice || []).forEach(a => {
+    const li = document.createElement('li'); li.textContent = a; adviceEl.appendChild(li);
   });
 
-  // deep-link & memory
-  location.hash = `${g.lat.toFixed(5)},${g.lon.toFixed(5)},${day}`;
-  localStorage.setItem('tp_last', JSON.stringify({lat:g.lat,lon:g.lon,day}));
+  speciesEl.textContent = (j.species||[]).join(", ") || "—";
+
+  techEl.textContent = JSON.stringify(j.tech, null, 2);
+
+  setMap(j.tech.lat, j.tech.lon, j.index);
 }
 
-go.onclick = ()=>compute(parseInt(dayR.value)).catch(e=>alert('Errore: '+e.message));
-clr.onclick = ()=>{ qI.value=''; };
-dayR.oninput = ()=>{ if(last) compute(parseInt(dayR.value)).catch(()=>{}); };
+async function run(){
+  try{
+    const txt = q.value.trim();
+    let coords = parseLatLon(txt);
+    if(!coords){
+      if(!txt) throw new Error("Inserisci località o coordinate");
+      coords = await geocode(txt);
+    }
+    const d = parseInt(day.value,10) || 0;
+    const j = await fetchScore(coords.lat, coords.lon, d);
+    showResult(j);
+  }catch(err){
+    alert("Errore: " + err.message);
+  }
+}
 
-window.addEventListener('load', ()=>{
-  // ripristina da hash o memoria
-  const h = location.hash.replace('#','').split(',');
-  if(h.length>=2 && !isNaN(h[0]) && !isNaN(h[1])){ qI.value = `${h[0]}, ${h[1]}`; if(h[2]) dayR.value=+h[2]; compute(+dayR.value).catch(()=>{}); return; }
-  const mem = localStorage.getItem('tp_last');
-  if(mem){ const m=JSON.parse(mem); qI.value=`${m.lat}, ${m.lon}`; dayR.value = m.day ?? 0; compute(+dayR.value).catch(()=>{}); }
+go.addEventListener('click', run);
+clr.addEventListener('click', ()=>{ q.value=""; adviceEl.innerHTML=""; whyEl.textContent=""; techEl.textContent=""; indexPill.textContent="Indice: –"; capsPill.textContent="Stima 3h: – cappelli"; rainPill.textContent="Pioggia: –"; });
+day.addEventListener('input', ()=>{
+  const v = parseInt(day.value,10);
+  dayLbl.textContent = v===0 ? "oggi" : `D+${v}`;
+  if(q.value.trim()) run();
 });
+
+// Avvio: centro Italia di default
+setMap(42.5, 12.5, 50);
 </script>
 </body>
 </html>
+
 
 
 
