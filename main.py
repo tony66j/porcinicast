@@ -2,11 +2,9 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timezone
-import math, asyncio, os
-import httpx
+import httpx, math, os
 
-# ---------------- App ----------------
-APP = FastAPI(title="TrovaPorcini API v0.97")
+APP = FastAPI(title="TrovaPorcini API v1.0")
 app = APP  # <- uvicorn main:app
 
 APP.add_middleware(
@@ -14,11 +12,10 @@ APP.add_middleware(
     allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
-UA = "TrovaPorcini/0.97"
+UA = "TrovaPorcini/1.0"
 HDR = {"User-Agent": UA}
-OWM_KEY = os.getenv("OPENWEATHER_API_KEY", "").strip()
 
-# -------------- utils ---------------
+# ----------------- helpers -----------------
 def clamp(x,a,b): return max(a, min(b, x))
 
 def deg_to_octant(deg: float) -> str:
@@ -38,74 +35,6 @@ def slope_aspect_from_grid(e9: List[List[float]], cell_m: float=30.0) -> Tuple[f
         if aspect<0: aspect+=360
     return slope, aspect
 
-# -------------- external ------------
-async def geocode(q: str) -> Dict[str, Any]:
-    url="https://nominatim.openstreetmap.org/search"
-    p={"format":"json","q":q,"addressdetails":1,"limit":1}
-    async with httpx.AsyncClient(timeout=15, headers={**HDR,"Accept-Language":"it"}) as c:
-        r=await c.get(url,params=p); r.raise_for_status()
-        j=r.json()
-    if not j: return {}
-    return {"lat":float(j[0]["lat"]), "lon":float(j[0]["lon"]), "display":j[0]["display_name"]}
-
-async def open_elev_grid(lat:float, lon:float) -> List[List[float]]:
-    step=30.0
-    dlat=step/111320.0
-    dlon=step/(111320.0*math.cos(math.radians(lat)))
-    coords=[]
-    for dr in (-1,0,1):
-        for dc in (-1,0,1):
-            coords.append({"latitude":lat+dr*dlat, "longitude":lon+dc*dlon})
-    async with httpx.AsyncClient(timeout=15, headers=HDR) as c:
-        r=await c.post("https://api.open-elevation.com/api/v1/lookup", json={"locations":coords})
-        r.raise_for_status(); j=r.json()
-    v=[p["elevation"] for p in j["results"]]
-    return [v[0:3], v[3:6], v[6:9]]
-
-async def overpass_forest(lat:float, lon:float, radius:int=800)->Optional[str]:
-    q=f"""
-[out:json][timeout:25];
-(way(around:{radius},{lat},{lon})[natural=wood];
- relation(around:{radius},{lat},{lon})[natural=wood]);
-out tags center 60;
-"""
-    async with httpx.AsyncClient(timeout=30, headers=HDR) as c:
-        r=await c.post("https://overpass-api.de/api/interpreter", data={"data":q})
-        r.raise_for_status(); j=r.json()
-    lab=[]
-    for el in j.get("elements",[]):
-        t=el.get("tags",{})
-        if "leaf_type" in t:
-            lt=t["leaf_type"].lower()
-            if "broad" in lt: lab.append("broadleaved")
-            elif "conifer" in lt: lab.append("coniferous")
-        elif "wood" in t:
-            v=t["wood"]
-            if v in ("deciduous","broadleaved"): lab.append("broadleaved")
-            if v in ("coniferous","needleleaved"): lab.append("coniferous")
-    if not lab: return None
-    return "broadleaved" if lab.count("broadleaved")>=lab.count("coniferous") else "coniferous"
-
-def forest_label(kind: Optional[str], alt: float) -> str:
-    if kind=="coniferous": return "Pinus/Abies/Picea"
-    if kind=="broadleaved":
-        if alt>800: return "Fagus sylvatica"
-        if alt>500: return "Castanea sativa"
-        return "Quercus spp."
-    if alt>1400: return "Pinus/Abies/Picea"
-    if alt>900:  return "Fagus sylvatica"
-    if alt>500:  return "Castanea sativa"
-    return "Quercus spp."
-
-async def meteo(lat:float, lon:float)->Dict[str,Any]:
-    base="https://api.open-meteo.com/v1/forecast"
-    p={"latitude":lat,"longitude":lon,
-       "daily":",".join(["precipitation_sum","temperature_2m_mean","relative_humidity_2m_mean","et0_fao_evapotranspiration"]),
-       "past_days":14,"forecast_days":10,"timezone":"auto"}
-    async with httpx.AsyncClient(timeout=25, headers=HDR) as c:
-        r=await c.get(base,params=p); r.raise_for_status(); return r.json()
-
-# -------------- model ---------------
 def season_band(month:int)->Tuple[int,int]:
     if month in (9,10,11): return 400,1500
     if month in (6,7,8):  return 900,1800
@@ -138,11 +67,11 @@ def window3(xs:List[int])->Tuple[int,int,float]:
 
 def tips(T7:float,P14:float,slope:float,asp:str,forest:str)->str:
     out=[]
-    out.append("cerca zone con suolo che trattiene umidità" if P14<8 else "buon apporto idrico recente")
-    if T7<8: out.append("prediligi esposizioni NE–E più miti")
-    elif T7>20: out.append("meglio quote leggermente maggiori e versanti N–NE–NW")
+    out.append("suolo che trattiene umidità" if P14<8 else "apporto idrico recente ok")
+    if T7<8: out.append("quote un po’ più basse; esposizioni NE–E")
+    elif T7>20: out.append("quote leggermente maggiori e versanti N–NE–NW")
     if slope<5: out.append("evita piani: cerca pendenze 5–20°")
-    if "Fagus" in forest: out.append("nei faggeti: chiarie e bordi sentiero")
+    if "Fagus" in forest: out.append("nel faggio: chiarie e bordi sentiero")
     if "Castanea" in forest: out.append("castagneti: margini e zone muschiose")
     if "Quercus" in forest: out.append("querceti: tratti più freschi/ombreggiati")
     return "; ".join(out)
@@ -157,41 +86,131 @@ def species(forest:str,lat:float,alt:float,month:int)->List[str]:
     else:
         out=["Boletus edulis"]
     # dedup
-    seen=set();res=[]
+    res=[]; seen=set()
     for s in out:
         if s not in seen: seen.add(s); res.append(s)
     return res
 
-def est_kg(score:float, compat:float, uncert:float, lat:float, month:int)->float:
-    base=max(0.0,(score-40)/60.0)
-    seas=1.1 if (month in (6,7,8) and lat<43) else 1.0
-    kg=0.8*base*(0.6+0.6*compat-0.3*uncert)*seas
-    return round(max(0.0,kg),2)
+def est_caps(score:float, compat:float, uncert:float)->Tuple[float,Tuple[int,int]]:
+    # intensità attesa (porcini/ora) in funzione dello score (≥40 inizia a muoversi)
+    lam = max(0.0,(score-40)/10.0) * (0.7+0.6*compat) * (1.0-0.5*uncert)
+    exp3 = lam*3.0
+    lo   = max(0, int(round(exp3*0.6)))
+    hi   =        int(round(exp3*1.6))
+    return round(exp3,1), (lo, hi)
 
-# -------------- endpoints -----------
+def forest_label(kind: Optional[str], alt: float) -> str:
+    if kind=="coniferous": return "Pinus/Abies/Picea"
+    if kind=="broadleaved":
+        if alt>800: return "Fagus sylvatica"
+        if alt>500: return "Castanea sativa"
+        return "Quercus spp."
+    if alt>1400: return "Pinus/Abies/Picea"
+    if alt>900:  return "Fagus sylvatica"
+    if alt>500:  return "Castanea sativa"
+    return "Quercus spp."
+
+# ---------------- external (fault-tolerant) ----------------
+async def safe_get(client, *a, **kw):
+    try:
+        r=await client.get(*a, **kw); r.raise_for_status(); return r
+    except Exception:
+        return None
+
+async def safe_post(client, *a, **kw):
+    try:
+        r=await client.post(*a, **kw); r.raise_for_status(); return r
+    except Exception:
+        return None
+
+async def geocode(q: str) -> Dict[str, Any]:
+    async with httpx.AsyncClient(timeout=15, headers={**HDR,"Accept-Language":"it"}) as c:
+        r=await safe_get(c,"https://nominatim.openstreetmap.org/search",
+                         params={"format":"json","q":q,"addressdetails":1,"limit":1})
+    if not r: return {}
+    j=r.json()
+    if not j: return {}
+    return {"lat":float(j[0]["lat"]), "lon":float(j[0]["lon"]), "display":j[0]["display_name"]}
+
+async def open_elev_grid(lat:float, lon:float) -> List[List[float]]:
+    # 3x3 griglia Open-Elevation; fallback piatto a quota media 800 m
+    step=30.0
+    dlat=step/111320.0
+    dlon=step/(111320.0*math.cos(math.radians(lat)))
+    coords=[{"latitude":lat+dr*dlat, "longitude":lon+dc*dlon}
+            for dr in (-1,0,1) for dc in (-1,0,1)]
+    async with httpx.AsyncClient(timeout=15, headers=HDR) as c:
+        r=await safe_post(c,"https://api.open-elevation.com/api/v1/lookup", json={"locations":coords})
+    if not r:
+        return [[800,800,800],[800,800,800],[800,800,800]]
+    j=r.json(); v=[p.get("elevation",800) for p in j.get("results",[])]
+    if len(v)!=9: v=[800]*9
+    return [v[0:3], v[3:6], v[6:9]]
+
+async def overpass_forest(lat:float, lon:float, radius:int=800)->Optional[str]:
+    q=f"""
+[out:json][timeout:25];
+(way(around:{radius},{lat},{lon})[natural=wood];
+ relation(around:{radius},{lat},{lon})[natural=wood]);
+out tags center 60;
+"""
+    async with httpx.AsyncClient(timeout=30, headers=HDR) as c:
+        r=await safe_post(c,"https://overpass-api.de/api/interpreter", data={"data":q})
+        if not r:
+            r=await safe_post(c,"https://overpass.kumi.systems/api/interpreter", data={"data":q})
+    if not r: return None
+    j=r.json()
+    lab=[]
+    for el in j.get("elements",[]):
+        t=el.get("tags",{})
+        if "leaf_type" in t:
+            lt=t["leaf_type"].lower()
+            if "broad" in lt: lab.append("broadleaved")
+            elif "conifer" in lt: lab.append("coniferous")
+        elif "wood" in t:
+            w=t["wood"]
+            if w in ("deciduous","broadleaved"): lab.append("broadleaved")
+            if w in ("coniferous","needleleaved"): lab.append("coniferous")
+    if not lab: return None
+    return "broadleaved" if lab.count("broadleaved")>=lab.count("coniferous") else "coniferous"
+
+async def meteo(lat:float, lon:float)->Dict[str,Any]:
+    base="https://api.open-meteo.com/v1/forecast"
+    p={"latitude":lat,"longitude":lon,
+       "daily":",".join(["precipitation_sum","temperature_2m_mean","relative_humidity_2m_mean","et0_fao_evapotranspiration"]),
+       "past_days":14,"forecast_days":10,"timezone":"auto"}
+    async with httpx.AsyncClient(timeout=25, headers=HDR) as c:
+        r=await safe_get(c,base,params=p)
+    return r.json() if r else {"daily":{"precipitation_sum":[0]*24,"temperature_2m_mean":[16]*24}}
+
+# ---------------- endpoints ----------------
+@APP.get("/api/health")
+def health(): return {"ok":True}
+
 @APP.get("/api/geocode")
-async def api_geocode(q: str):
-    return await geocode(q)
+async def api_geocode(q: str): return await geocode(q)
 
 @APP.get("/api/score")
 async def api_score(lat: float, lon: float, day:int=Query(0,ge=0,le=9)):
+    degraded=False
     # terreno
     elev9=await open_elev_grid(lat,lon)
     elev=float(elev9[1][1])
     slope, aspect_deg = slope_aspect_from_grid(elev9,30.0)
-    aspect_oct = deg_to_octant(aspect_deg) if aspect_deg is not None else "N/A"
+    aspect_oct = deg_to_octant(aspect_deg) if aspect_deg is not None else "N"
     # bosco
-    k = await overpass_forest(lat,lon)
-    flbl = forest_label(k, elev)
+    kind = await overpass_forest(lat,lon)
+    flbl = forest_label(kind, elev)
+    if kind is None: degraded=True
     # meteo (14 passati + 10 futuri)
     m = await meteo(lat,lon)
-    d = m["daily"]
-    prec = d["precipitation_sum"]; temp = d["temperature_2m_mean"]
-    rh = d.get("relative_humidity_2m_mean",[None]*len(prec))
-    et0= d.get("et0_fao_evapotranspiration",[0.0]*len(prec))
+    d = m.get("daily",{})
+    prec = d.get("precipitation_sum",[0.0]*24)
+    temp = d.get("temperature_2m_mean",[16.0]*24)
+    rh   = d.get("relative_humidity_2m_mean",[None]*len(prec))
     past14 = prec[:14]
-    futP   = prec[14:14+10]
-    futT   = temp[14:14+10]
+    futP   = prec[14:24]
+    futT   = temp[14:24]
     # metriche pioggia
     P14 = sum(past14)
     last_rain=0
@@ -203,23 +222,23 @@ async def api_score(lat: float, lon: float, day:int=Query(0,ge=0,le=9)):
         next_mm += mm
         if next_in is None and mm>=0.5: next_in=i
     month=int(datetime.now(timezone.utc).month)
-    # score per 10 giorni
-    scores=[]; tips10=[]; why10=[]; kg10=[]; kgNote10=[]
-    roll=P14
-    uncert=0.3 + (0.2 if k is None else 0.0) + (0.1 if all(v is None for v in rh) else 0.0)
+    # uncertainty
+    uncert=0.2 + (0.2 if kind is None else 0.0) + (0.1 if all(v is None for v in rh) else 0.0)
     uncert=clamp(uncert,0.0,1.0)
+    # score 10 gg + stime cappelli
+    scores=[]; tips10=[]; why10=[]; caps10=[]; capsrng10=[]
+    roll=P14
     for i in range(10):
         roll = max(0.0, roll*(13/14) + (futP[i] if i<len(futP) else 0.0))
         s, br = comp_score(roll, futT[i], elev, aspect_oct, flbl, month)
         scores.append(int(round(s)))
         tips10.append(tips(futT[i], roll, slope, aspect_oct, flbl))
-        why10.append(
-            f"P14={round(roll,1)} mm; T7={round(futT[i],1)} °C; quota {int(round(elev))} m; esposizione {aspect_oct}; bosco {flbl}"
-        )
-        kg10.append(est_kg(s, br["compat"], uncert, lat, month))
-        kgNote10.append("prudente" if kg10[-1]<=0.6 else ("realistica" if kg10[-1]<=1.2 else "ottimista"))
+        why10.append(f"P14={round(roll,1)} mm; T7={round(futT[i],1)} °C; quota {int(round(elev))} m; esposizione {aspect_oct}; bosco {flbl}")
+        mean_caps, rng = est_caps(s, br["compat"], uncert)
+        caps10.append(mean_caps); capsrng10.append(rng)
     s0,s2,smean=window3(scores)
     return {
+        "ok": True, "degraded": degraded,
         "elevation_m": elev,
         "slope_deg": round(slope,1),
         "aspect_deg": round(aspect_deg,1) if aspect_deg is not None else None,
@@ -231,15 +250,16 @@ async def api_score(lat: float, lon: float, day:int=Query(0,ge=0,le=9)):
         "scores_next10": scores,
         "tips10": tips10,
         "why10": why10,
-        "kg10": kg10,
-        "kg_note10": kgNote10,
+        "caps3_10": caps10,
+        "caps3_range10": capsrng10,
         "best_window": {"start":s0,"end":s2,"mean":smean},
         "series": {
             "precip_past14": [round(x,1) for x in past14],
             "precip_next10": [round(x,1) for x in futP],
             "tmean_next10": [round(x,1) for x in futT]
         },
-        "species_probable": species(flbl, lat, elev, month)
+        "species_probable": species(flbl, lat, elev, month),
+        "uncertainty": round(uncert,2)
     }
 
 
