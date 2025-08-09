@@ -1,154 +1,252 @@
-<!doctype html><html lang="it"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>TrovaPorcini v4.3-Pro</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<style>
-  :root{--bg:#0f1520;--card:#121a26;--muted:#8aa0b5;--acc:#1dd675;--warn:#ffd166;--bad:#ff5c5c}
-  body{margin:0;background:var(--bg);color:#e6edf5;font-family:system-ui,Segoe UI,Roboto,Ubuntu,sans-serif}
-  .wrap{max-width:1150px;margin:24px auto;padding:0 14px}
-  h1{display:flex;gap:.6rem;align-items:center;margin:0 0 18px;font-size:1.4rem}
-  .ver{background:#243144;border:1px solid #314059;color:#b6c6d8;padding:.15rem .5rem;border-radius:.5rem}
-  .by{font-size:.9rem;color:var(--muted)}
-  .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
-  .card{background:var(--card);border:1px solid #1f2b3b;border-radius:12px;padding:14px}
-  label{font-size:.9rem;color:var(--muted)}
-  input{width:100%;padding:10px 12px;margin-top:6px;border-radius:10px;border:1px solid #2a3a50;background:#0c121b;color:#e6edf5}
-  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-  .btn{background:#1a2636;color:#e6edf5;border:1px solid #2a3a50;border-radius:10px;padding:10px 14px;cursor:pointer}
-  .btn.acc{background:var(--acc);color:#00160b;border:none}
-  .kpi{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
-  .chip{background:#0e1621;border:1px solid #243144;border-radius:999px;padding:.35rem .7rem;font-size:.92rem}
-  .chip.bad{background:#2b1010;border-color:#531919}
-  .chip.warn{background:#2a240c;border-color:#534519}
-  .chip.good{background:#0d2418;border-color:#1d5435}
-  .slider{width:100%;margin:10px 0}
-  #map{height:420px;border-radius:12px;border:1px solid #1f2b3b}
-  details{margin:8px 0} small.mono{font-family:ui-monospace,Consolas,monospace;color:#a9bfd3}
-  @media (max-width:900px){.grid{grid-template-columns:1fr} #map{height:360px}}
-</style>
-</head><body>
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <title>TrovaPorcini vPRO+</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    :root{
+      --bg:#0f1420; --panel:#141a29; --muted:#9fb0ca; --acc:#30d158; --accent:#27c;
+      --warn:#f6b73c; --bad:#e05d5d; --card:#0b1020;
+    }
+    html,body{margin:0;background:var(--bg);color:#e6eef8;font-family:system-ui,Segoe UI,Roboto,Arial}
+    .wrap{max-width:1200px;margin:0 auto;padding:18px}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    .title{font-size:28px;font-weight:700}
+    .badge{background:#1e2639;padding:4px 10px;border-radius:8px}
+    .by{margin-left:auto;color:var(--muted);font-size:14px}
+    .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:14px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}}
+    .card{background:var(--panel);border-radius:12px;padding:14px;box-shadow:0 0 0 1px #182036 inset}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    input,button{height:40px;border-radius:8px;border:1px solid #26314a;background:#0e1526;color:#e6eef8;padding:0 10px}
+    button{background:var(--accent);border:none;font-weight:600;cursor:pointer}
+    .muted{color:var(--muted)}
+    .indexBig{font-size:42px;font-weight:800}
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#1e2639;margin:0 6px 0 0}
+    .ok{color:#8ef39b}.warn{color:var(--warn)}.bad{color:var(--bad)}
+    .section h3{margin:10px 0 6px}
+    .list{line-height:1.55}
+    .kpi{display:flex;gap:10px;flex-wrap:wrap}
+    .kpi .pill{background:#0b1020}
+    .flex{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .slider{width:100%}
+    .map{height:480px;border-radius:12px;overflow:hidden}
+    .json{font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap;background:#0b1020;padding:12px;border-radius:10px;color:#b8c6e0}
+  </style>
+</head>
+<body>
 <div class="wrap">
-  <h1>🍄 TrovaPorcini <span class="ver">v4.3-Pro</span> <span class="by">by Antonio Pio D’Aloia</span></h1>
+  <header>
+    <div class="title">🍄 TrovaPorcini <span class="badge">vPRO+</span></div>
+    <div class="by">by <b>Antonio Pio D’Aloia</b></div>
+  </header>
 
+  <!-- Input -->
   <div class="card">
     <div class="row">
-      <div style="flex:1"><label>Località</label><input id="q" placeholder="es. Bocca della Selva"/></div>
-      <div style="flex:1"><label>Coordinate (lat,lon)</label>
-        <input id="coords" placeholder="es. 41,41948, 14,47275 (anche formato Google)"/></div>
-      <button id="go" class="btn acc">Calcola</button>
-      <button id="clear" class="btn">Pulisci</button>
+      <label class="muted">Località</label>
+      <input id="loc" style="min-width:260px" placeholder="es. Bocca della Selva" />
+      <label class="muted">Coordinate (lat,lon)</label>
+      <input id="coords" style="min-width:240px" placeholder="41,4170010, 14,4707168" />
+      <button id="go">Calcola</button>
+      <button id="clear" style="background:#26314a">Pulisci</button>
+      <span class="muted" id="place"></span>
     </div>
   </div>
 
+  <!-- Risultati + Mappa -->
   <div class="grid">
     <div class="card">
       <div class="kpi">
-        <span id="dateChip" class="chip">Indice: —</span>
-        <span id="idxChip"  class="chip">—</span>
-        <span id="capsChip" class="chip">Stima 3h: — cappelli</span>
-        <span id="rainChip" class="chip">Pioggia: — mm</span>
+        <span class="pill">Indice: <span id="idx" class="indexBig">—</span></span>
+        <span class="pill">Stima 3h: <span id="caps">— cappelli</span></span>
+        <span class="pill">Pioggia prossima: <span id="nextr">— mm</span></span>
       </div>
-      <label>Previsione (prossimi 10 giorni)</label>
-      <input id="day" class="slider" type="range" min="0" max="9" value="0">
 
-      <details open><summary><b>Consigli pratici</b> (cambiano per il giorno selezionato)</summary>
-        <div id="tips">—</div></details>
-      <details><summary><b>Perché questa stima</b> (considerazioni)</summary>
-        <div id="why">—</div></details>
-      <details><summary><b>Specie di porcini probabili</b></summary>
-        <div id="species">—</div></details>
-      <details><summary><b>Dati tecnici</b></summary>
-        <small class="mono" id="tech">—</small></details>
+      <div class="section">
+        <h3>Previsione (prossimi 10 giorni)</h3>
+        <input id="day" type="range" min="0" max="9" value="0" class="slider" />
+        <div class="muted">Giorno selezionato: <span id="dsel">oggi</span></div>
+      </div>
+
+      <div class="section">
+        <h3>Consigli pratici (cambiano col giorno)</h3>
+        <div id="tips" class="list muted">—</div>
+      </div>
+
+      <div class="section">
+        <h3>Perché questa stima</h3>
+        <div id="why" class="list muted">—</div>
+      </div>
+
+      <div class="section">
+        <h3>Specie di porcini probabili</h3>
+        <div id="forest" class="list muted">—</div>
+      </div>
+
+      <div class="section">
+        <h3>Dati tecnici</h3>
+        <div id="tech" class="json">—</div>
+      </div>
     </div>
 
-    <div class="card"><div id="map"></div>
-      <div style="margin-top:8px;color:#8aa0b5;font-size:.85rem">
-        Legenda cerchio: colore = indice del giorno selezionato.
-      </div>
+    <div class="card">
+      <div id="map" class="map"></div>
+      <div class="muted" style="margin-top:6px">Il cerchio cambia colore con lo slider (indice del giorno selezionato).</div>
     </div>
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""></script>
 <script>
-const API = "/api"; // Netlify redirect -> Render
-const $ = id => document.getElementById(id);
-let state=null, map, marker, circ;
+const API = (location.hostname.includes("netlify") || location.hostname.includes("localhost"))
+  ? (localStorage.getItem("API_URL") || "https://porcinicast-2.onrender.com")  // <-- cambia se diverso
+  : "https://porcinicast-2.onrender.com";                                     // Render backend
 
-function parseLatLon(s){
-  if(!s) return null;
-  const s2=s.replace(/,/g,".");
-  const m=s2.match(/([-+]?\d+(?:\.\d+)?)[^\d-+]+([-+]?\d+(?:\.\d+)?)/);
-  return m?{lat:parseFloat(m[1]),lon:parseFloat(m[2])}:null;
-}
-function chip(el, txt, cls){ el.className="chip "+(cls||""); el.textContent=txt;}
-function idxClass(v){ return v>=70?"good":v>=50?"warn":"bad"; }
+let Lmap, Lmarker, Lring, last;
 
-function ensureMap(){
-  if(map) return;
-  map=L.map("map"); 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,minZoom:5}).addTo(map);
-}
-function drawMap(lat,lon,idx){
-  ensureMap();
-  map.setView([lat,lon], 12);
-  if(!marker) marker=L.marker([lat,lon]).addTo(map); else marker.setLatLng([lat,lon]);
-  if(circ) map.removeLayer(circ);
-  const col= idx>=70?"#12d670":idx>=50?"#ffd166":"#ff6b6b";
-  circ=L.circle([lat,lon],{radius:1200,color:col,fillColor:col,fillOpacity:.25}).addTo(map);
+function initMap(){
+  Lmap = L.map('map').setView([41.9,12.5], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: "© OpenStreetMap"}).addTo(Lmap);
 }
 
-function renderDay(d){
-  if(!state) return;
-  const idx=state.daily.idx[d], ch=idxClass(idx);
-  const range=state.daily.caps[d];
-  const rain=state.daily.rain[d].p14_mm;
-  const iso=state.series.dates[13+d]; const dat=new Date(iso).toLocaleDateString("it-IT");
-  $("dateChip").textContent = `D+${d} — ${dat}`;
-  chip($("idxChip"), `Indice: ${idx}`, ch);
-  $("capsChip").textContent = `Stima 3h: ${range[0]}–${range[1]} cappelli`;
-  $("rainChip").textContent = `Pioggia (ult.14gg): ${rain} mm`;
-  $("tips").textContent = state.daily.tips[d];
-  $("why").textContent  = state.daily.why[d];
-  $("species").textContent = state.terrain.forest;
-  $("tech").textContent = JSON.stringify({
-    lat:state.coords.lat, lon:state.coords.lon,
-    elev_m:state.terrain.elev_m, slope_deg:state.terrain.slope_deg, aspect:state.terrain.aspect_oct,
-    P14_mm:state.meta.p14_mm, Tmean7_c:state.meta.tmean7_c,
-    last_rain_days:state.meta.last_rain_days,
-    next_rain_in_days:state.meta.next_rain_in_days,
-    next_rain_10d_mm:state.meta.next_rain_10d_mm,
-    source:state.meta.source
-  }, null, 2);
-  drawMap(state.coords.lat, state.coords.lon, idx);
+function ringColor(idx){
+  if(idx>=70) return "#3bd16f";
+  if(idx>=50) return "#f6b73c";
+  return "#e05d5d";
 }
-$("day").oninput=()=>renderDay(parseInt($("day").value,10));
 
-async function j(url, params){
-  const r=await fetch(url+(params?("?"+new URLSearchParams(params)):""));
-  if(!r.ok){ throw new Error("API "+r.status+": "+(await r.text())); }
-  return r.json();
+function setMap(lat, lon, idx){
+  if(!Lmap) return;
+  if(!Lmarker){
+    Lmarker = L.marker([lat,lon]).addTo(Lmap);
+  } else {
+    Lmarker.setLatLng([lat,lon]);
+  }
+  if(!Lring){
+    Lring = L.circle([lat,lon], {radius: 1500, color: ringColor(idx), fillOpacity: 0.07}).addTo(Lmap);
+  } else {
+    Lring.setLatLng([lat,lon]);
+    Lring.setStyle({color: ringColor(idx)});
+  }
+  Lmap.setView([lat,lon], 12);
 }
-async function geocode(q){ return j(API+"/geocode",{q}); }
-async function score(p){ return j(API+"/score",p); }
 
-$("go").onclick = async ()=>{
-  try{
-    const c=parseLatLon($("coords").value.trim());
-    let p={};
-    if(c) p={lat:c.lat,lon:c.lon};
-    else{
-      const q=$("q").value.trim();
-      if(!q) {alert("Inserisci località o coordinate"); return;}
-      const g=await geocode(q); p={lat:g.lat,lon:g.lon};
-    }
-    state = await score(p);
-    $("day").value=0; renderDay(0);
-  }catch(e){ alert(e.message); }
-};
-$("clear").onclick=()=>{ $("q").value="";$("coords").value="";state=null; location.reload(); };
+function fmtCaps(obj){
+  if(!obj) return "— cappelli";
+  return `${obj.low}–${obj.high} cappelli`;
+}
+
+function setDayLabel(dates, k){
+  if(!dates || !dates[k]) { dsel.textContent = (k===0?"oggi":`D+${k}`); return; }
+  const todayISO = new Date().toISOString().slice(0,10);
+  dsel.textContent = (dates[14+k]===todayISO ? "oggi" : dates[14+k]);
+}
+
+async function fetchScore(){
+  const loc = document.getElementById("loc").value.trim();
+  const coords = document.getElementById("coords").value.trim();
+  let url = `${API}/api/score?`;
+  if(coords){
+    url += `coords=${encodeURIComponent(coords)}`;
+  } else if(loc){
+    url += `q=${encodeURIComponent(loc)}`;
+  } else {
+    alert("Errore: inserisci località o coordinate");
+    return;
+  }
+  const r = await fetch(url);
+  if(!r.ok){
+    const txt = await r.text();
+    alert(`Errore: ${r.status} ${txt}`);
+    return;
+  }
+  last = await r.json();
+  // riempi pannelli base
+  document.getElementById("place").textContent = last.place || "";
+  document.getElementById("idx").textContent = last.index_today ?? "—";
+  document.getElementById("caps").textContent = fmtCaps(last.caps_3h);
+  document.getElementById("nextr").textContent = (last.next_rain_mm!=null ? `${last.next_rain_mm} mm (D+${last.next_rain_in_days})` : "—");
+
+  // forest
+  document.getElementById("forest").textContent = last.forest || "—";
+
+  // why/tips oggi
+  document.getElementById("tips").textContent = (last.tips_today || []).join(" ");
+  document.getElementById("why").textContent = last.why_today || "—";
+
+  // tech
+  const tech = {
+    lat: last.lat, lon: last.lon, elev_m: last.elevation_m,
+    slope_deg: Math.round(last.slope_deg), aspect_deg: Math.round(last.aspect_deg),
+    P14_eff_mm: last.rain_history ? last.rain_history.slice(-14).map(x=>x.mm).reduce((a,b)=>a+(b||0),0) : null,
+    next_rain_mm: last.next_rain_mm, next_rain_in_days: last.next_rain_in_days,
+    uncert: last.uncert
+  };
+  document.getElementById("tech").textContent = JSON.stringify(tech, null, 2);
+
+  // mappa
+  setMap(last.lat, last.lon, last.index_today||0);
+
+  // slider reset
+  document.getElementById("day").value = 0;
+  setDayLabel(last.dates, 0);
+}
+
+function recomputeDay(k){
+  if(!last) return;
+  setDayLabel(last.dates, k);
+  // per semplicità: appoggiamo indice base a today + variazione con pioggia futura e T futura
+  const p = (last.precip_next10 && last.precip_next10[k] != null) ? last.precip_next10[k] : 0;
+  const t = (last.tmean && last.tmean[14+k] != null) ? last.tmean[14+k] : null;
+  let idx = last.index_today;
+  idx = Math.round(idx + Math.min(15, p*2) + (t!=null ? ((t>=14&&t<=19)? 5 : (t<10||t>24? -5:0)) : 0));
+  idx = Math.max(0, Math.min(100, idx));
+  document.getElementById("idx").textContent = idx;
+
+  // cappelli ricalcolati
+  const low = Math.max(0, Math.floor((idx/10)*0.6));
+  const high = Math.max(low, Math.ceil((idx/10)*1.6));
+  document.getElementById("caps").textContent = `${low}–${high} cappelli`;
+
+  // consigli dinamici
+  const adv=[];
+  if(idx>=70) adv.push("Giornata molto buona; entra presto, lettiera umida.");
+  else if(idx>=50) adv.push("Possibile: prediligi ombra N–NE–NW, quote 800–1200 m.");
+  else adv.push("Debole: verifica dopo le prossime piogge utili.");
+  // pioggia del giorno
+  if(last.precip_next10 && last.precip_next10[k]!=null && last.precip_next10[k]>=2){
+    adv.push(`Pioggia prevista ~${last.precip_next10[k]} mm: possibile apertura finestra tra 7–10 gg.`);
+  }
+  document.getElementById("tips").textContent = adv.join(" ");
+
+  // perché (esteso)
+  let why = `Indice ricalcolato per il giorno (D+${k}): pioggia prev.=${last.precip_next10 && last.precip_next10[k]!=null? last.precip_next10[k] : 0} mm; `;
+  if(t!=null) why += `Tmedia=${t} °C; `;
+  why += `bosco stimato ${last.forest}; quota ${Math.round(last.elevation_m)} m; esposizione ${Math.round(last.aspect_deg)}°.`;
+  document.getElementById("why").textContent = why;
+
+  // mappa: aggiorna colore anello
+  if(Lring) Lring.setStyle({color: ringColor(idx)});
+}
+
+document.getElementById("go").addEventListener("click", fetchScore);
+document.getElementById("clear").addEventListener("click", ()=>{loc.value="";coords.value="";place.textContent="";});
+document.getElementById("day").addEventListener("input", (e)=>recomputeDay(parseInt(e.target.value)));
+
+initMap();
 </script>
-</body></html>
+</body>
+</html>
 
 
 
