@@ -27,6 +27,7 @@
     .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #2b3b5e;margin-right:6px}
     .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
     @media (max-width:760px){.grid{grid-template-columns:1fr}}
+    a{color:#7fdcff;text-decoration:none}
   </style>
 </head>
 <body>
@@ -48,7 +49,7 @@
           <button id="clear">Pulisci</button>
         </div>
       </div>
-      <small class="muted">Usa coordinate per massima precisione. Il backend somma piogge recenti (API* con emivita ~8 giorni), termica e quota/esposizione.</small>
+      <small class="muted">Usa coordinate per massima precisione. Il backend calcola API* (emivita ~8 gg), bilancio idrico, finestra D+10, quota/esposizione.</small>
     </div>
 
     <div id="out" class="card" style="display:none">
@@ -102,7 +103,7 @@
         <div style="margin-bottom:6px"><b>Altre specie possibili</b> <span class="muted">(indicative)</span></div>
         <ul id="species"></ul>
       </div>
-      <small class="muted">Nota: indice 0–100. 0–49: sconsigliato • 50–59: incerto • 60–74: moderatamente consigliato • 75–100: consigliato.</small>
+      <small class="muted">Indice 0–100. 0–49: sconsigliato • 50–59: incerto • 60–74: moderatamente consigliato • 75–100: consigliato.<br>Crediti dati: Open-Meteo, Open-Elevation, OSM; meteo puntuale/24h da OpenWeather (tramite backend).</small>
     </div>
 
     <div class="card">
@@ -110,8 +111,8 @@
         <summary><b>Metodo (sintesi)</b></summary>
         <p class="muted">
           API* = precipitazioni con decadimento (emivita ≈ 8 giorni). Bilancio idrico ≈ API* − ET0 7g. Idoneità termica su Tmean/Tmin/Tmax 7g.
-          Modificatori per latitudine (Italia), quota, esposizione (se pendenza &gt; 1.5°) e pendenza. Dati: Open-Meteo, Open-Elevation, OSM;
-          meteo puntuale/24h da OpenWeather se disponibile (solo per perfezionare UR e pioggia 24h). Sito creato da <b>Antonio Pio d'Aloia</b>.
+          Modificatori per latitudine (Italia), quota, esposizione (se pendenza &gt; 1.5°) e pendenza.
+          Sito creato da <b>Antonio Pio d'Aloia</b>.
         </p>
       </details>
     </div>
@@ -119,11 +120,14 @@
 
 <script>
 const $ = sel => document.querySelector(sel);
-const api = (path, params={}) => fetch(path + (Object.keys(params).length? "?" + new URLSearchParams(params):""), {headers:{'Accept':'application/json'}}).then(r=>{
-  if(!r.ok) throw new Error("HTTP "+r.status); return r.json();
-});
 
-function judgeLabel(s){
+// grazie al redirect in netlify.toml possiamo usare direttamente /api/...
+const API = {
+  geocode: (q) => fetch('/api/geocode?q=' + encodeURIComponent(q)).then(r=>r.json()),
+  score: (lat,lon) => fetch('/api/score?lat='+lat+'&lon='+lon).then(r=>r.json())
+};
+
+function labelForScore(s){
   if (s>=75) return ["Consigliato oggi","s2"];
   if (s>=60) return ["Moderatamente consigliato","s1"];
   if (s>=50) return ["Incerto","s1"];
@@ -146,49 +150,46 @@ async function run(){
     if(!coords){
       const q = $("#place").value.trim();
       if(!q){ alert("Inserisci località o coordinate."); return; }
-      const g = await api("/api/geocode", {q});
+      const g = await API.geocode(q);
       coords = {lat:g.lat, lon:g.lon};
     }
-    const data = await api("/api/score", {lat:coords.lat, lon:coords.lon, half:8.0});
+    const d = await API.score(coords.lat, coords.lon);
 
-    // KPI principali
-    $("#elev").textContent = Math.round(data.elevation_m) + " m";
-    $("#slope").textContent = data.slope_deg.toFixed(1) + "°";
-    $("#aspect").textContent = data.aspect_octant;
-    $("#forest").textContent = data.forest;
+    $("#elev").textContent = Math.round(d.elevation_m) + " m";
+    $("#slope").textContent = d.slope_deg.toFixed(1) + "°";
+    $("#aspect").textContent = d.aspect_octant;
+    $("#forest").textContent = d.forest;
 
-    // Meteo/idrico/termico
-    $("#p7").textContent = data.P7_mm.toFixed(1);
-    $("#p14").textContent = data.P14_mm.toFixed(1);
-    $("#api").textContent = data.API_star_mm.toFixed(1);
-    $("#et0").textContent = data.ET0_7d_mm.toFixed(1);
-    $("#lrd").textContent = data.last_rain_days>=0? data.last_rain_days : "—";
-    $("#prob").textContent = data.prob_rain_next3d!=null? data.prob_rain_next3d+"%" : "—";
-    $("#tmean").textContent = data.Tmean7_c.toFixed(1);
-    $("#tmin").textContent = data.Tmin7_c.toFixed(1);
-    $("#tmax").textContent = data.Tmax7_c.toFixed(1);
-    $("#hum").textContent = data.humidity_now!=null? data.humidity_now : "—";
-    $("#r24").textContent = data.rain24h_forecast_mm!=null? data.rain24h_forecast_mm.toFixed(1):"—";
-    $("#conf").textContent = (data.confidence*100).toFixed(0)+"%";
+    $("#p7").textContent   = d.P7_mm.toFixed(1);
+    $("#p14").textContent  = d.P14_mm.toFixed(1);
+    $("#api").textContent  = d.API_star_mm.toFixed(1);
+    $("#et0").textContent  = d.ET0_7d_mm.toFixed(1);
+    $("#lrd").textContent  = d.last_rain_days>=0? d.last_rain_days : "—";
+    $("#prob").textContent = d.prob_rain_next3d!=null? d.prob_rain_next3d+"%" : "—";
 
-    // Score e badge
-    $("#score").textContent = data.score_today;
-    const [lbl,cls] = judgeLabel(data.score_today);
+    $("#tmean").textContent = d.Tmean7_c.toFixed(1);
+    $("#tmin").textContent  = d.Tmin7_c.toFixed(1);
+    $("#tmax").textContent  = d.Tmax7_c.toFixed(1);
+    $("#hum").textContent   = d.humidity_now!=null? d.humidity_now : "—";
+    $("#r24").textContent   = d.rain24h_forecast_mm!=null? d.rain24h_forecast_mm.toFixed(1):"—";
+    $("#conf").textContent  = (d.confidence*100).toFixed(0)+"%";
+
+    $("#score").textContent = d.score_today;
+    const [lbl,cls] = labelForScore(d.score_today);
     $("#badge").textContent = lbl;
     const b = $("#meter b");
-    b.style.width = Math.min(100, Math.max(0, data.score_today)) + "%";
+    b.style.width = Math.min(100, Math.max(0, d.score_today)) + "%";
     b.className = cls;
 
-    // Perché + consigli
-    $("#why").textContent = data.explanation?.today || "";
-    $("#reasons").innerHTML = (data.explanation?.reasons||[]).map(x=>`<li>${x}</li>`).join("") || "<li>Dati insufficienti.</li>";
-    $("#tips").innerHTML = (data.habitat_tips||[]).map(x=>`<li>${x}</li>`).join("") || "<li>Nessun consiglio disponibile.</li>";
-    $("#species").innerHTML = (data.other_species||[]).map(x=>`<li>${x}</li>`).join("") || "<li>—</li>";
+    $("#why").textContent = d.explanation?.today || "";
+    $("#reasons").innerHTML = (d.explanation?.reasons||[]).map(x=>`<li>${x}</li>`).join("") || "<li>Dati insufficienti.</li>";
+    $("#tips").innerHTML    = (d.habitat_tips||[]).map(x=>`<li>${x}</li>`).join("") || "<li>Nessun consiglio disponibile.</li>";
+    $("#species").innerHTML = (d.other_species||[]).map(x=>`<li>${x}</li>`).join("") || "<li>—</li>";
 
     $("#out").style.display="block";
     window.scrollTo({top:document.body.scrollHeight, behavior:"smooth"});
   }catch(e){
-    alert("Errore: " + e.message + "\nControlla che il backend sia Live su Render.");
+    alert("Errore: " + e.message + "\n• Verifica che il backend su Render sia Live.\n• Controlla il redirect /api su netlify.toml.");
   }
 }
 
