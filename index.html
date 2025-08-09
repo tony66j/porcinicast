@@ -1,15 +1,12 @@
-<!doctype html>
-<html lang="it">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>TrovaPorcini v4.2</title>
+<!doctype html><html lang="it"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>TrovaPorcini v4.3-Pro</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
-  :root{--bg:#0f1520;--card:#121a26;--muted:#8aa0b5;--acc:#1dd675;--warn:#ffd166;--bad:#ff5c5c;}
+  :root{--bg:#0f1520;--card:#121a26;--muted:#8aa0b5;--acc:#1dd675;--warn:#ffd166;--bad:#ff5c5c}
   body{margin:0;background:var(--bg);color:#e6edf5;font-family:system-ui,Segoe UI,Roboto,Ubuntu,sans-serif}
   .wrap{max-width:1150px;margin:24px auto;padding:0 14px}
-  h1{display:flex;align-items:center;gap:.6rem;font-size:1.4rem;margin:0 0 18px}
+  h1{display:flex;gap:.6rem;align-items:center;margin:0 0 18px;font-size:1.4rem}
   .ver{background:#243144;border:1px solid #314059;color:#b6c6d8;padding:.15rem .5rem;border-radius:.5rem}
   .by{font-size:.9rem;color:var(--muted)}
   .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
@@ -25,70 +22,47 @@
   .chip.warn{background:#2a240c;border-color:#534519}
   .chip.good{background:#0d2418;border-color:#1d5435}
   .slider{width:100%;margin:10px 0}
-  .sec{margin-top:10px}
-  details{margin:8px 0}
-  small.mono{font-family:ui-monospace,Consolas,monospace;color:#a9bfd3}
   #map{height:420px;border-radius:12px;border:1px solid #1f2b3b}
+  details{margin:8px 0} small.mono{font-family:ui-monospace,Consolas,monospace;color:#a9bfd3}
   @media (max-width:900px){.grid{grid-template-columns:1fr} #map{height:360px}}
 </style>
-</head>
-<body>
+</head><body>
 <div class="wrap">
-  <h1>🍄 TrovaPorcini <span class="ver">v4.2</span> <span class="by">by Antonio Pio D’Aloia</span></h1>
+  <h1>🍄 TrovaPorcini <span class="ver">v4.3-Pro</span> <span class="by">by Antonio Pio D’Aloia</span></h1>
 
   <div class="card">
     <div class="row">
-      <div style="flex:1">
-        <label>Località</label>
-        <input id="q" placeholder="es. Bocca della Selva"/>
-      </div>
-      <div style="flex:1">
-        <label>Coordinate (lat,lon)</label>
-        <input id="coords" placeholder="es. 41,41948, 14,47275 (anche formato Google)"/>
-      </div>
+      <div style="flex:1"><label>Località</label><input id="q" placeholder="es. Bocca della Selva"/></div>
+      <div style="flex:1"><label>Coordinate (lat,lon)</label>
+        <input id="coords" placeholder="es. 41,41948, 14,47275 (anche formato Google)"/></div>
       <button id="go" class="btn acc">Calcola</button>
       <button id="clear" class="btn">Pulisci</button>
     </div>
   </div>
 
   <div class="grid">
-    <div class="card" id="left">
+    <div class="card">
       <div class="kpi">
         <span id="dateChip" class="chip">Indice: —</span>
         <span id="idxChip"  class="chip">—</span>
         <span id="capsChip" class="chip">Stima 3h: — cappelli</span>
         <span id="rainChip" class="chip">Pioggia: — mm</span>
       </div>
+      <label>Previsione (prossimi 10 giorni)</label>
+      <input id="day" class="slider" type="range" min="0" max="9" value="0">
 
-      <div class="sec">
-        <label>Previsione (prossimi 10 giorni)</label>
-        <input id="day" class="slider" type="range" min="0" max="9" value="0">
-      </div>
-
-      <details open class="sec">
-        <summary><b>Consigli pratici</b> (cambiano per il giorno selezionato)</summary>
-        <div id="tips">—</div>
-      </details>
-
-      <details class="sec">
-        <summary><b>Perché questa stima</b></summary>
-        <div id="why">—</div>
-      </details>
-
-      <details class="sec">
-        <summary><b>Specie di porcini probabili</b></summary>
-        <div id="species">Pinus/Abies/Picea (stima)</div>
-      </details>
-
-      <details class="sec">
-        <summary><b>Dati tecnici</b></summary>
-        <small class="mono" id="tech">—</small>
-      </details>
+      <details open><summary><b>Consigli pratici</b> (cambiano per il giorno selezionato)</summary>
+        <div id="tips">—</div></details>
+      <details><summary><b>Perché questa stima</b> (considerazioni)</summary>
+        <div id="why">—</div></details>
+      <details><summary><b>Specie di porcini probabili</b></summary>
+        <div id="species">—</div></details>
+      <details><summary><b>Dati tecnici</b></summary>
+        <small class="mono" id="tech">—</small></details>
     </div>
 
-    <div class="card">
-      <div id="map"></div>
-      <div style="margin-top:8px;color:var(--muted);font-size:.85rem">
+    <div class="card"><div id="map"></div>
+      <div style="margin-top:8px;color:#8aa0b5;font-size:.85rem">
         Legenda cerchio: colore = indice del giorno selezionato.
       </div>
     </div>
@@ -97,129 +71,84 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const api = "/api"; // Netlify redirect -> Render
-const $ = (id)=>document.getElementById(id);
-const dayEl = $("day");
-let state = null; // ultimo JSON
+const API = "/api"; // Netlify redirect -> Render
+const $ = id => document.getElementById(id);
+let state=null, map, marker, circ;
 
 function parseLatLon(s){
-  const s2 = s.replace(/,/g,"."); // virgole italiane -> punto
-  const m = s2.match(/([-+]?\d+(?:\.\d+)?)[^\d-+]+([-+]?\d+(?:\.\d+)?)/);
-  if(!m) return null;
-  return {lat: parseFloat(m[1]), lon: parseFloat(m[2])};
+  if(!s) return null;
+  const s2=s.replace(/,/g,".");
+  const m=s2.match(/([-+]?\d+(?:\.\d+)?)[^\d-+]+([-+]?\d+(?:\.\d+)?)/);
+  return m?{lat:parseFloat(m[1]),lon:parseFloat(m[2])}:null;
 }
+function chip(el, txt, cls){ el.className="chip "+(cls||""); el.textContent=txt;}
+function idxClass(v){ return v>=70?"good":v>=50?"warn":"bad"; }
 
-function idxColor(idx){
-  if(idx>=70) return "good";
-  if(idx>=50) return "warn";
-  return "bad";
-}
-
-let map, marker, circ;
 function ensureMap(){
   if(map) return;
-  map = L.map('map',{zoomControl:true, attributionControl:true});
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom: 17, minZoom: 5
-  }).addTo(map);
+  map=L.map("map"); 
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,minZoom:5}).addTo(map);
 }
-function updateMap(lat, lon, idx){
+function drawMap(lat,lon,idx){
   ensureMap();
   map.setView([lat,lon], 12);
-  if(!marker){ marker = L.marker([lat,lon]).addTo(map); }
-  else marker.setLatLng([lat,lon]);
+  if(!marker) marker=L.marker([lat,lon]).addTo(map); else marker.setLatLng([lat,lon]);
   if(circ) map.removeLayer(circ);
-  const col = idx>=70 ? "#12d670" : idx>=50 ? "#ffd166" : "#ff6b6b";
-  circ = L.circle([lat,lon], {radius:1200, color:col, fillColor:col, fillOpacity:0.25}).addTo(map);
+  const col= idx>=70?"#12d670":idx>=50?"#ffd166":"#ff6b6b";
+  circ=L.circle([lat,lon],{radius:1200,color:col,fillColor:col,fillOpacity:.25}).addTo(map);
 }
-
-function chip(el, text, cls){ el.className = `chip ${cls||""}`; el.textContent = text; }
 
 function renderDay(d){
   if(!state) return;
-  const idx = state.daily.idx[d];
-  const [lo,hi] = state.daily.caps[d];
-  const rain = state.daily.rain[d].p14_mm;
-  const date = new Date(state.series.dates[13+d]).toLocaleDateString('it-IT');
-
-  $("dateChip").textContent = `D+${d} — ${date}`;
-  chip($("idxChip"), `Indice: ${idx}`, idxColor(idx));
-  $("capsChip").textContent = `Stima 3h: ${lo}–${hi} cappelli`;
+  const idx=state.daily.idx[d], ch=idxClass(idx);
+  const range=state.daily.caps[d];
+  const rain=state.daily.rain[d].p14_mm;
+  const iso=state.series.dates[13+d]; const dat=new Date(iso).toLocaleDateString("it-IT");
+  $("dateChip").textContent = `D+${d} — ${dat}`;
+  chip($("idxChip"), `Indice: ${idx}`, ch);
+  $("capsChip").textContent = `Stima 3h: ${range[0]}–${range[1]} cappelli`;
   $("rainChip").textContent = `Pioggia (ult.14gg): ${rain} mm`;
-
   $("tips").textContent = state.daily.tips[d];
-  $("why").textContent = state.daily.why[d];
-
-  const t = state.terrain, m = state.meta;
-  $("species").textContent = t.forest;
+  $("why").textContent  = state.daily.why[d];
+  $("species").textContent = state.terrain.forest;
   $("tech").textContent = JSON.stringify({
-    lat: state.coords.lat, lon: state.coords.lon,
-    elev_m: t.elev_m, slope_deg: t.slope_deg, aspect: t.aspect_oct,
-    P14_mm: m.p14_mm, Tmean7_c: m.tmean7_c,
-    last_rain_days: m.last_rain_days,
-    next_rain_in_days: m.next_rain_in_days,
-    next_rain_10d_mm: m.next_rain_10d_mm,
-    source: m.source
+    lat:state.coords.lat, lon:state.coords.lon,
+    elev_m:state.terrain.elev_m, slope_deg:state.terrain.slope_deg, aspect:state.terrain.aspect_oct,
+    P14_mm:state.meta.p14_mm, Tmean7_c:state.meta.tmean7_c,
+    last_rain_days:state.meta.last_rain_days,
+    next_rain_in_days:state.meta.next_rain_in_days,
+    next_rain_10d_mm:state.meta.next_rain_10d_mm,
+    source:state.meta.source
   }, null, 2);
-
-  updateMap(state.coords.lat, state.coords.lon, idx);
+  drawMap(state.coords.lat, state.coords.lon, idx);
 }
+$("day").oninput=()=>renderDay(parseInt($("day").value,10));
 
-async function fetchJSON(url, params){
-  const r = await fetch(url + (params ? ("?" + new URLSearchParams(params)) : ""));
-  if(!r.ok){
-    const txt = await r.text();
-    throw new Error(`API ${r.status}: ${txt||r.statusText}`);
-  }
-  return await r.json();
+async function j(url, params){
+  const r=await fetch(url+(params?("?"+new URLSearchParams(params)):""));
+  if(!r.ok){ throw new Error("API "+r.status+": "+(await r.text())); }
+  return r.json();
 }
-
-async function geocode(q){
-  return await fetchJSON(`${api}/geocode`, {q});
-}
-
-async function score(params){
-  return await fetchJSON(`${api}/score`, params);
-}
+async function geocode(q){ return j(API+"/geocode",{q}); }
+async function score(p){ return j(API+"/score",p); }
 
 $("go").onclick = async ()=>{
   try{
-    const q = $("q").value.trim();
-    const c = $("coords").value.trim();
-    let params = {};
-    if(c){
-      const p = parseLatLon(c);
-      if(!p) throw new Error("Coordinate non riconosciute");
-      params = {lat:p.lat, lon:p.lon};
-    }else if(q){
-      const g = await geocode(q);
-      params = {lat:g.lat, lon:g.lon};
-    }else{
-      alert("Errore: inserisci località o coordinate"); return;
+    const c=parseLatLon($("coords").value.trim());
+    let p={};
+    if(c) p={lat:c.lat,lon:c.lon};
+    else{
+      const q=$("q").value.trim();
+      if(!q) {alert("Inserisci località o coordinate"); return;}
+      const g=await geocode(q); p={lat:g.lat,lon:g.lon};
     }
-    const data = await score(params);
-    state = data;
-    dayEl.value = 0;
-    renderDay(0);
-  }catch(e){
-    alert(e.message.includes("API") ? e.message : ("Errore: " + e.message));
-  }
+    state = await score(p);
+    $("day").value=0; renderDay(0);
+  }catch(e){ alert(e.message); }
 };
-
-$("clear").onclick = ()=>{
-  $("q").value = ""; $("coords").value = ""; state=null;
-  $("dateChip").textContent="Indice: —";
-  $("idxChip").textContent="—";
-  $("capsChip").textContent="Stima 3h: — cappelli";
-  $("rainChip").textContent="Pioggia: — mm";
-  $("tips").textContent = $("why").textContent = $("tech").textContent = "—";
-};
-
-dayEl.oninput = ()=> renderDay(parseInt(dayEl.value,10));
+$("clear").onclick=()=>{ $("q").value="";$("coords").value="";state=null; location.reload(); };
 </script>
-</body>
-</html>
-
+</body></html>
 
 
 
