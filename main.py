@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx, math, asyncio, time
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
-from .utils import slope_aspect_from_elev_grid, composite_score, best_window_3day, deg_to_octant
+from utils import slope_aspect_from_elev_grid, composite_score, best_window_3day, deg_to_octant
 
 APP_NAME = "PorciniCast-MVP/0.3 (+https://example.org)"
 HEADERS = {"User-Agent": APP_NAME}
