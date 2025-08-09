@@ -1,186 +1,155 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PorciniCast – Previsione habitat porcini</title>
-  <meta name="description" content="Nowcasting e forecast dell'idoneità per porcini in base a pioggia, temperatura, quota, esposizione e boschi. MVP completo con backend FastAPI." />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PorciniCast</title>
   <style>
-    :root{
-      --bg: #0b0f0c; --panel:#101511; --ink:#e8f2e9; --muted:#b6c4b8;
-      --accent:#2e7d32; --accent-2:#8d6e63; --mid:#f9a825; --bad:#ef5350; --good:#2e7d32;
-    }
-    *{box-sizing:border-box} html,body{margin:0}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif; background:radial-gradient(80% 120% at 10% 0%, #0f1511, #0b0f0c); color:var(--ink)}
-    .container{width:min(1150px,94%); margin-inline:auto}
-    header{position:sticky; top:0; z-index:40; backdrop-filter:saturate(140%) blur(8px); background:rgba(11,15,12,.75); border-bottom:1px solid rgba(255,255,255,.04)}
-    .nav{display:flex; align-items:center; justify-content:space-between; padding:14px 0}
-    .brand{display:flex; align-items:center; gap:10px; font-weight:800}
-    .logo{width:30px; height:30px; border-radius:10px; background:conic-gradient(from 120deg, var(--accent), #66bb6a, var(--accent-2)); box-shadow:0 0 0 3px rgba(46,125,50,.25)}
-    .menu{display:flex; gap:18px}
-    .menu a{opacity:.9; padding:8px 10px; border-radius:10px}
-    .menu a:hover{background:rgba(255,255,255,.06)}
-    .hero{padding:64px 0 28px}
-    .eyebrow{letter-spacing:.25em; text-transform:uppercase; color:#a5d6a7; font-weight:700; font-size:12px}
-    h1{font-size:clamp(28px,4.8vw,46px); margin:8px 0 10px; line-height:1.1}
-    .lead{color:var(--muted)}
-    .panel{background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:16px}
-    .row{display:grid; grid-template-columns:1.2fr 1fr; gap:18px; align-items:start}
-    .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
-    input, button{background:#0a120d; color:var(--ink); border:1px solid rgba(255,255,255,.12); padding:12px 14px; border-radius:12px}
-    button{cursor:pointer; border:none; background:linear-gradient(135deg,var(--accent),#66bb6a); color:#0b110c; font-weight:800}
-    label{font-size:12px; color:var(--muted)}
-    .score{display:flex; align-items:center; gap:12px}
-    .dot{width:14px; height:14px; border-radius:50%}
-    .heat{height:320px; border-radius:16px; background:#0a120d; border:1px dashed rgba(255,255,255,.12); display:grid; place-items:center; color:var(--muted)}
-    canvas{max-width:100%}
-    section{padding:40px 0} h2{margin:0 0 10px} p{color:var(--muted)}
-    footer{padding:28px 0; color:var(--muted); text-align:center}
-    small.mono{font-family:ui-monospace,Menlo,Consolas,monospace; opacity:.9}
-    @media (max-width: 900px){ .row{grid-template-columns:1fr} .grid{grid-template-columns:1fr 1fr} }
-    @media (max-width: 640px){ .grid{grid-template-columns:1fr} }
+    :root{--bg:#0c1222;--panel:#0f172a;--text:#e5e7eb;--muted:#94a3b8;--accent:#10b981;--accent2:#22d3ee;--danger:#ef4444;}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0b1020,#0f172a);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    header{display:flex;align-items:center;gap:.7rem;padding:14px 16px;border-bottom:1px solid #1f2937;background:rgba(15,23,42,.6);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
+    .logo{display:flex;align-items:center;gap:.5rem}
+    .logo svg{width:26px;height:26px}
+    .brand{font-weight:800;letter-spacing:.3px}
+    main{max-width:980px;margin:22px auto;padding:0 16px}
+    .card{background:linear-gradient(180deg,#0b1220,#0f172a);border:1px solid #1f2937;border-radius:14px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    input,button{border-radius:10px;border:1px solid #334155;background:#0b1324;color:var(--text);padding:12px 14px;font-size:15px}
+    button{background:linear-gradient(90deg,var(--accent2),var(--accent));border:none;cursor:pointer;color:#062f2a;font-weight:700}
+    button:disabled{opacity:.5;cursor:default}
+    .muted{color:var(--muted);font-size:13px}
+    .score{font-size:38px;font-weight:800}
+    .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;border:1px solid #1f2937;background:#0b1324}
+    .ok{background:rgba(16,185,129,.15);color:#22c55e;border-color:#064e3b}
+    .warn{background:rgba(245,158,11,.12);color:#f59e0b;border-color:#7c2d12}
+    .bad{background:rgba(239,68,68,.12);color:#ef4444;border-color:#7f1d1d}
+    .calendar{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-top:8px}
+    .day{height:12px;border-radius:4px;background:#1f2937}
+    .day[data-v="low"]{background:#ef4444}
+    .day[data-v="mid"]{background:#f59e0b}
+    .day[data-v="hi"]{background:#10b981}
+    .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px}
+    details{background:#0b1324;border:1px solid #1f2937;border-radius:10px;padding:10px}
+    summary{cursor:pointer;color:#a5b4fc}
+    footer{margin:18px auto 36px;max-width:980px;padding:0 16px;color:#9ca3af}
+    .attribution{font-size:12px}
+    @media(max-width:860px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <header>
-    <div class="container nav">
-      <a class="brand" href="#"><span class="logo"></span><span>PorciniCast</span></a>
-      <nav class="menu" aria-label="Principale">
-        <a href="#mappa">Mappa</a>
-        <a href="#metodo">Metodo</a>
-        <a href="#note">Note</a>
-      </nav>
+    <div class="logo">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#22d3ee"/><stop offset="1" stop-color="#10b981"/></linearGradient></defs>
+        <path d="M12 26c0-9 10-16 20-16s20 7 20 16c0 3-6 6-16 7v7h6a2 2 0 110 4H22a2 2 0 110-4h6v-7c-10-1-16-4-16-7z" fill="url(#g)"/>
+        <circle cx="32" cy="48" r="5" fill="#22d3ee"/>
+      </svg>
+      <div class="brand">PorciniCast</div>
     </div>
   </header>
 
-  <main class="container">
-    <section class="hero">
-      <div class="eyebrow">MVP · Backend FastAPI + servizi open</div>
-      <h1>Nowcasting & forecast dell'habitat dei porcini</h1>
-      <p class="lead">Cerca una località: il sistema stima quota, pendenza, esposizione, boschi/essenze OSM, e calcola l'indice di idoneità (oggi e prossimi 10 giorni) con finestra migliore.</p>
-    </section>
+  <main>
+    <div class="card">
+      <div style="display:flex;gap:8px">
+        <input id="q" placeholder="Cerca una località (es. Bocca della Selva)">
+        <button id="btn">Calcola idoneità</button>
+      </div>
+      <div class="muted" style="margin-top:6px">Consiglio automatico e finestra migliore D+10 basati su pioggia recente (emivita ~8 gg), bilancio idrico e finestra termica.</div>
+    </div>
 
-    <section id="ricerca" class="panel">
-      <div class="row">
-        <div>
-          <div class="grid">
-            <div>
-              <label for="q">Zona / località</label>
-              <input id="q" placeholder="Es. Abetone, Monte Taburno, Asiago…" />
-            </div>
-            <div>
-              <label>Quota (m s.l.m.)</label>
-              <div id="alt">—</div>
-            </div>
-            <div>
-              <label>Esposizione · Pendenza</label>
-              <div id="asp">—</div>
-            </div>
+    <div class="grid">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div class="muted">Indice oggi</div>
+            <div class="score" id="score">—</div>
           </div>
-          <div style="display:flex; gap:10px; margin-top:12px">
-            <button id="run">Calcola idoneità</button>
-            <span class="score"><span id="dot" class="dot" style="background:var(--mid)"></span><span id="scoreLabel">Indice: –</span></span>
-          </div>
-          <div style="margin-top:10px" class="small mono" id="explain">Digita una località e premi Calcola.</div>
+          <div id="advice" class="pill">—</div>
         </div>
-        <div>
-          <div class="panel" style="background:rgba(46,125,50,.08)">
-            <h3 style="margin:0 0 6px">Boschi & specie probabili</h3>
-            <div id="species">—</div>
-          </div>
-          <div class="panel" style="margin-top:12px">
-            <h3 style="margin:0 0 6px">Finestra migliore</h3>
-            <div id="window">—</div>
-          </div>
+        <div id="calendar" class="calendar" title="Prossimi 10 giorni"></div>
+        <div id="best" class="muted" style="margin-top:8px">Finestra migliore: —</div>
+      </div>
+      <div class="card">
+        <div class="kv" id="kv"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>Metodi & note (clicca per aprire)</summary>
+        <div style="font-size:14px;line-height:1.6;margin-top:6px">
+          Modello v0.5: <b>pioggia antecedente a decadimento</b> (emivita ~8 giorni) → indice API*;
+          corretta con <b>ET0 FAO (7g)</b> per un proxy di umidità del suolo; <b>finestra termica</b> 10–18 °C (penalità Tmin&lt;6 °C / Tmax&gt;24 °C);
+          modulatori deboli per <b>quota</b>, <b>esposizione</b> (N/NE) e <b>pendenza</b>. Bosco da OSM è informativo e non incide pesantemente sul punteggio.
+          Dati: <b>Open-Meteo</b>, <b>OpenWeather</b> (umidità/nowcast), <b>Open-Elevation</b>, <b>Overpass/OSM</b>.
+          Questo sito fornisce <i>probabilità</i>, non garanzie. Creato da <b>Antonio Pio d'Aloia</b>.
         </div>
-      </div>
-    </section>
-
-    <section id="mappa" class="row">
-      <div class="panel">
-        <h2>Mappa idoneità (locale)</h2>
-        <p>Griglia 12×12 con punteggi per celle da ~500 m: colori da scarso (rosso) a ottimo (verde). In MVP è sintetica; nel progetto completo sarà derivata da raster DEM/land cover.</p>
-        <div class="heat"><canvas id="heat" width="520" height="320">Mappa non supportata</canvas></div>
-      </div>
-      <div class="panel">
-        <h2>Andamento prossimi 10 giorni</h2>
-        <p>Indice (0–100) calcolato dalle previsioni locali.</p>
-        <div class="heat" style="height:320px"><canvas id="chart" width="520" height="320">Grafico non supportato</canvas></div>
-      </div>
-    </section>
-
-    <section id="metodo">
-      <h2>Metodo (MVP)</h2>
-      <p>Indice 0–100 basato su: pioggia 14 gg, T media 7 gg, quota, pendenza/aspect locali (da micro-DEM) e compatibilità bosco (OSM). Dati meteo: Open‑Meteo. Elevazione: Open‑Elevation. Boschi: Overpass/OSM.</p>
-    </section>
-
-    <section id="note">
-      <h2>Note etiche e di sicurezza</h2>
-      <ul>
-        <li>È una <strong>probabilità</strong> di habitat favorevole, non una garanzia.</li>
-        <li>Hotspot aggregati in griglia per ridurre pressione locale.</li>
-        <li>Rispettare regolamenti, aree protette e sicurezza alimentare.</li>
-      </ul>
-    </section>
+      </details>
+    </div>
   </main>
 
   <footer>
-    <div class="container">© <span id="year"></span> PorciniCast · MVP. <span class="mono">v0.3</span></div>
+    <div class="attribution">
+      PorciniCast © <span id="y"></span> · Dati di terze parti con licenze proprie.
+    </div>
   </footer>
 
-  <script>
-    const api = (p)=> fetch(p).then(r=>{ if(!r.ok) throw new Error('API error'); return r.json(); });
-    const byId = (id)=>document.getElementById(id);
-    const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+<script>
+const API_BASE = window.location.origin + "/api"; // Netlify rewrite → backend Render
+const $ = (s)=>document.querySelector(s);
 
-    function colorForScore(x){ const r = x<0.5 ? 255 : Math.round(255*(1-(x-0.5)*2)); const g = x<0.5 ? Math.round(255*(x*2)) : 255; const b = 80; return `rgb(${r},${g},${b})`; }
-    function drawHeat(canvas, grid){
-      const ctx = canvas.getContext('2d'); const h = canvas.height, w = canvas.width;
-      const rows = grid.length, cols = grid[0].length; const cw = Math.floor(w/cols), ch = Math.floor(h/rows);
-      ctx.clearRect(0,0,w,h);
-      for(let r=0;r<rows;r++){ for(let c=0;c<cols;c++){ ctx.fillStyle = colorForScore(grid[r][c]); ctx.fillRect(c*cw, r*ch, cw-1, ch-1); } }
-    }
-    function drawChart(canvas, arr){
-      const ctx = canvas.getContext('2d'); const h = canvas.height, w = canvas.width; ctx.clearRect(0,0,w,h);
-      ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(40,10); ctx.lineTo(40,h-30); ctx.lineTo(w-10,h-30); ctx.stroke();
-      for(let y=0;y<=100;y+=20){ const yy=(h-30)-(h-40)*y/100; ctx.fillStyle='rgba(255,255,255,.5)'; ctx.fillText(y.toString(),10,yy+4); ctx.strokeStyle='rgba(255,255,255,.1)'; ctx.beginPath(); ctx.moveTo(40,yy); ctx.lineTo(w-10,yy); ctx.stroke(); }
-      ctx.strokeStyle = '#66bb6a'; ctx.lineWidth=2; ctx.beginPath();
-      arr.forEach((v,i)=>{ const x=40+(w-60)*i/(arr.length-1); const y=(h-30)-(h-40)*v/100; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); ctx.fillStyle='#e8f2e9'; ctx.beginPath(); ctx.arc(x,y,2.5,0,Math.PI*2); ctx.fill(); });
-      ctx.stroke(); ctx.fillStyle='rgba(255,255,255,.7)'; arr.forEach((_,i)=>{ const x=40+(w-60)*i/(arr.length-1); ctx.fillText('D+'+i, x-10, h-12); });
-    }
-    function gridFromScore(base){
-      const b = base/100; const grid=[];
-      for(let r=0;r<12;r++){ const row=[]; for(let c=0;c<12;c++){ const d = Math.hypot(r-5.5,c-5.5)/9; const noise=(Math.random()-0.5)*0.18; row.push(clamp(b*(1-0.6*d)+noise,0,1)); } grid.push(row); }
-      return grid;
-    }
+function cls(score){ if(score>=70) return "ok"; if(score>=60) return "warn"; return "bad"; }
+function dayClass(v){ if(v>=70) return "hi"; if(v>=55) return "mid"; return "low"; }
 
-    async function run(){
-      const q = byId('q').value.trim(); if(!q){ byId('explain').textContent='Inserisci una località.'; return; }
-      byId('explain').textContent='⏳ Cerco la località…';
-      try{
-        const g = await api(`/api/geocode?q=${encodeURIComponent(q)}`);
-        byId('explain').textContent='⏳ Calcolo quota/pendenza/aspect e meteo…';
-        const s = await api(`/api/score?lat=${g.lat}&lon=${g.lon}`);
-        const f = await api(`/api/forest?lat=${g.lat}&lon=${g.lon}&alt=${s.elevation_m}`);
-
-        // UI populate
-        byId('alt').textContent = `${Math.round(s.elevation_m)} m`;
-        byId('asp').textContent = `${f.forest} · ${['N','NE','E','SE','S','SW','W','NW'].includes(s.aspect_octant)?s.aspect_octant:s.aspect_octant} · pendenza ~ ${s.slope_deg.toFixed(1)}°`;
-        byId('species').innerHTML = `<b>Essenze dominanti:</b> ${f.forest}<br><b>Porcini attesi:</b> ${f.species.join(', ')}`;
-        byId('scoreLabel').textContent = `Indice: ${s.score_today}/100`;
-        byId('dot').style.background = s.score_today>=70? 'var(--good)' : s.score_today>=40? 'var(--mid)' : 'var(--bad)';
-        byId('window').textContent = `Finestra ottimale D+${s.best_window.start} → D+${s.best_window.end} (media ${s.best_window.mean}).`;
-        byId('explain').textContent = `P14≈${s.P14_mm} mm · T7≈${s.Tmean7_c}°C · quota≈${Math.round(s.elevation_m)} m · aspect=${s.aspect_octant}`;
-
-        drawHeat(byId('heat'), gridFromScore(s.score_today));
-        drawChart(byId('chart'), s.scores_next10);
-      }catch(err){
-        console.error(err);
-        byId('explain').textContent = 'Errore durante il calcolo. Riprova tra poco.';
-      }
-    }
-    byId('run').addEventListener('click', run);
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
+async function geocode(q){
+  const r = await fetch(`${API_BASE}/geocode?q=${encodeURIComponent(q)}`);
+  if(!r.ok) throw new Error("geocode"); return r.json();
+}
+async function score(lat,lon,half=8){
+  const r = await fetch(`${API_BASE}/score?lat=${lat}&lon=${lon}&half=${half}`);
+  if(!r.ok) throw new Error("score"); return r.json();
+}
+function fillKV(container, rows){
+  container.innerHTML="";
+  rows.forEach(([k,v])=>{
+    const div=document.createElement("div");
+    div.innerHTML=`<div class="muted">${k}</div><div>${v??"—"}</div>`;
+    container.appendChild(div);
+  });
+}
+async function run(){
+  const q = $("#q").value.trim(); if(!q){$("#q").focus();return;}
+  $("#btn").disabled=true;
+  try{
+    const g = await geocode(q);
+    const s = await score(g.lat,g.lon,8);
+    $("#score").textContent = s.score_today;
+    const pill = $("#advice"); pill.textContent = s.advice || "—"; pill.className = `pill ${cls(s.score_today)}`;
+    // calendar
+    const cal=$("#calendar"); cal.innerHTML="";
+    (s.scores_next10||[]).forEach(v=>{const d=document.createElement("div");d.className="day";d.dataset.v=dayClass(v);d.title=v;cal.appendChild(d);});
+    $("#best").textContent = s.best_window? `Finestra migliore (3 giorni): D+${s.best_window.start} → D+${s.best_window.end} (media ${s.best_window.mean})` : "—";
+    // kv
+    fillKV($("#kv"), [
+      ["Località", g.display],
+      ["Quota", `${Math.round(s.elevation_m)} m`],
+      ["Pendenza", `${s.slope_deg.toFixed(1)}°`],
+      ["Esposizione", `${s.aspect_octant} (${s.aspect_deg.toFixed(0)}°)`],
+      ["Bosco (indic.)", s.forest],
+      ["API* (30g, half=8)", `${s.API_star_mm} mm`],
+      ["ET0 7g", `${s.ET0_7d_mm} mm`],
+      ["Tmed 7g", `${s.Tmean7_c.toFixed(1)} °C`],
+      ["Umidità (ora, OWM)", s.humidity_now!=null? `${s.humidity_now}%` : "—"],
+      ["Pioggia prossime 24h (OWM)", s.rain24h_forecast_mm!=null? `${s.rain24h_forecast_mm} mm` : "—"],
+      ["Incertezza", s.uncertainty]
+    ]);
+  }catch(e){ alert("Errore durante il calcolo. Riprova tra poco."); console.error(e); }
+  finally{ $("#btn").disabled=false; }
+}
+$("#btn").addEventListener("click", run);
+document.addEventListener("keydown", e=>{ if(e.key==="Enter") run(); });
+document.querySelector("#y").textContent = new Date().getFullYear();
+</script>
 </body>
 </html>
