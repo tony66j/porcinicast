@@ -3,188 +3,202 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>TrovaPorcini v0.8</title>
+<title>TrovaPorcini (v0.9)</title>
 <link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet"/>
-<script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
 <style>
-:root{--bg:#0f1423;--panel:#121a2a;--muted:#8aa1c2;--text:#e8f0ff;--ok:#22c55e;--mid:#f59e0b;--bad:#ff6b6b}
-html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-.wrap{max-width:1000px;margin:20px auto;padding:0 16px}
-h1{display:flex;align-items:center;gap:8px;margin:0 0 12px}
-.tabs{display:flex;gap:8px;margin-bottom:10px}
-.tab{padding:8px 12px;border-radius:10px;border:1px solid #253559;background:#15203a;color:#bfe0ff;cursor:pointer}
-.tab.active{background:#1d3350;border-color:#2c4f7b}
-.card{background:var(--panel);border:1px solid #1f2a44;border-radius:12px;padding:14px;margin:12px 0}
-.row{display:flex;flex-wrap:wrap;gap:10px}
-.row > *{flex:1 1 280px}
-label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
-input{width:100%;padding:12px;border-radius:10px;border:1px solid #213152;background:#0c1220;color:var(--text)}
-button{padding:12px 16px;border-radius:10px;border:1px solid #274861;background:#18344a;color:#cfe8ff;cursor:pointer}
-button.primary{background:linear-gradient(180deg,#28b487,#1f9d78);border-color:#1a8d6d;color:#fff}
-.meter{height:10px;background:#1f2a44;border-radius:999px;overflow:hidden}
-.meter > b{display:block;height:100%}
-.s0{background:var(--bad)} .s1{background:var(--mid)} .s2{background:var(--ok)}
-.kpi{display:flex;flex-wrap:wrap;gap:10px}
-.kpi .box{flex:1 1 150px;background:#0c1220;border:1px solid #1f2a44;border-radius:10px;padding:10px}
-small,.muted{color:var(--muted)}
-.legend{display:flex;align-items:center;gap:6px}
-.legend b{width:16px;height:10px;display:inline-block}
-#map{height:560px;border-radius:12px;border:1px solid #1f2a44}
+  body{margin:0;background:#0b1020;color:#e6eaf5;font:16px/1.5 system-ui,Segoe UI,Roboto,Arial}
+  header{display:flex;align-items:center;gap:.75rem;padding:14px 18px;border-bottom:1px solid #1a2238}
+  .logo{font-weight:700;font-size:1.1rem}
+  .tabs{display:flex;gap:.5rem;margin-left:auto}
+  .tab{padding:8px 12px;border:1px solid #1a2238;border-radius:8px;cursor:pointer;opacity:.8}
+  .tab.active{background:#16203a;opacity:1}
+  main{max-width:1100px;margin:18px auto;padding:0 16px}
+  .card{background:#111832;border:1px solid #1a2238;border-radius:12px;padding:16px;margin-bottom:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row > *{flex:1 1 280px}
+  input,select,button{font:inherit}
+  input,select{background:#0e1427;color:#e6eaf5;border:1px solid #27304b;border-radius:10px;padding:10px 12px;width:100%}
+  button{background:#2eb881;color:#0b1020;border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+  button.alt{background:#223355;color:#c7d2fe}
+  .meter{height:10px;background:#1e263e;border-radius:999px;overflow:hidden;margin-top:8px}
+  .meter > div{height:100%}
+  .s0{background:#ff6b6b}.s1{background:#f59e0b}.s2{background:#22c55e}
+  #map{height:560px;border-radius:12px;border:1px solid #1a2238}
+  small.muted{color:#9aa4c7}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .k{font-size:.92rem}
+  .badge{display:inline-block;background:#1e293b;padding:4px 10px;border-radius:999px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>🍄 TrovaPorcini <span class="muted">v0.8</span></h1>
-
+<header>
+  <div>🍄</div><div class="logo">TrovaPorcini</div>
   <div class="tabs">
     <div class="tab active" data-tab="search">Ricerca</div>
     <div class="tab" data-tab="map">Mappa</div>
   </div>
+</header>
 
-  <!-- TAB: RICERCA -->
-  <div id="tab-search">
-    <div class="card">
-      <div class="row">
-        <div>
-          <label>Località</label>
-          <input id="place" placeholder="es. Bocca della Selva"/>
-        </div>
-        <div>
-          <label>Coordinate (lat,lon)</label>
-          <input id="coords" placeholder="es. 41.35, 14.55"/>
-        </div>
-        <div style="align-self:end;display:flex;gap:8px">
-          <button class="primary" id="btn">Calcola idoneità</button>
-          <button id="clear">Pulisci</button>
-        </div>
-      </div>
-      <small class="muted">Doppia barra: se metti le coordinate uso quelle. I dati arrivano dalle API /api del backend.</small>
-    </div>
+<main>
 
-    <div id="out" class="card" style="display:none">
-      <div class="row" style="align-items:center">
-        <div style="flex:0 0 140px">
-          <div id="score" style="font-size:40px;font-weight:800">–</div>
-          <div id="badge" class="muted">–</div>
-        </div>
-        <div style="flex:1">
-          <div class="meter"><b id="meterbar" style="width:0%" class="s0"></b></div>
-          <small id="why" class="muted"></small>
-        </div>
-      </div>
-
-      <div class="kpi" style="margin-top:8px">
-        <div class="box"><div class="muted">Quota</div><div id="elev">–</div></div>
-        <div class="box"><div class="muted">Pendenza</div><div id="slope">–</div></div>
-        <div class="box"><div class="muted">Esposizione</div><div id="aspect">–</div></div>
-        <div class="box"><div class="muted">Bosco (stima)</div><div id="forest">–</div></div>
-      </div>
-
-      <div class="kpi">
-        <div class="box">
-          <div class="muted">Piogge</div>
-          P7: <b id="p7">–</b> mm — P14: <b id="p14">–</b> mm<br/>
-          API* (30g, half=8): <b id="api">–</b> mm — ET0 7g: <b id="et0">–</b> mm<br/>
-          Ultima pioggia utile: <b id="lrd">–</b> gg • Prob. pioggia 72h: <b id="prob">–</b>%
-        </div>
-        <div class="box">
-          <div class="muted">Termica</div>
-          Tmed 7g: <b id="tmean">–</b> °C (min <b id="tmin">–</b> / max <b id="tmax">–</b>)<br/>
-          UR ora: <b id="hum">–</b>% • Pioggia 24h: <b id="r24">–</b> mm<br/>
-          Affidabilità: <b id="conf">–</b>
-        </div>
-      </div>
-
-      <div class="card">
-        <b>Possibile finestra</b>: <span id="window">–</span><br/>
-        <small class="muted" id="whyf"></small>
-      </div>
-
-      <div class="card">
-        <b>Perché questo giudizio?</b>
-        <ul id="reasons"></ul>
-      </div>
-    </div>
-  </div>
-
-  <!-- TAB: MAPPA -->
-  <div id="tab-map" style="display:none">
-    <div class="card">
-      <div class="row" style="align-items:end">
-        <div style="flex:2">
-          <label>Giorno (0=oggi … 10)</label>
-          <input id="day" type="range" min="0" max="10" step="1" value="0" oninput="dayLbl.textContent=this.value"/>
-          <div>Selezionato: <b id="dayLbl">0</b></div>
-        </div>
-        <div style="flex:1">
-          <label>Passo griglia (km)</label>
-          <input id="step" value="10" />
-        </div>
-        <div style="flex:0 0 auto">
-          <button class="primary" id="reload">Aggiorna mappa</button>
-        </div>
-      </div>
-      <div class="legend"><b style="background:#ff6b6b"></b> 0–49 &nbsp; <b style="background:#f59e0b"></b> 60–74 &nbsp; <b style="background:#22c55e"></b> ≥75</div>
-    </div>
-    <div id="map" class="card"></div>
-  </div>
-
+<!-- Ricerca -->
+<section id="tab-search">
   <div class="card">
-    <details>
-      <summary><b>Metodo (sintesi)</b></summary>
-      <p class="muted">API* con emivita ≈8 gg, convoluzione della pioggia futura con kernel di ritardo (picco ~9 gg),
-      bilancio idrico (API*−ET0 7g), termica su Tmean/Tmin/Tmax 7g, correttivi per quota/latitudine/esposizione.
-      Dati: Open-Meteo, Open-Elevation, OSM; meteo puntuale/24h da OpenWeather (via backend). Autore: <b>Antonio Pio d’Aloia</b>.</p>
+    <div class="row">
+      <div>
+        <label>Località</label>
+        <input id="place" placeholder="es. Bocca della Selva">
+      </div>
+      <div>
+        <label>Coordinate (lat,lon) – incolla come da Google</label>
+        <input id="coords" placeholder="41,4170010, 14,4707168">
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><button id="btn">Calcola idoneità</button></div>
+      <div><button class="alt" id="clear">Pulisci</button></div>
+      <div style="flex:2 1 auto"><small class="muted">La barra coord. ha priorità; accetta virgola decimale e formati Google.</small></div>
+    </div>
+  </div>
+
+  <div class="card" id="out" style="display:none">
+    <div class="row">
+      <div style="flex:2">
+        <div style="font-size:2.4rem;font-weight:800" id="score">—</div>
+        <div class="badge" id="badge">—</div>
+        <div class="meter"><div id="meterbar" style="width:0%"></div></div>
+        <div style="margin-top:8px" id="why"> </div>
+      </div>
+      <div style="flex:3">
+        <div class="grid k">
+          <div><b>Quota</b>: <span id="elev"></span></div>
+          <div><b>Pendenza</b>: <span id="slope"></span></div>
+          <div><b>Esposizione</b>: <span id="aspect"></span></div>
+          <div><b>Bosco</b>: <span id="forest"></span></div>
+          <div><b>P14</b>: <span id="p14"></span></div>
+          <div><b>API*</b>: <span id="api"></span></div>
+          <div><b>Tmed 7g</b>: <span id="tmean"></span></div>
+          <div><b>ET0 7g</b>: <span id="et0"></span></div>
+          <div><b>Umi ora</b>: <span id="hum"></span></div>
+          <div><b>Pioggia 24h</b>: <span id="r24"></span></div>
+          <div><b>Finestra</b>: <span id="window"></span></div>
+          <div><b>Confidenza</b>: <span id="conf"></span></div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:8px" id="whyf"><small class="muted"></small></div>
+    <details style="margin-top:10px"><summary><b>Perché?</b></summary>
+      <ul id="reasons"></ul>
     </details>
   </div>
-</div>
+</section>
 
+<!-- Mappa -->
+<section id="tab-map" style="display:none">
+  <div class="card">
+    <div class="row">
+      <div style="max-width:260px">
+        <label>Giorno</label>
+        <select id="day">
+          <option value="0">Oggi</option>
+          <option value="1">D+1</option>
+          <option value="2">D+2</option>
+          <option value="3">D+3</option>
+          <option value="4">D+4</option>
+          <option value="5">D+5</option>
+          <option value="6">D+6</option>
+          <option value="7">D+7</option>
+          <option value="8">D+8</option>
+          <option value="9">D+9</option>
+          <option value="10">D+10</option>
+        </select>
+      </div>
+      <div><button id="reload">Aggiorna mappa</button></div>
+      <div style="flex:2 1 auto"><small class="muted">La mappa mostra SOLO punti boschivi (OSM) in Italia, colorati per idoneità.</small></div>
+    </div>
+  </div>
+  <div class="card">
+    <div id="map"></div>
+  </div>
+</section>
+
+</main>
+
+<script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
 <script>
 const $ = s=>document.querySelector(s);
+
+// API base (Netlify fa da proxy /api -> Render)
 const API = {
-  geocode: q => fetch('/api/geocode?q='+encodeURIComponent(q)).then(r=>r.json()),
-  score: (lat,lon)=>fetch('/api/score?lat='+lat+'&lon='+lon).then(r=>r.json()),
-  grid : (bbox,day,step)=>fetch('/api/score_grid?bbox='+bbox+'&day='+day+'&step_km='+step).then(r=>r.json())
+  geocode: q => fetch('/api/geocode?q='+encodeURIComponent(q)).then(okjson),
+  score  : (lat,lon)=>fetch('/api/score?lat='+lat+'&lon='+lon).then(okjson),
+  forest : (bbox,day)=>fetch('/api/score_forest_points?bbox='+bbox+'&day='+day).then(okjson),
 };
 
+async function okjson(r){
+  if(!r.ok){
+    const t = await r.text();
+    throw new Error(`API ${r.status}: ${t.substring(0,120)}`);
+  }
+  return r.json();
+}
+
+// Parser coordinate compatibile Google e virgola decimale
+function parseCoords(raw){
+  if(!raw) return null;
+  let s = raw.trim();
+  s = s.replace(/(\d),(\d)/g, '$1.$2');      // 41,417 -> 41.417
+  const parts = s.split(/[;\s,]+/).filter(Boolean);
+  const nums = [];
+  for(const p of parts){
+    const v = parseFloat(p);
+    if(isFinite(v)) nums.push(v);
+    if(nums.length===2) break;
+  }
+  if(nums.length!==2) return null;
+  const [lat,lon]=nums;
+  if(Math.abs(lat)>90||Math.abs(lon)>180) return null;
+  return {lat,lon};
+}
+
 function labelScore(s){ if(s>=75) return ["Consigliato","s2"]; if(s>=60) return ["Moderato","s1"]; if(s>=50) return ["Incerto","s1"]; return ["Sconsigliato","s0"]; }
-function parseCoords(s){ if(!s) return null; const a=s.split(/[,\s]+/).filter(Boolean); if(a.length<2) return null; const lat=+a[0],lon=+a[1]; if(isFinite(lat)&&isFinite(lon)) return {lat,lon}; return null; }
 
 async function runSearch(){
   try{
     $("#out").style.display="none";
-    let c = parseCoords($("#coords").value.trim());
+    let c = parseCoords($("#coords").value);
     if(!c){
-      const q=$("#place").value.trim();
+      const q = $("#place").value.trim();
       if(!q){ alert("Inserisci località o coordinate."); return; }
-      const g=await API.geocode(q); c={lat:g.lat,lon:g.lon};
+      const g = await API.geocode(q); c={lat:g.lat,lon:g.lon};
     }
-    const d=await API.score(c.lat,c.lon);
+    const d = await API.score(c.lat,c.lon);
+
     // KPI
     $("#elev").textContent = Math.round(d.elevation_m)+" m";
     $("#slope").textContent = d.slope_deg.toFixed(1)+"°";
     $("#aspect").textContent = d.aspect_octant;
     $("#forest").textContent = d.forest;
-    $("#p7").textContent = d.P7_mm.toFixed(1);
     $("#p14").textContent = d.P14_mm.toFixed(1);
     $("#api").textContent = d.API_star_mm.toFixed(1);
-    $("#et0").textContent = d.ET0_7d_mm.toFixed(1);
     $("#tmean").textContent = d.Tmean7_c.toFixed(1);
-    $("#tmin").textContent  = d.Tmin7_c.toFixed(1);
-    $("#tmax").textContent  = d.Tmax7_c.toFixed(1);
-    $("#hum").textContent   = d.humidity_now ?? "—";
-    $("#r24").textContent   = d.rain24h_forecast_mm!=null? d.rain24h_forecast_mm.toFixed(1):"—";
-    $("#conf").textContent  = Math.round(d.confidence*100)+"%";
-    // score
+    $("#et0").textContent = d.ET0_7d_mm? d.ET0_7d_mm.toFixed(1): "—";
+    $("#hum").textContent = d.humidity_now ?? "—";
+    $("#r24").textContent = d.rain24h_forecast_mm!=null? d.rain24h_forecast_mm.toFixed(1): "—";
+    $("#conf").textContent = Math.round((d.confidence||0.8)*100)+"%";
+
+    // score + barra
     $("#score").textContent = d.score_today;
     const [lbl,cls]=labelScore(d.score_today);
     $("#badge").textContent = lbl+" oggi";
     const mb=$("#meterbar"); mb.style.width=Math.min(100,Math.max(0,d.score_today))+"%"; mb.className=cls;
+
     // spiegazioni
     $("#why").textContent = d.explanation?.today || "";
-    $("#reasons").innerHTML=(d.explanation?.reasons||[]).map(x=>`<li>${x}</li>`).join("");
-    const bw = d.best_window; $("#window").textContent = bw?.mean? `D+${bw.start} → D+${bw.end} (media ${bw.mean})` : "—";
+    $("#reasons").innerHTML = (d.explanation?.reasons||[]).map(x=>`<li>${x}</li>`).join("");
+    const bw=d.best_window; $("#window").textContent = bw? `D+${bw.start} → D+${bw.end} (media ${bw.mean})`:"—";
     $("#whyf").textContent = d.explanation?.forecast || "";
+
     $("#out").style.display="block";
   }catch(e){ alert("Errore: "+e.message); }
 }
@@ -204,43 +218,57 @@ document.querySelectorAll(".tab").forEach(t=>{
   });
 });
 
-// MAPPA
-let map, mapReady=false, srcId="scores";
+// MAPPA ITALIA – punti boschivi colorati
+let map, mapReady=false, srcId="forestScores";
+const IT_BOUNDS = [[36.5,6.5],[47.5,19.0]];
+
 function initMapOnce(){
   if(mapReady) return;
   map = new maplibregl.Map({
     container:'map',
     style:'https://demotiles.maplibre.org/style.json',
-    center:[12.5,42.5], zoom:5.2
+    center:[12.5,42.5], zoom:5.2,
+    maxBounds: IT_BOUNDS
   });
-  map.addControl(new maplibregl.NavigationControl(), 'top-right');
-  map.on('load', ()=>{ mapReady=true; loadGrid(); });
-  $("#reload").addEventListener("click", loadGrid);
+  map.addControl(new maplibre-gl.NavigationControl(), 'top-right');
+  map.on('load', ()=>{ mapReady=true; loadForestPoints(); });
+  $("#reload").addEventListener("click", loadForestPoints);
 }
 
-async function loadGrid(){
+async function loadForestPoints(){
   if(!mapReady) return;
   const b = map.getBounds();
-  const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(x=>x.toFixed(4)).join(",");
+  const south = Math.max(b.getSouth(), IT_BOUNDS[0][0]);
+  const west  = Math.max(b.getWest(),  IT_BOUNDS[0][1]);
+  const north = Math.min(b.getNorth(), IT_BOUNDS[1][0]);
+  const east  = Math.min(b.getEast(),  IT_BOUNDS[1][1]);
+  const bbox = [south, west, north, east].map(x=>x.toFixed(4)).join(",");
   const day = +$("#day").value;
-  const step = +$("#step").value || 10;
-  const geo = await API.grid(bbox, day, step);
-  if(map.getSource(srcId)) map.removeLayer("sc"); if(map.getSource(srcId)) map.removeSource(srcId);
+
+  const geo = await API.forest(bbox, day);
+
+  if(map.getSource(srcId)){
+    try{ map.removeLayer("fs"); }catch(e){}
+    try{ map.removeSource(srcId); }catch(e){}
+  }
   map.addSource(srcId, {type:'geojson', data:geo});
   map.addLayer({
-    id:"sc", type:"circle", source:srcId,
+    id:"fs", type:"circle", source:srcId,
     paint:{
       "circle-radius": 6,
-      "circle-color": [
+      "circle-color":[
         "case",
         [">=",["get","score"],75], "#22c55e",
         [">=",["get","score"],60], "#f59e0b",
-                                 "#ff6b6b"
+                                  "#ff6b6b"
       ],
-      "circle-opacity": 0.8
+      "circle-opacity":0.9,
+      "circle-stroke-width":0.3,
+      "circle-stroke-color":"#0b1020"
     }
   });
 }
 </script>
 </body>
 </html>
+
