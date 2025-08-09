@@ -1,1 +1,201 @@
-<!doctype html><html><body>placeholder index.html v0.7</body></html>
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TrovaPorcini v0.7</title>
+  <style>
+    :root{--bg:#0e1320;--panel:#121a2a;--muted:#8aa1c2;--text:#e8f0ff;--accent:#23d18b;--warn:#ff6b6b;--ok:#22c55e;--mid:#f59e0b}
+    html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:980px;margin:24px auto;padding:0 16px}
+    h1{display:flex;align-items:center;gap:8px;font-size:22px;margin:0 0 16px}
+    .card{background:var(--panel);border:1px solid #1f2a44;border-radius:12px;padding:16px;margin:14px 0}
+    .row{display:flex;flex-wrap:wrap;gap:10px}
+    .row > *{flex:1 1 280px}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input{width:100%;padding:12px;border-radius:10px;border:1px solid #213152;background:#0c1220;color:var(--text)}
+    button{padding:12px 16px;border-radius:10px;border:1px solid #274861;background:#18344a;color:#cfe8ff;cursor:pointer}
+    button.primary{background:linear-gradient(180deg,#28b487,#1f9d78);border-color:#1a8d6d;color:#fff}
+    .kpi{display:flex;flex-wrap:wrap;gap:16px}
+    .kpi .box{flex:1 1 150px;background:#0c1220;border:1px solid #1f2a44;border-radius:10px;padding:12px}
+    .meter{height:10px;background:#1f2a44;border-radius:999px;overflow:hidden;margin-top:6px}
+    .meter > b{display:block;height:100%}
+    .s0{background:var(--warn)} .s1{background:var(--mid)} .s2{background:var(--ok)}
+    ul{margin:8px 0 0 18px}
+    small, .muted{color:var(--muted)}
+    code{background:#0b1020;border:1px solid #223; padding:1px 6px;border-radius:6px}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #2b3b5e;margin-right:6px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🍄 TrovaPorcini <span class="muted">v0.7</span></h1>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>Località (es. “Castelpagano”)</label>
+          <input id="place" placeholder="Scrivi una località…" />
+        </div>
+        <div>
+          <label>Coordinate (lat,lon) — hanno priorità se compilate</label>
+          <input id="coords" placeholder="es. 41.25, 14.75" />
+        </div>
+        <div style="align-self:end;display:flex;gap:8px">
+          <button class="primary" id="btn">Calcola idoneità</button>
+          <button id="clear">Pulisci</button>
+        </div>
+      </div>
+      <small class="muted">Usa coordinate per massima precisione. Il backend somma piogge recenti (API* con emivita ~8 giorni), termica e quota/esposizione.</small>
+    </div>
+
+    <div id="out" class="card" style="display:none">
+      <div class="row" style="align-items:center">
+        <div style="flex:0 0 140px">
+          <div style="font-size:40px;font-weight:800" id="score">–</div>
+          <div id="badge" class="muted">–</div>
+        </div>
+        <div style="flex:1">
+          <div id="meter" class="meter"><b style="width:0%" class="s0"></b></div>
+          <small class="muted" id="why"></small>
+        </div>
+      </div>
+
+      <div class="kpi" style="margin-top:10px">
+        <div class="box"><div class="muted">Quota</div><div id="elev">–</div></div>
+        <div class="box"><div class="muted">Pendenza</div><div id="slope">–</div></div>
+        <div class="box"><div class="muted">Esposizione</div><div id="aspect">–</div></div>
+        <div class="box"><div class="muted">Bosco (stima)</div><div id="forest">–</div></div>
+      </div>
+
+      <div class="grid">
+        <div class="box">
+          <div class="muted">Piogge recenti</div>
+          <div>P7: <b id="p7">–</b> mm — P14: <b id="p14">–</b> mm</div>
+          <div>API* (30g, half=8): <b id="api">–</b> mm</div>
+          <div>ET0 7g: <b id="et0">–</b> mm</div>
+          <div>Ultima pioggia utile: <b id="lrd">–</b> gg</div>
+          <div>Prob. pioggia prossime 72h: <b id="prob">–</b>%</div>
+        </div>
+        <div class="box">
+          <div class="muted">Termica</div>
+          <div>Tmed 7g: <b id="tmean">–</b> °C</div>
+          <div>Tmin 7g: <b id="tmin">–</b> °C • Tmax 7g: <b id="tmax">–</b> °C</div>
+          <div>UR ora: <b id="hum">–</b>% • Pioggia 24h: <b id="r24">–</b> mm</div>
+          <div>Affidabilità: <b id="conf">–</b></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div style="margin-bottom:6px"><b>Perché questo giudizio?</b></div>
+        <ul id="reasons"></ul>
+      </div>
+
+      <div class="card">
+        <div style="margin-bottom:6px"><b>Consigli di ricerca (campo)</b></div>
+        <ul id="tips"></ul>
+      </div>
+
+      <div class="card">
+        <div style="margin-bottom:6px"><b>Altre specie possibili</b> <span class="muted">(indicative)</span></div>
+        <ul id="species"></ul>
+      </div>
+      <small class="muted">Nota: indice 0–100. 0–49: sconsigliato • 50–59: incerto • 60–74: moderatamente consigliato • 75–100: consigliato.</small>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary><b>Metodo (sintesi)</b></summary>
+        <p class="muted">
+          API* = precipitazioni con decadimento (emivita ≈ 8 giorni). Bilancio idrico ≈ API* − ET0 7g. Idoneità termica su Tmean/Tmin/Tmax 7g.
+          Modificatori per latitudine (Italia), quota, esposizione (se pendenza &gt; 1.5°) e pendenza. Dati: Open-Meteo, Open-Elevation, OSM;
+          meteo puntuale/24h da OpenWeather se disponibile (solo per perfezionare UR e pioggia 24h). Sito creato da <b>Antonio Pio d'Aloia</b>.
+        </p>
+      </details>
+    </div>
+  </div>
+
+<script>
+const $ = sel => document.querySelector(sel);
+const api = (path, params={}) => fetch(path + (Object.keys(params).length? "?" + new URLSearchParams(params):""), {headers:{'Accept':'application/json'}}).then(r=>{
+  if(!r.ok) throw new Error("HTTP "+r.status); return r.json();
+});
+
+function judgeLabel(s){
+  if (s>=75) return ["Consigliato oggi","s2"];
+  if (s>=60) return ["Moderatamente consigliato","s1"];
+  if (s>=50) return ["Incerto","s1"];
+  return ["Sconsigliato oggi","s0"];
+}
+
+function parseCoords(s){
+  if(!s) return null;
+  const parts = s.split(/[,\s]+/).filter(Boolean);
+  if(parts.length<2) return null;
+  const lat = parseFloat(parts[0]); const lon = parseFloat(parts[1]);
+  if(Number.isFinite(lat) && Number.isFinite(lon)) return {lat,lon};
+  return null;
+}
+
+async function run(){
+  try{
+    $("#out").style.display="none";
+    let coords = parseCoords($("#coords").value.trim());
+    if(!coords){
+      const q = $("#place").value.trim();
+      if(!q){ alert("Inserisci località o coordinate."); return; }
+      const g = await api("/api/geocode", {q});
+      coords = {lat:g.lat, lon:g.lon};
+    }
+    const data = await api("/api/score", {lat:coords.lat, lon:coords.lon, half:8.0});
+
+    // KPI principali
+    $("#elev").textContent = Math.round(data.elevation_m) + " m";
+    $("#slope").textContent = data.slope_deg.toFixed(1) + "°";
+    $("#aspect").textContent = data.aspect_octant;
+    $("#forest").textContent = data.forest;
+
+    // Meteo/idrico/termico
+    $("#p7").textContent = data.P7_mm.toFixed(1);
+    $("#p14").textContent = data.P14_mm.toFixed(1);
+    $("#api").textContent = data.API_star_mm.toFixed(1);
+    $("#et0").textContent = data.ET0_7d_mm.toFixed(1);
+    $("#lrd").textContent = data.last_rain_days>=0? data.last_rain_days : "—";
+    $("#prob").textContent = data.prob_rain_next3d!=null? data.prob_rain_next3d+"%" : "—";
+    $("#tmean").textContent = data.Tmean7_c.toFixed(1);
+    $("#tmin").textContent = data.Tmin7_c.toFixed(1);
+    $("#tmax").textContent = data.Tmax7_c.toFixed(1);
+    $("#hum").textContent = data.humidity_now!=null? data.humidity_now : "—";
+    $("#r24").textContent = data.rain24h_forecast_mm!=null? data.rain24h_forecast_mm.toFixed(1):"—";
+    $("#conf").textContent = (data.confidence*100).toFixed(0)+"%";
+
+    // Score e badge
+    $("#score").textContent = data.score_today;
+    const [lbl,cls] = judgeLabel(data.score_today);
+    $("#badge").textContent = lbl;
+    const b = $("#meter b");
+    b.style.width = Math.min(100, Math.max(0, data.score_today)) + "%";
+    b.className = cls;
+
+    // Perché + consigli
+    $("#why").textContent = data.explanation?.today || "";
+    $("#reasons").innerHTML = (data.explanation?.reasons||[]).map(x=>`<li>${x}</li>`).join("") || "<li>Dati insufficienti.</li>";
+    $("#tips").innerHTML = (data.habitat_tips||[]).map(x=>`<li>${x}</li>`).join("") || "<li>Nessun consiglio disponibile.</li>";
+    $("#species").innerHTML = (data.other_species||[]).map(x=>`<li>${x}</li>`).join("") || "<li>—</li>";
+
+    $("#out").style.display="block";
+    window.scrollTo({top:document.body.scrollHeight, behavior:"smooth"});
+  }catch(e){
+    alert("Errore: " + e.message + "\nControlla che il backend sia Live su Render.");
+  }
+}
+
+$("#btn").addEventListener("click", run);
+$("#clear").addEventListener("click", ()=>{
+  $("#place").value=""; $("#coords").value=""; $("#out").style.display="none";
+});
+</script>
+</body>
+</html>
