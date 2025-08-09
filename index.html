@@ -1,202 +1,246 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TrovaPorcini v0.7</title>
-  <style>
-    :root{--bg:#0e1320;--panel:#121a2a;--muted:#8aa1c2;--text:#e8f0ff;--accent:#23d18b;--warn:#ff6b6b;--ok:#22c55e;--mid:#f59e0b}
-    html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{max-width:980px;margin:24px auto;padding:0 16px}
-    h1{display:flex;align-items:center;gap:8px;font-size:22px;margin:0 0 16px}
-    .card{background:var(--panel);border:1px solid #1f2a44;border-radius:12px;padding:16px;margin:14px 0}
-    .row{display:flex;flex-wrap:wrap;gap:10px}
-    .row > *{flex:1 1 280px}
-    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
-    input{width:100%;padding:12px;border-radius:10px;border:1px solid #213152;background:#0c1220;color:var(--text)}
-    button{padding:12px 16px;border-radius:10px;border:1px solid #274861;background:#18344a;color:#cfe8ff;cursor:pointer}
-    button.primary{background:linear-gradient(180deg,#28b487,#1f9d78);border-color:#1a8d6d;color:#fff}
-    .kpi{display:flex;flex-wrap:wrap;gap:16px}
-    .kpi .box{flex:1 1 150px;background:#0c1220;border:1px solid #1f2a44;border-radius:10px;padding:12px}
-    .meter{height:10px;background:#1f2a44;border-radius:999px;overflow:hidden;margin-top:6px}
-    .meter > b{display:block;height:100%}
-    .s0{background:var(--warn)} .s1{background:var(--mid)} .s2{background:var(--ok)}
-    ul{margin:8px 0 0 18px}
-    small, .muted{color:var(--muted)}
-    code{background:#0b1020;border:1px solid #223; padding:1px 6px;border-radius:6px}
-    .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #2b3b5e;margin-right:6px}
-    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-    @media (max-width:760px){.grid{grid-template-columns:1fr}}
-    a{color:#7fdcff;text-decoration:none}
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TrovaPorcini v0.8</title>
+<link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet"/>
+<script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
+<style>
+:root{--bg:#0f1423;--panel:#121a2a;--muted:#8aa1c2;--text:#e8f0ff;--ok:#22c55e;--mid:#f59e0b;--bad:#ff6b6b}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+.wrap{max-width:1000px;margin:20px auto;padding:0 16px}
+h1{display:flex;align-items:center;gap:8px;margin:0 0 12px}
+.tabs{display:flex;gap:8px;margin-bottom:10px}
+.tab{padding:8px 12px;border-radius:10px;border:1px solid #253559;background:#15203a;color:#bfe0ff;cursor:pointer}
+.tab.active{background:#1d3350;border-color:#2c4f7b}
+.card{background:var(--panel);border:1px solid #1f2a44;border-radius:12px;padding:14px;margin:12px 0}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.row > *{flex:1 1 280px}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+input{width:100%;padding:12px;border-radius:10px;border:1px solid #213152;background:#0c1220;color:var(--text)}
+button{padding:12px 16px;border-radius:10px;border:1px solid #274861;background:#18344a;color:#cfe8ff;cursor:pointer}
+button.primary{background:linear-gradient(180deg,#28b487,#1f9d78);border-color:#1a8d6d;color:#fff}
+.meter{height:10px;background:#1f2a44;border-radius:999px;overflow:hidden}
+.meter > b{display:block;height:100%}
+.s0{background:var(--bad)} .s1{background:var(--mid)} .s2{background:var(--ok)}
+.kpi{display:flex;flex-wrap:wrap;gap:10px}
+.kpi .box{flex:1 1 150px;background:#0c1220;border:1px solid #1f2a44;border-radius:10px;padding:10px}
+small,.muted{color:var(--muted)}
+.legend{display:flex;align-items:center;gap:6px}
+.legend b{width:16px;height:10px;display:inline-block}
+#map{height:560px;border-radius:12px;border:1px solid #1f2a44}
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>🍄 TrovaPorcini <span class="muted">v0.7</span></h1>
+<div class="wrap">
+  <h1>🍄 TrovaPorcini <span class="muted">v0.8</span></h1>
 
+  <div class="tabs">
+    <div class="tab active" data-tab="search">Ricerca</div>
+    <div class="tab" data-tab="map">Mappa</div>
+  </div>
+
+  <!-- TAB: RICERCA -->
+  <div id="tab-search">
     <div class="card">
       <div class="row">
         <div>
-          <label>Località (es. “Castelpagano”)</label>
-          <input id="place" placeholder="Scrivi una località…" />
+          <label>Località</label>
+          <input id="place" placeholder="es. Bocca della Selva"/>
         </div>
         <div>
-          <label>Coordinate (lat,lon) — hanno priorità se compilate</label>
-          <input id="coords" placeholder="es. 41.25, 14.75" />
+          <label>Coordinate (lat,lon)</label>
+          <input id="coords" placeholder="es. 41.35, 14.55"/>
         </div>
         <div style="align-self:end;display:flex;gap:8px">
           <button class="primary" id="btn">Calcola idoneità</button>
           <button id="clear">Pulisci</button>
         </div>
       </div>
-      <small class="muted">Usa coordinate per massima precisione. Il backend calcola API* (emivita ~8 gg), bilancio idrico, finestra D+10, quota/esposizione.</small>
+      <small class="muted">Doppia barra: se metti le coordinate uso quelle. I dati arrivano dalle API /api del backend.</small>
     </div>
 
     <div id="out" class="card" style="display:none">
       <div class="row" style="align-items:center">
         <div style="flex:0 0 140px">
-          <div style="font-size:40px;font-weight:800" id="score">–</div>
+          <div id="score" style="font-size:40px;font-weight:800">–</div>
           <div id="badge" class="muted">–</div>
         </div>
         <div style="flex:1">
-          <div id="meter" class="meter"><b style="width:0%" class="s0"></b></div>
-          <small class="muted" id="why"></small>
+          <div class="meter"><b id="meterbar" style="width:0%" class="s0"></b></div>
+          <small id="why" class="muted"></small>
         </div>
       </div>
 
-      <div class="kpi" style="margin-top:10px">
+      <div class="kpi" style="margin-top:8px">
         <div class="box"><div class="muted">Quota</div><div id="elev">–</div></div>
         <div class="box"><div class="muted">Pendenza</div><div id="slope">–</div></div>
         <div class="box"><div class="muted">Esposizione</div><div id="aspect">–</div></div>
         <div class="box"><div class="muted">Bosco (stima)</div><div id="forest">–</div></div>
       </div>
 
-      <div class="grid">
+      <div class="kpi">
         <div class="box">
-          <div class="muted">Piogge recenti</div>
-          <div>P7: <b id="p7">–</b> mm — P14: <b id="p14">–</b> mm</div>
-          <div>API* (30g, half=8): <b id="api">–</b> mm</div>
-          <div>ET0 7g: <b id="et0">–</b> mm</div>
-          <div>Ultima pioggia utile: <b id="lrd">–</b> gg</div>
-          <div>Prob. pioggia prossime 72h: <b id="prob">–</b>%</div>
+          <div class="muted">Piogge</div>
+          P7: <b id="p7">–</b> mm — P14: <b id="p14">–</b> mm<br/>
+          API* (30g, half=8): <b id="api">–</b> mm — ET0 7g: <b id="et0">–</b> mm<br/>
+          Ultima pioggia utile: <b id="lrd">–</b> gg • Prob. pioggia 72h: <b id="prob">–</b>%
         </div>
         <div class="box">
           <div class="muted">Termica</div>
-          <div>Tmed 7g: <b id="tmean">–</b> °C</div>
-          <div>Tmin 7g: <b id="tmin">–</b> °C • Tmax 7g: <b id="tmax">–</b> °C</div>
-          <div>UR ora: <b id="hum">–</b>% • Pioggia 24h: <b id="r24">–</b> mm</div>
-          <div>Affidabilità: <b id="conf">–</b></div>
+          Tmed 7g: <b id="tmean">–</b> °C (min <b id="tmin">–</b> / max <b id="tmax">–</b>)<br/>
+          UR ora: <b id="hum">–</b>% • Pioggia 24h: <b id="r24">–</b> mm<br/>
+          Affidabilità: <b id="conf">–</b>
         </div>
       </div>
 
-      <div class="card" style="margin-top:14px">
-        <div style="margin-bottom:6px"><b>Perché questo giudizio?</b></div>
+      <div class="card">
+        <b>Possibile finestra</b>: <span id="window">–</span><br/>
+        <small class="muted" id="whyf"></small>
+      </div>
+
+      <div class="card">
+        <b>Perché questo giudizio?</b>
         <ul id="reasons"></ul>
       </div>
-
-      <div class="card">
-        <div style="margin-bottom:6px"><b>Consigli di ricerca (campo)</b></div>
-        <ul id="tips"></ul>
-      </div>
-
-      <div class="card">
-        <div style="margin-bottom:6px"><b>Altre specie possibili</b> <span class="muted">(indicative)</span></div>
-        <ul id="species"></ul>
-      </div>
-      <small class="muted">Indice 0–100. 0–49: sconsigliato • 50–59: incerto • 60–74: moderatamente consigliato • 75–100: consigliato.<br>Crediti dati: Open-Meteo, Open-Elevation, OSM; meteo puntuale/24h da OpenWeather (tramite backend).</small>
-    </div>
-
-    <div class="card">
-      <details>
-        <summary><b>Metodo (sintesi)</b></summary>
-        <p class="muted">
-          API* = precipitazioni con decadimento (emivita ≈ 8 giorni). Bilancio idrico ≈ API* − ET0 7g. Idoneità termica su Tmean/Tmin/Tmax 7g.
-          Modificatori per latitudine (Italia), quota, esposizione (se pendenza &gt; 1.5°) e pendenza.
-          Sito creato da <b>Antonio Pio d'Aloia</b>.
-        </p>
-      </details>
     </div>
   </div>
 
-<script>
-const $ = sel => document.querySelector(sel);
+  <!-- TAB: MAPPA -->
+  <div id="tab-map" style="display:none">
+    <div class="card">
+      <div class="row" style="align-items:end">
+        <div style="flex:2">
+          <label>Giorno (0=oggi … 10)</label>
+          <input id="day" type="range" min="0" max="10" step="1" value="0" oninput="dayLbl.textContent=this.value"/>
+          <div>Selezionato: <b id="dayLbl">0</b></div>
+        </div>
+        <div style="flex:1">
+          <label>Passo griglia (km)</label>
+          <input id="step" value="10" />
+        </div>
+        <div style="flex:0 0 auto">
+          <button class="primary" id="reload">Aggiorna mappa</button>
+        </div>
+      </div>
+      <div class="legend"><b style="background:#ff6b6b"></b> 0–49 &nbsp; <b style="background:#f59e0b"></b> 60–74 &nbsp; <b style="background:#22c55e"></b> ≥75</div>
+    </div>
+    <div id="map" class="card"></div>
+  </div>
 
-// grazie al redirect in netlify.toml possiamo usare direttamente /api/...
+  <div class="card">
+    <details>
+      <summary><b>Metodo (sintesi)</b></summary>
+      <p class="muted">API* con emivita ≈8 gg, convoluzione della pioggia futura con kernel di ritardo (picco ~9 gg),
+      bilancio idrico (API*−ET0 7g), termica su Tmean/Tmin/Tmax 7g, correttivi per quota/latitudine/esposizione.
+      Dati: Open-Meteo, Open-Elevation, OSM; meteo puntuale/24h da OpenWeather (via backend). Autore: <b>Antonio Pio d’Aloia</b>.</p>
+    </details>
+  </div>
+</div>
+
+<script>
+const $ = s=>document.querySelector(s);
 const API = {
-  geocode: (q) => fetch('/api/geocode?q=' + encodeURIComponent(q)).then(r=>r.json()),
-  score: (lat,lon) => fetch('/api/score?lat='+lat+'&lon='+lon).then(r=>r.json())
+  geocode: q => fetch('/api/geocode?q='+encodeURIComponent(q)).then(r=>r.json()),
+  score: (lat,lon)=>fetch('/api/score?lat='+lat+'&lon='+lon).then(r=>r.json()),
+  grid : (bbox,day,step)=>fetch('/api/score_grid?bbox='+bbox+'&day='+day+'&step_km='+step).then(r=>r.json())
 };
 
-function labelForScore(s){
-  if (s>=75) return ["Consigliato oggi","s2"];
-  if (s>=60) return ["Moderatamente consigliato","s1"];
-  if (s>=50) return ["Incerto","s1"];
-  return ["Sconsigliato oggi","s0"];
-}
+function labelScore(s){ if(s>=75) return ["Consigliato","s2"]; if(s>=60) return ["Moderato","s1"]; if(s>=50) return ["Incerto","s1"]; return ["Sconsigliato","s0"]; }
+function parseCoords(s){ if(!s) return null; const a=s.split(/[,\s]+/).filter(Boolean); if(a.length<2) return null; const lat=+a[0],lon=+a[1]; if(isFinite(lat)&&isFinite(lon)) return {lat,lon}; return null; }
 
-function parseCoords(s){
-  if(!s) return null;
-  const parts = s.split(/[,\s]+/).filter(Boolean);
-  if(parts.length<2) return null;
-  const lat = parseFloat(parts[0]); const lon = parseFloat(parts[1]);
-  if(Number.isFinite(lat) && Number.isFinite(lon)) return {lat,lon};
-  return null;
-}
-
-async function run(){
+async function runSearch(){
   try{
     $("#out").style.display="none";
-    let coords = parseCoords($("#coords").value.trim());
-    if(!coords){
-      const q = $("#place").value.trim();
+    let c = parseCoords($("#coords").value.trim());
+    if(!c){
+      const q=$("#place").value.trim();
       if(!q){ alert("Inserisci località o coordinate."); return; }
-      const g = await API.geocode(q);
-      coords = {lat:g.lat, lon:g.lon};
+      const g=await API.geocode(q); c={lat:g.lat,lon:g.lon};
     }
-    const d = await API.score(coords.lat, coords.lon);
-
-    $("#elev").textContent = Math.round(d.elevation_m) + " m";
-    $("#slope").textContent = d.slope_deg.toFixed(1) + "°";
+    const d=await API.score(c.lat,c.lon);
+    // KPI
+    $("#elev").textContent = Math.round(d.elevation_m)+" m";
+    $("#slope").textContent = d.slope_deg.toFixed(1)+"°";
     $("#aspect").textContent = d.aspect_octant;
     $("#forest").textContent = d.forest;
-
-    $("#p7").textContent   = d.P7_mm.toFixed(1);
-    $("#p14").textContent  = d.P14_mm.toFixed(1);
-    $("#api").textContent  = d.API_star_mm.toFixed(1);
-    $("#et0").textContent  = d.ET0_7d_mm.toFixed(1);
-    $("#lrd").textContent  = d.last_rain_days>=0? d.last_rain_days : "—";
-    $("#prob").textContent = d.prob_rain_next3d!=null? d.prob_rain_next3d+"%" : "—";
-
+    $("#p7").textContent = d.P7_mm.toFixed(1);
+    $("#p14").textContent = d.P14_mm.toFixed(1);
+    $("#api").textContent = d.API_star_mm.toFixed(1);
+    $("#et0").textContent = d.ET0_7d_mm.toFixed(1);
     $("#tmean").textContent = d.Tmean7_c.toFixed(1);
     $("#tmin").textContent  = d.Tmin7_c.toFixed(1);
     $("#tmax").textContent  = d.Tmax7_c.toFixed(1);
-    $("#hum").textContent   = d.humidity_now!=null? d.humidity_now : "—";
+    $("#hum").textContent   = d.humidity_now ?? "—";
     $("#r24").textContent   = d.rain24h_forecast_mm!=null? d.rain24h_forecast_mm.toFixed(1):"—";
-    $("#conf").textContent  = (d.confidence*100).toFixed(0)+"%";
-
+    $("#conf").textContent  = Math.round(d.confidence*100)+"%";
+    // score
     $("#score").textContent = d.score_today;
-    const [lbl,cls] = labelForScore(d.score_today);
-    $("#badge").textContent = lbl;
-    const b = $("#meter b");
-    b.style.width = Math.min(100, Math.max(0, d.score_today)) + "%";
-    b.className = cls;
-
+    const [lbl,cls]=labelScore(d.score_today);
+    $("#badge").textContent = lbl+" oggi";
+    const mb=$("#meterbar"); mb.style.width=Math.min(100,Math.max(0,d.score_today))+"%"; mb.className=cls;
+    // spiegazioni
     $("#why").textContent = d.explanation?.today || "";
-    $("#reasons").innerHTML = (d.explanation?.reasons||[]).map(x=>`<li>${x}</li>`).join("") || "<li>Dati insufficienti.</li>";
-    $("#tips").innerHTML    = (d.habitat_tips||[]).map(x=>`<li>${x}</li>`).join("") || "<li>Nessun consiglio disponibile.</li>";
-    $("#species").innerHTML = (d.other_species||[]).map(x=>`<li>${x}</li>`).join("") || "<li>—</li>";
-
+    $("#reasons").innerHTML=(d.explanation?.reasons||[]).map(x=>`<li>${x}</li>`).join("");
+    const bw = d.best_window; $("#window").textContent = bw?.mean? `D+${bw.start} → D+${bw.end} (media ${bw.mean})` : "—";
+    $("#whyf").textContent = d.explanation?.forecast || "";
     $("#out").style.display="block";
-    window.scrollTo({top:document.body.scrollHeight, behavior:"smooth"});
-  }catch(e){
-    alert("Errore: " + e.message + "\n• Verifica che il backend su Render sia Live.\n• Controlla il redirect /api su netlify.toml.");
-  }
+  }catch(e){ alert("Errore: "+e.message); }
 }
 
-$("#btn").addEventListener("click", run);
-$("#clear").addEventListener("click", ()=>{
-  $("#place").value=""; $("#coords").value=""; $("#out").style.display="none";
+$("#btn").addEventListener("click", runSearch);
+$("#clear").addEventListener("click", ()=>{ $("#place").value=""; $("#coords").value=""; $("#out").style.display="none"; });
+
+// Tabs
+document.querySelectorAll(".tab").forEach(t=>{
+  t.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    const id=t.dataset.tab;
+    $("#tab-search").style.display = id==="search" ? "block" : "none";
+    $("#tab-map").style.display    = id==="map" ? "block" : "none";
+    if(id==="map") initMapOnce();
+  });
 });
+
+// MAPPA
+let map, mapReady=false, srcId="scores";
+function initMapOnce(){
+  if(mapReady) return;
+  map = new maplibregl.Map({
+    container:'map',
+    style:'https://demotiles.maplibre.org/style.json',
+    center:[12.5,42.5], zoom:5.2
+  });
+  map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  map.on('load', ()=>{ mapReady=true; loadGrid(); });
+  $("#reload").addEventListener("click", loadGrid);
+}
+
+async function loadGrid(){
+  if(!mapReady) return;
+  const b = map.getBounds();
+  const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(x=>x.toFixed(4)).join(",");
+  const day = +$("#day").value;
+  const step = +$("#step").value || 10;
+  const geo = await API.grid(bbox, day, step);
+  if(map.getSource(srcId)) map.removeLayer("sc"); if(map.getSource(srcId)) map.removeSource(srcId);
+  map.addSource(srcId, {type:'geojson', data:geo});
+  map.addLayer({
+    id:"sc", type:"circle", source:srcId,
+    paint:{
+      "circle-radius": 6,
+      "circle-color": [
+        "case",
+        [">=",["get","score"],75], "#22c55e",
+        [">=",["get","score"],60], "#f59e0b",
+                                 "#ff6b6b"
+      ],
+      "circle-opacity": 0.8
+    }
+  });
+}
 </script>
 </body>
 </html>
