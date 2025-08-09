@@ -3,6 +3,6 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://YOUR-BACKEND-URL/api/:splat"
+  to = "https://porcinicast-2.onrender.com/api/:splat"
   status = 200
   force = true
