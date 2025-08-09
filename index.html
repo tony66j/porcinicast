@@ -2,203 +2,201 @@
 <html lang="it">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>TrovaPorcini v3.0</title>
-<link rel="preconnect" href="https://unpkg.com">
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TrovaPorcini v4.0</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  :root{
-    --bg:#0e1420;--card:#141c2b;--accent:#1f9d5a;--text:#e8eef6;--muted:#8fa6c3;
-  }
-  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
-  .wrap{max-width:1100px;margin:0 auto;padding:16px}
-  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-  h1{font-size:22px;margin:0}
-  h1 small{background:#22314a;color:#cfe1ff;border-radius:6px;padding:2px 8px;margin-left:8px}
-  .by{color:var(--muted);font-size:14px}
-  .card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:12px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
-  input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a3956;background:#0f1726;color:var(--text)}
-  .buttons{display:flex;gap:8px;margin-top:8px}
-  button{background:var(--accent);color:#fff;border:none;padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer}
-  button.secondary{background:#2a3956}
-  .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:12px}
-  .metric{display:flex;gap:10px;align-items:center}
-  .pill{background:#1a2740;color:#cfe1ff;border-radius:20px;padding:4px 10px;font-size:13px}
-  .section-title{font-weight:700;margin:8px 0}
-  #map{width:100%;height:420px;border-radius:12px}
-  .slider{width:100%}
-  details{margin:8px 0}
-  details>summary{cursor:pointer;color:#cfe1ff}
-  @media (max-width:900px){
-    .grid{grid-template-columns:1fr}
-    #map{height:50vh}
-  }
+  body{background:#0f1620;color:#e8eef6;font:16px/1.4 system-ui,Segoe UI,Roboto,Arial}
+  .wrap{max-width:1150px;margin:24px auto;padding:0 14px}
+  h1{font-size:24px;margin:0 0 12px}
+  .by{opacity:.7;font-size:14px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .card{background:#141c27;border:1px solid #1e2a3a;border-radius:10px;padding:14px}
+  label{display:block;margin:10px 0 6px;font-weight:600}
+  input[type=text]{width:100%;padding:10px;border-radius:8px;border:1px solid #26405b;background:#0f1a24;color:#e8eef6}
+  button{padding:10px 14px;border:0;border-radius:8px;background:#1db954;color:#08121b;font-weight:700;cursor:pointer}
+  button.sec{background:#2a394d;color:#e8eef6}
+  .grid2{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center}
+  #map{height:420px;border-radius:10px;border:1px solid #1e2a3a}
+  .pill{display:inline-block;background:#1e2a3a;border-radius:18px;padding:6px 10px;margin:2px 6px 6px 0}
+  details{margin-top:10px}
+  .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:13px;background:#101826;padding:10px;border-radius:8px;overflow:auto}
+  @media (max-width:900px){ .row{grid-template-columns:1fr} #map{height:360px} }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>🍄 TrovaPorcini <small>v3.0</small></h1>
-    <div class="by">by <b>Antonio Pio D'Aloia</b></div>
-  </header>
+  <h1>🍄 TrovaPorcini <span class="pill">v4.0</span> <span class="by">by Antonio Pio D’Aloia</span></h1>
 
   <div class="card">
-    <label for="q">Località o coordinate (lat,lon)</label>
-    <input id="q" placeholder="es. Bocca della Selva oppure 41.4170010, 14.4707168" />
-    <div class="buttons">
+    <div class="grid2">
+      <input id="q" type="text" placeholder="Località o coordinate (lat,lon) — es. 41,41948, 14,47275"/>
       <button id="go">Calcola</button>
-      <button id="clear" class="secondary">Pulisci</button>
+      <button id="clr" class="sec">Pulisci</button>
     </div>
   </div>
 
-  <div class="grid">
+  <div class="row" style="margin-top:14px">
     <div class="card">
-      <div class="metric">
-        <div class="pill" id="indexPill">Indice: –</div>
-        <div class="pill" id="capsPill">Stima 3h: – cappelli</div>
-        <div class="pill" id="rainPill">Pioggia: –</div>
+      <div id="head">
+        <span class="pill" id="idx">Indice: –</span>
+        <span class="pill" id="caps">Stima 3h: – cappelli</span>
+        <span class="pill" id="rain">Pioggia: –</span>
       </div>
 
-      <div class="section-title">Previsione (prossimi 10 giorni)</div>
-      <input id="day" class="slider" type="range" min="0" max="9" step="1" value="0"/>
-      <div style="font-size:13px;color:var(--muted)">Giorno selezionato: <span id="dayLbl">oggi</span></div>
+      <label>Previsione (prossimi 10 giorni)</label>
+      <input id="day" type="range" min="0" max="9" value="0" style="width:100%"/>
 
       <details open>
-        <summary>Consigli pratici (cambiano per il giorno selezionato)</summary>
-        <ul id="advice" style="margin:8px 0 0 18px"></ul>
+        <summary><b>Consigli pratici</b> (cambiano per il giorno selezionato)</summary>
+        <div id="adv">—</div>
+      </details>
+
+      <details open>
+        <summary><b>Perché questa stima</b></summary>
+        <div id="why">—</div>
       </details>
 
       <details>
-        <summary>Perché questa stima</summary>
-        <div id="why" style="margin-top:6px;color:#d9e7ff"></div>
+        <summary><b>Specie di porcini probabili</b></summary>
+        <div id="species">—</div>
       </details>
 
       <details>
-        <summary>Specie di porcini probabili</summary>
-        <div id="species" style="margin-top:6px"></div>
-      </details>
-
-      <details>
-        <summary>Dati tecnici</summary>
-        <pre id="tech" style="white-space:pre-wrap;margin-top:6px;color:#9fc6ff"></pre>
+        <summary><b>Dati tecnici</b></summary>
+        <div class="mono" id="tech">—</div>
       </details>
     </div>
 
     <div class="card">
       <div id="map"></div>
+      <div style="opacity:.8;margin-top:6px">Legenda cerchio: colore = indice del giorno selezionato.</div>
     </div>
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const apiBase = "/api"; // Netlify proxy / Render diretto
+const API = location.origin.replace(/\/$/,'')  // Netlify -> stesso dominio (proxy/redirect)
 
-// --- Leaflet ---
-let map = L.map('map', {scrollWheelZoom:true});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap'}).addTo(map);
-let marker=null, circle=null;
-
-// --- UI ---
-const q   = document.getElementById('q');
-const go  = document.getElementById('go');
-const clr = document.getElementById('clear');
-const day = document.getElementById('day');
-const dayLbl = document.getElementById('dayLbl');
-
-const indexPill = document.getElementById('indexPill');
-const capsPill  = document.getElementById('capsPill');
-const rainPill  = document.getElementById('rainPill');
-const adviceEl  = document.getElementById('advice');
-const whyEl     = document.getElementById('why');
-const techEl    = document.getElementById('tech');
-const speciesEl = document.getElementById('species');
-
-function parseLatLon(s){
+function parseCoords(s){
   if(!s) return null;
-  const t = s.replace(/[°\s]/g,'').replace(';',',').split(',');
-  if(t.length!==2) return null;
-  let la = t[0].replace(',','.'), lo = t[1].replace(',','.');
-  const lat = parseFloat(la), lon = parseFloat(lo);
-  if(Number.isFinite(lat) && Number.isFinite(lon)) return {lat, lon};
-  return null;
-}
-
-async function geocode(name){
-  const url = "https://nominatim.openstreetmap.org/search";
-  const params = new URLSearchParams({format:"json",q:name,limit:"1",addressdetails:"0"});
-  const r = await fetch(`${url}?${params.toString()}`, {headers:{"User-Agent":"TrovaPorcini/3.0"}});
-  const j = await r.json();
-  if(j && j[0]) return {lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon)};
-  throw new Error("Località non trovata");
-}
-
-async function fetchScore(lat, lon, d){
-  const params = new URLSearchParams({lat,lon,day:d});
-  const r = await fetch(`${apiBase}/score?`+params.toString());
-  if(!r.ok){
-    const t = await r.text();
-    throw new Error(`API ${r.status}: ${t.substring(0,120)}`);
+  s = s.trim();
+  // accetta: "41,41948, 14,47275" | "41.41948 14.47275" | "41.41948;14.47275"
+  // sostituisco “;” con “,” e spazi multipli con “,”
+  s = s.replace(/;/g,',').replace(/\s+/g,',');
+  // ora splitto e converto le virgole decimali (italiano) in punti
+  const parts = s.split(',').filter(Boolean);
+  if(parts.length < 2) return null;
+  // se ci sono più di 2 pezzi, provo a ricomporre (es. "41,41948,14,47275")
+  function toFloat(x){ return parseFloat(x.replace(',', '.')); }
+  let lat=null, lon=null;
+  if(parts.length===2){ lat=toFloat(parts[0]); lon=toFloat(parts[1]); }
+  else {
+    // prendo i primi due pezzi “decimali ragionevoli”
+    let nums = parts.map(toFloat).filter(x => !isNaN(x));
+    if(nums.length>=2){ lat=nums[0]; lon=nums[1]; }
   }
-  return await r.json();
+  if(isNaN(lat)||isNaN(lon) || Math.abs(lat)>90 || Math.abs(lon)>180) return null;
+  return {lat, lon};
 }
 
-function setMap(lat, lon, idx){
-  if(!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-  map.setView([lat,lon], 11);
-  if(marker) map.removeLayer(marker);
-  if(circle) map.removeLayer(circle);
-  marker = L.marker([lat,lon]).addTo(map);
-  const radius = 1500 + (100-idx)*15; // cerchio più grande se indice basso
-  circle = L.circle([lat,lon], {radius, color:"#1f9d5a", fillColor:"#1f9d5a", fillOpacity:0.15}).addTo(map);
+function $(id){ return document.getElementById(id); }
+
+let state = { lat:null, lon:null, data:null, marker:null, circle:null, map:null };
+
+async function geocodeOrCoords(){
+  const raw = $("q").value;
+  const c = parseCoords(raw);
+  if(c) return c; // usa direttamente le coordinate
+  // altrimenti geocoding
+  const r = await fetch(`/api/geocode?q=${encodeURIComponent(raw)}`);
+  const j = await r.json();
+  if(j.error){ alert("Errore: Località non trovata"); return null; }
+  $("q").value = j.display || `${j.lat},${j.lon}`;
+  return {lat:j.lat, lon:j.lon};
 }
 
-function showResult(j){
-  indexPill.textContent = `Indice: ${j.index}`;
-  capsPill.textContent  = `Stima 3h: ${j.caps3h} cappelli`;
-  rainPill.textContent  = `Pioggia: ${j.tech.P14mm} mm (ult.14gg)`;
-  whyEl.textContent     = j.why || "—";
+function circleColor(score){
+  if(score>=75) return "#2ecc71";
+  if(score>=55) return "#f1c40f";
+  if(score>=35) return "#e67e22";
+  return "#e74c3c";
+}
 
-  adviceEl.innerHTML = "";
-  (j.advice || []).forEach(a => {
-    const li = document.createElement('li'); li.textContent = a; adviceEl.appendChild(li);
-  });
+function updateUI(day){
+  if(!state.data) return;
+  const d = state.data;
+  const idx = d.scores_next10[day];
+  $("idx").textContent = `Indice: ${idx}`;
+  if(day===0 && d.caps3h_est){
+    $("caps").textContent = `Stima 3h: ${d.caps3h_est.low}–${d.caps3h_est.high} cappelli`;
+  }else{
+    $("caps").textContent = `Stima 3h: – cappelli`;
+  }
+  $("rain").textContent = `Pioggia: ultimi 14 gg ${d.P14_mm} mm; prossimi 10 gg ${d.tech.sum_next10mm} mm`;
 
-  speciesEl.textContent = (j.species||[]).join(", ") || "—";
+  $("adv").textContent = (d.advice_all && d.advice_all[day]) || d.advice_today || "—";
+  $("why").textContent = (d.why_all && d.why_all[day]) || d.why_today || "—";
 
-  techEl.textContent = JSON.stringify(j.tech, null, 2);
+  const species = (d.forest||"").includes("Castanea") ? "Boletus pinophilus, Boletus edulis"
+                  : (d.forest||"").includes("Fagus") ? "Boletus edulis"
+                  : "Boletus reticulatus (estivo)";
+  $("species").textContent = species;
 
-  setMap(j.tech.lat, j.tech.lon, j.index);
+  $("tech").textContent = JSON.stringify({
+    lat:d.lat, lon:d.lon, elev_m:d.elev_m, slope_deg:d.slope_deg,
+    aspect_deg:d.aspect_deg, aspect_octant:d.aspect_octant,
+    forest:d.forest, P14_mm:d.P14_mm, Tmean7_c:d.Tmean7_c,
+    humidity_mean:d.humidity_mean, radiation_MJm2:d.radiation_MJm2,
+    last_rain_days:d.tech.last_rain_days, next_rain_in_days:d.tech.next_rain_in_days
+  }, null, 2);
+
+  // mappa: colore del giorno selezionato
+  if(state.circle){
+    state.circle.setStyle({color:circleColor(idx), fillColor:circleColor(idx)});
+  }
 }
 
 async function run(){
+  const c = await geocodeOrCoords();
+  if(!c) return;
+  state.lat = c.lat; state.lon = c.lon;
+
+  const url = `/api/score?lat=${c.lat}&lon=${c.lon}`;
+  let j;
   try{
-    const txt = q.value.trim();
-    let coords = parseLatLon(txt);
-    if(!coords){
-      if(!txt) throw new Error("Inserisci località o coordinate");
-      coords = await geocode(txt);
-    }
-    const d = parseInt(day.value,10) || 0;
-    const j = await fetchScore(coords.lat, coords.lon, d);
-    showResult(j);
-  }catch(err){
-    alert("Errore: " + err.message);
+    const r = await fetch(url);
+    j = await r.json();
+  }catch(e){
+    alert("Errore: API non raggiungibile"); return;
   }
+  if(j.error){ alert("Errore API"); return; }
+  state.data = j;
+  $("day").value = 0;
+  updateUI(0);
+
+  // mappa
+  if(!state.map){
+    state.map = L.map('map',{scrollWheelZoom:true}).setView([c.lat,c.lon], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19, attribution:'© OpenStreetMap'
+    }).addTo(state.map);
+  }else{
+    state.map.setView([c.lat,c.lon], state.map.getZoom());
+  }
+  if(state.marker){ state.map.removeLayer(state.marker); }
+  if(state.circle){ state.map.removeLayer(state.circle); }
+  state.marker = L.marker([c.lat,c.lon]).addTo(state.map);
+  state.circle = L.circle([c.lat,c.lon], {
+    radius: 1200, color: circleColor(j.scores_next10[0]),
+    fillColor: circleColor(j.scores_next10[0]), fillOpacity: 0.15, weight:2
+  }).addTo(state.map);
 }
 
-go.addEventListener('click', run);
-clr.addEventListener('click', ()=>{ q.value=""; adviceEl.innerHTML=""; whyEl.textContent=""; techEl.textContent=""; indexPill.textContent="Indice: –"; capsPill.textContent="Stima 3h: – cappelli"; rainPill.textContent="Pioggia: –"; });
-day.addEventListener('input', ()=>{
-  const v = parseInt(day.value,10);
-  dayLbl.textContent = v===0 ? "oggi" : `D+${v}`;
-  if(q.value.trim()) run();
-});
-
-// Avvio: centro Italia di default
-setMap(42.5, 12.5, 50);
+$("go").onclick = run;
+$("clr").onclick = ()=>{ $("q").value=""; };
+$("day").oninput = e => updateUI(parseInt(e.target.value,10));
 </script>
 </body>
 </html>
