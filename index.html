@@ -52,7 +52,7 @@
   <div class="wrap">
     <div class="card">
       <div class="row" style="margin-bottom:10px;">
-        <input id="q" type="text" placeholder="Es. 'Campitello Matese' oppure '41.458, 14.374'">
+        <input id="q" type="text" placeholder="Es. 'Benevento' oppure '41.127, 14.782'">
         <button id="go">Cerca</button>
         <button id="geo" title="Usa la mia posizione">📍</button>
       </div>
@@ -98,7 +98,10 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
-    // ---- diagnostica base ----
+    // ==== CONFIG: backend (Render) =====
+    const BACKEND = "https://porcinicast-2.onrender.com";
+
+    // ---- diagnostica ----
     const statusBox = document.getElementById("status");
     function setStatus(msg, isErr=false){ statusBox.textContent = "Diagnostica: " + msg; statusBox.className = "status" + (isErr?" err":""); }
 
@@ -108,9 +111,7 @@
       map = L.map('map', {zoomControl: true}).setView([42.5, 12.5], 6);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '&copy; OpenStreetMap'}).addTo(map);
       marker = L.marker([42.5,12.5]).addTo(map);
-      // evita "mappa nera"
       setTimeout(()=> map.invalidateSize(), 200);
-      // click sulla mappa => cerca per coordinate
       map.on('click', (e)=> { runSearch({lat:e.latlng.lat, lon:e.latlng.lng}); });
     }
     document.addEventListener("DOMContentLoaded", ()=>{
@@ -145,7 +146,7 @@
       try{
         goBtn.disabled=true; document.getElementById("paneMsg").textContent="";
         barsEl.innerHTML=""; scoreEl.textContent="…"; relEl.textContent="…"; lastRainEl.textContent="—"; factorsEl.innerHTML=""; tipsEl.innerHTML="";
-        let url="/api/score?";
+        let url = BACKEND + "/api/score?";
         if(arg && arg.lat && arg.lon){ url+=`lat=${arg.lat}&lon=${arg.lon}`; }
         else{
           const q=qInput.value.trim();
@@ -204,7 +205,7 @@
       tipsEl.innerHTML = (tips||[]).map(t=>`<li>${t}</li>`).join("");
 
       // suggerimento sintetico
-      hintEl.textContent = advice(todayScore);
+      hintEl.textContent = advice(Math.round(today?.score??0));
     }
 
     // eventi UI
@@ -218,24 +219,23 @@
       );
     });
 
-    // prova API health per proxy
+    // diagnostica backend
     (async ()=>{
       try{
-        const r = await fetch("/api/health");
-        if(!r.ok){ setStatus("Proxy /api non configurato", true); return; }
+        const r = await fetch(BACKEND + "/api/health");
+        if(!r.ok){ setStatus("backend non raggiungibile", true); return; }
         const j = await r.json();
         if(j && j.ok) setStatus("backend raggiungibile ✔");
         else setStatus("backend non risponde correttamente", true);
-      }catch(e){ setStatus("errore rete verso /api", true); }
+      }catch(e){ setStatus("errore rete verso backend", true); }
     })();
 
-    // avvio con una query utile
-    window.addEventListener("load", ()=>{
-      qInput.value = "Benevento";
-    });
+    // avvio
+    window.addEventListener("load", ()=>{ document.getElementById("q").value = "Benevento"; });
   </script>
 </body>
 </html>
+
 
 
 
