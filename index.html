@@ -101,5 +101,157 @@
       map = L.map('map', {zoomControl: true}).setView([42.5, 12.5], 6);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 18, attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+      marker = L.marker([42.5,12.5]).addTo(map);
+    }
+    document.addEventListener("DOMContentLoaded", initMap);
+
+    // Helpers
+    const COORD_RE = /^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/;
+    function parseCoords(txt){
+      const m = COORD_RE.exec((txt||"").trim());
+      if(!m) return null;
+      const lat = parseFloat(m[1].replace(",", "."));
+      const lon = parseFloat(m[2].replace(",", "."));
+      if(!(isFinite(lat)&&isFinite(lon))) return null;
+      if(lat<-90||lat>90||lon<-180||lon>180) return null;
+      return {lat, lon};
+    }
+    function relBadge(r){
+      if(r===null||r===undefined) return ["low","—"];
+      const pct = Math.round(r*100);
+      if(pct>=80) return ["ok", pct+"%"];
+      if(pct>=60) return ["med", pct+"%"];
+      return ["low", pct+"%"];
+    }
+    function advice(score){
+      if(score>=75) return "Finestra molto favorevole: controlla i tuoi spot abituali nelle prossime 24–72 h.";
+      if(score>=55) return "Condizioni discrete: utile monitorare dopo eventuale pioggia/umidità notturna.";
+      if(score>=40) return "Potenziale moderato: attendi un impulso piovoso o calo termico.";
+      return "Basso potenziale: serve pioggia utile (e 5–10 giorni di maturazione).";
+    }
+
+    // UI nodes
+    const goBtn = document.getElementById("go");
+    const qInput = document.getElementById("q");
+    const locEl  = document.getElementById("loc");
+    const relEl  = document.getElementById("rel");
+    const scoreEl= document.getElementById("score");
+    const barsEl = document.getElementById("bars");
+    const hintEl = document.getElementById("hint");
+    const modelsEl = document.getElementById("models");
+    const lastRainEl = document.getElementById("lastrain");
+    const factorsEl = document.getElementById("factors");
+
+    async function search(){
+      const q = qInput.value.trim();
+      goBtn.disabled = true;
+      barsEl.innerHTML = "";
+      scoreEl.textContent = "…";
+      relEl.textContent = "…";
+      lastRainEl.textContent = "—";
+      factorsEl.innerHTML = "";
+
+      let url = "/api/score?";
+      const coords = parseCoords(q);
+      if(coords){
+        url += `lat=${coords.lat}&lon=${coords.lon}`;
+      }else if(q){
+        url += `q=${encodeURIComponent(q)}`;
+      }else{
+        goBtn.disabled = false;
+        return;
+      }
+
+      try{
+        const r = await fetch(url, {headers: {"Accept":"application/json"}});
+        if(!r.ok){
+          const t = await r.text();
+          throw new Error("Errore backend: "+t);
+        }
+        const data = await r.json();
+        renderResult(data);
+      }catch(err){
+        alert(err.message || "Errore di rete");
+      }finally{
+        goBtn.disabled = false;
+      }
+    }
+
+    function renderResult(data){
+      const {location, today, forecast, reliability, last_rain, factors} = data;
+      locEl.textContent = location?.name || "—";
+      const [cls, lbl] = relBadge(reliability);
+      relEl.className = "badge "+cls;
+      relEl.textContent = lbl;
+
+      const todayScore = Math.round(today?.score ?? 0);
+      scoreEl.textContent = `${todayScore}`;
+
+      // mappa
+      if(location?.lat && location?.lon){
+        marker.setLatLng([location.lat, location.lon]);
+        map.setView([location.lat, location.lon], 10);
+      }
+
+      // barre previsione 10 gg
+      barsEl.innerHTML = "";
+      const maxH = 120, maxScore = 100;
+      forecast.forEach(d =>{
+        const col = document.createElement("div");
+        col.className = "col";
+        const h = Math.max(2, Math.round((d.score/maxScore)*maxH));
+        const fill = document.createElement("div");
+        fill.className = "fill";
+        fill.style.height = `${h}px`;
+        const label = document.createElement("div");
+        const dd = new Date(d.date+"T00:00:00");
+        label.className = "label";
+        label.textContent = dd.toLocaleDateString(undefined, {weekday:"short", day:"2-digit"});
+        const scorelbl = document.createElement("div");
+        scorelbl.className = "scorelbl";
+        scorelbl.textContent = Math.round(d.score);
+        col.appendChild(fill); col.appendChild(label); col.appendChild(scorelbl);
+        barsEl.appendChild(col);
+      });
+
+      // ultima pioggia
+      if(last_rain && last_rain.date){
+        const dd = new Date(last_rain.date+"T00:00:00");
+        lastRainEl.textContent = `${dd.toLocaleDateString()} — ${last_rain.amount_mm} mm`;
+      }else{
+        lastRainEl.textContent = "Nessuna pioggia significativa negli ultimi 30 giorni.";
+      }
+
+      // fattori analizzati
+      const f = factors || {};
+      const items = [
+        ["Latitudine", f.latitude?.toFixed?.(5)],
+        ["Longitudine", f.longitude?.toFixed?.(5)],
+        ["Quota", f.elevation_m!=null ? `${f.elevation_m} m` : "—"],
+        ["Pioggia 14gg (P14)", f.P14_mm!=null ? `${f.P14_mm} mm` : "—"],
+        ["ET0 14gg", f.ET0_14_mm!=null ? `${f.ET0_14_mm} mm` : "—"],
+        ["Temperatura media 7gg", f.T7_mean_C!=null ? `${f.T7_mean_C} °C` : "—"],
+        ["Umidità relativa 7gg", f.RH7_mean_%!=null ? `${f.RH7_mean_%} %` : "—"],
+        ["Radiazione solare 7gg", f.SWrad7_MJm2!=null ? `${f.SWrad7_MJm2} MJ/m²` : "—"],
+        ["Modelli", Array.isArray(f.models_used)? f.models_used.join(", ") : "—"],
+      ];
+      factorsEl.innerHTML = items.map(([k,v])=>`<li><b>${k}:</b> ${v??"—"}</li>`).join("");
+
+      // consiglio
+      hintEl.textContent = advice(todayScore);
+    }
+
+    document.getElementById("go").addEventListener("click", search);
+    document.getElementById("q").addEventListener("keydown", (e)=>{ if(e.key==="Enter") search(); });
+
+    // avvio
+    window.addEventListener("load", ()=>{
+      document.getElementById("q").value = "Benevento";
+      search();
+    });
+  </script>
+</body>
+</html>
 
 
