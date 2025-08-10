@@ -108,7 +108,15 @@
       </details>
     </div>
 
-    <div class="card"><div id="map"></div></div>
+    <!-- Colonna destra -->
+    <div>
+      <div class="card"><div id="map"></div></div>
+      <!-- NUOVO RIQUADRO: Informazioni -->
+      <div class="card">
+        <h3 style="margin:0 0 6px 0;">Informazioni</h3>
+        <div id="infoText" class="muted">Cerca una località o clicca sulla mappa per visualizzare quota ed analisi dettagliata.</div>
+      </div>
+    </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -178,6 +186,14 @@
       const wl=$("#whyList"); wl.innerHTML=""; (reasons||[]).forEach(t=>{const li=document.createElement("li"); li.textContent=t; wl.appendChild(li);});
       const tl=$("#tipsList"); tl.innerHTML=""; (tips||[]).forEach(t=>{const li=document.createElement("li"); li.textContent=t; tl.appendChild(li);});
     }
+    function setInfo(info){
+      if(!info){ $("#infoText").textContent = "—"; return; }
+      const q = info.elevation_m!=null ? `${info.elevation_m} m s.l.m.` : "—";
+      const exp = info.aspect_octant ?? "—";
+      const pnd = info.slope_deg!=null ? `${info.slope_deg}°` : "—";
+      const text = `<b>Quota:</b> ${q} — <b>Pendenza:</b> ${pnd} — <b>Esposizione:</b> ${exp}.<br><br>${info.narrative || ""}`;
+      $("#infoText").innerHTML = text;
+    }
 
     // Handlers
     async function handlePlace(){
@@ -206,6 +222,7 @@
       setTables(s.rain_past, s.rain_future);
       setLists(s.explanation?.reasons, s.tips);
       setMetrics(s.index, s.harvest_estimate, s.reliability);
+      setInfo(s.info);   // <-- nuovo
     }
 
     // Bind
@@ -219,4 +236,5 @@
   </script>
 </body>
 </html>
+
 
