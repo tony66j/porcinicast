@@ -30,29 +30,19 @@
     .ok{background:rgba(16,185,129,.15);color:#22c55e;border-color:#064e3b}
     .warn{background:rgba(245,158,11,.12);color:#f59e0b;border-color:#7c2d12}
     .bad{background:rgba(239,68,68,.12);color:#ef4444;border-color:#7f1d1d}
-    .calendar{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-top:8px}
-    .day{height:12px;border-radius:4px;background:#1f2937}
-    .day[data-v="low"]{background:#ef4444}
-    .day[data-v="mid"]{background:#f59e0b}
-    .day[data-v="hi"]{background:#10b981}
     .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px}
-    details{background:#0b1324;border:1px solid var(--border);border-radius:10px;padding:10px}
-    summary{cursor:pointer;color:#a5b4fc}
-    footer{margin:18px auto 36px;max-width:1180px;padding:0 16px;color:#9ca3af}
-    .attribution{font-size:12px}
     .list{margin:6px 0 0 18px;line-height:1.6}
     .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
     .chip{font-size:12px;padding:4px 8px;border-radius:999px;background:var(--chip);border:1px solid #243244}
     #map{height:420px;border-radius:12px;overflow:hidden}
-    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .status{position:fixed;right:12px;top:10px;background:#1a2334;border:1px solid #2b3950;padding:6px 10px;border-radius:10px;font-size:12px}
-    .status.err{background:#3a1111;border-color:#7d1f1f;color:#ffdede}
     .hstack{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .table{border:1px solid var(--border);border-radius:10px;overflow:hidden}
     .tr{display:grid;grid-template-columns:1fr 1fr;padding:8px 10px;border-bottom:1px solid #1f2937}
     .tr.head{background:#0b1324;color:#cbd5e1;font-weight:700}
     .tr:last-child{border-bottom:none}
+    .status{position:fixed;right:12px;top:10px;background:#1a2334;border:1px solid #2b3950;padding:6px 10px;border-radius:10px;font-size:12px}
+    .status.err{background:#3a1111;border-color:#7d1f1f;color:#ffdede}
     @media(max-width:980px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
@@ -135,7 +125,7 @@
             <div style="font-size:14px;line-height:1.6;margin-top:6px">
               Modello “avanzato”: piogge passate/future (OpenWeather), temperatura media e umidità previste (5 giorni),
               altitudine da Open-Elevation, normalizzazione in indice 0–10 e stima **porcini/2h**.  
-              Dati: OpenWeather (richiede chiave, già impostata), Open-Elevation (gratuito), Nominatim (geocoding).
+              Dati: OpenWeather (chiave già impostata), Open-Elevation (gratuito), Nominatim (geocoding).
             </div>
           </details>
         </div>
@@ -149,18 +139,12 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
-    // ========= Helpers =========
     const $ = (s)=>document.querySelector(s);
     function setStatus(t,err=false){ const el=$("#status"); el.textContent="Diagnostica: "+t; el.className="status"+(err?" err":""); }
     const COORD_RE=/^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/;
-    function parseCoords(txt){
-      const m=COORD_RE.exec((txt||"").trim()); if(!m) return null;
-      const lat=parseFloat(m[1].replace(",", ".")); const lon=parseFloat(m[2].replace(",", "."));
-      if(!(isFinite(lat)&&isFinite(lon))) return null; if(lat<-90||lat>90||lon<-180||lon>180) return null; return {lat,lon};
-    }
-    function clsIdx(idx){ if(idx>=8) return "ok"; if(idx>=5) return "warn"; return "bad"; }
+    function parseCoords(txt){ const m=COORD_RE.exec((txt||"").trim()); if(!m) return null; const lat=parseFloat(m[1].replace(",", ".")); const lon=parseFloat(m[2].replace(",", ".")); if(!(isFinite(lat)&&isFinite(lon))) return null; if(lat<-90||lat>90||lon<-180||lon>180) return null; return {lat,lon}; }
 
-    // ========= Map =========
+    // Map
     let map, marker;
     function initMap(){
       map = L.map('map', {zoomControl:true}).setView([42.5,12.5], 6);
@@ -170,7 +154,7 @@
       map.on("click", async (e)=> runWithCoords(e.latlng.lat, e.latlng.lng, "Punto sulla mappa"));
     }
 
-    // ========= Geocoding / Elevation =========
+    // Geocoding + Elevation
     async function geocodePlace(q){
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&addressdetails=1`;
       const r = await fetch(url, {headers:{"Accept":"application/json"}});
@@ -184,64 +168,39 @@
           method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({locations:[{latitude:lat, longitude:lon}]})
         });
-        if(!r.ok) return null;
-        const j = await r.json();
-        return j?.results?.[0]?.elevation ?? null;
+        if(!r.ok) return null; const j = await r.json(); return j?.results?.[0]?.elevation ?? null;
       }catch{ return null; }
     }
 
-    // ========= Backend call =========
-    const API_BASE = window.location.origin + "/api"; // usa proxy Netlify
+    // Backend
+    const API_BASE = window.location.origin + "/api";
     async function callScore(lat, lon, alt){
-      const url = new URL(API_BASE + "/score");
-      url.searchParams.set("lat", lat); url.searchParams.set("lon", lon);
-      if(alt!=null) url.searchParams.set("alt", alt);
-      const r = await fetch(url.toString(), {headers:{"Accept":"application/json"}});
+      const u = new URL(API_BASE + "/score"); u.searchParams.set("lat", lat); u.searchParams.set("lon", lon); if(alt!=null) u.searchParams.set("alt", alt);
+      const r = await fetch(u.toString(), {headers:{"Accept":"application/json"}});
       if(!r.ok){ const t=await r.text(); throw new Error("Backend: "+t); }
       return r.json();
     }
 
-    // ========= Render UI =========
+    // UI helpers
+    function clsIdx(idx){ if(idx>=8) return "ok"; if(idx>=5) return "warn"; return "bad"; }
     function renderTables(past, future){
       const pastEl = $("#rainPast"); const futEl = $("#rainFuture");
       pastEl.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
       futEl.innerHTML  = '<div class="tr head"><div>Data</div><div>mm</div></div>';
-      // ordina per data
       const pkeys = Object.keys(past||{}).sort();
       const fkeys = Object.keys(future||{}).sort();
-      pkeys.forEach(d=>{
-        const tr=document.createElement("div"); tr.className="tr";
-        tr.innerHTML = `<div>${d}</div><div>${Number(past[d]).toFixed(1)}</div>`;
-        pastEl.appendChild(tr);
-      });
-      fkeys.forEach(d=>{
-        const tr=document.createElement("div"); tr.className="tr";
-        tr.innerHTML = `<div>${d}</div><div>${Number(future[d]).toFixed(1)}</div>`;
-        futEl.appendChild(tr);
-      });
+      pkeys.forEach(d=>{ const tr=document.createElement("div"); tr.className="tr"; tr.innerHTML = `<div>${d}</div><div>${Number(past[d]).toFixed(1)}</div>`; pastEl.appendChild(tr); });
+      fkeys.forEach(d=>{ const tr=document.createElement("div"); tr.className="tr"; tr.innerHTML = `<div>${d}</div><div>${Number(future[d]).toFixed(1)}</div>`; futEl.appendChild(tr); });
     }
     function fillKV(rows){
       const container=$("#kv"); container.innerHTML="";
-      rows.forEach(([k,v])=>{
-        const div=document.createElement("div");
-        div.innerHTML=`<div class="muted">${k}</div><div>${v??"—"}</div>`;
-        container.appendChild(div);
-      });
+      rows.forEach(([k,v])=>{ const div=document.createElement("div"); div.innerHTML=`<div class="muted">${k}</div><div>${v??"—"}</div>`; container.appendChild(div); });
     }
     function renderAll(displayName, lat, lon, data){
-      // indice e stima
       $("#score").textContent = data.indice_attuale ?? "—";
-      const pill=$("#advice");
-      const cls = clsIdx(data.indice_attuale||0);
-      pill.className = `pill ${cls}`;
-      pill.textContent = data.stima_raccolto || "—";
-      // piogge
+      const pill=$("#advice"); pill.className = `pill ${clsIdx(data.indice_attuale||0)}`; pill.textContent = data.stima_raccolto || "—";
       renderTables(data.piogge_passate, data.piogge_future);
-      // consigli
-      const tipsEl=$("#adviceCard"); const ul=$("#adviceTips");
-      ul.innerHTML=""; (data.consigli||[]).forEach(t=>{ const li=document.createElement("li"); li.textContent=t; ul.appendChild(li); });
-      tipsEl.style.display = (data.consigli && data.consigli.length) ? "block" : "none";
-      // fattori
+      const tipsEl=$("#adviceCard"); const ul=$("#adviceTips"); ul.innerHTML=""; (data.consigli||[]).forEach(t=>{ const li=document.createElement("li"); li.textContent=t; ul.appendChild(li); }); tipsEl.style.display = (data.consigli && data.consigli.length) ? "block" : "none";
       const f = data.fattori||{};
       fillKV([
         ["Località", displayName],
@@ -249,12 +208,11 @@
         ["Altitudine usata", (f.altitudine!=null? `${Math.round(f.altitudine)} m` : "—")],
         ["Temp media 5gg", (f.temperatura_media!=null? `${f.temperatura_media} °C`:"—")],
         ["Umidità media 5gg", (f.umidita_media!=null? `${f.umidita_media}%`:"—")],
-        ["Pioggia tot passata", (f.pioggia_tot_passata_mm!=null? `${f.pioggia_tot_passata_mm.toFixed?f.pioggia_tot_passata_mm.toFixed(1):f.pioggia_tot_passata_mm} mm`:"—")],
-        ["Pioggia tot futura", (f.pioggia_tot_futura_mm!=null? `${f.pioggia_tot_futura_mm.toFixed?f.pioggia_tot_futura_mm.toFixed(1):f.pioggia_tot_futura_mm} mm`:"—")]
+        ["Pioggia tot passata", (f.pioggia_tot_passata_mm!=null? `${Number(f.pioggia_tot_passata_mm).toFixed(1)} mm`:"—")],
+        ["Pioggia tot futura", (f.pioggia_tot_futura_mm!=null? `${Number(f.pioggia_tot_futura_mm).toFixed(1)} mm`:"—")]
       ]);
     }
 
-    // ========= Actions =========
     async function runWithCoords(lat, lon, displayName){
       try{
         setStatus("calcolo in corso…");
@@ -263,20 +221,12 @@
         const data = await callScore(lat, lon, alt);
         renderAll(displayName, lat, lon, data);
         setStatus("OK ✔");
-      }catch(e){
-        console.error(e); setStatus(e.message || "Errore", true);
-        alert("Errore durante il calcolo. Riprova tra poco.");
-      }
+      }catch(e){ console.error(e); setStatus(e.message || "Errore", true); alert("Errore durante il calcolo. Riprova tra poco."); }
     }
     async function runPlace(){
       const q = $("#qPlace").value.trim(); if(!q){ $("#qPlace").focus(); return; }
-      try{
-        setStatus("geocoding…");
-        const g = await geocodePlace(q);
-        await runWithCoords(g.lat, g.lon, g.display);
-      }catch(e){
-        console.error(e); setStatus("geocoding fallito", true); alert("Località non trovata o servizio non disponibile.");
-      }
+      try{ setStatus("geocoding…"); const g = await geocodePlace(q); await runWithCoords(g.lat, g.lon, g.display); }
+      catch(e){ console.error(e); setStatus("geocoding fallito", true); alert("Località non trovata o servizio non disponibile."); }
     }
     async function runCoords(){
       const txt = $("#qCoords").value.trim(); const c=parseCoords(txt);
@@ -284,7 +234,6 @@
       await runWithCoords(c.lat, c.lon, `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`);
     }
 
-    // ========= Init =========
     document.addEventListener("keydown", e=>{ if(e.key==="Enter") runPlace(); });
     $("#btnPlace").addEventListener("click", runPlace);
     $("#btnCoords").addEventListener("click", runCoords);
@@ -297,10 +246,15 @@
     });
 
     async function ping(){
-      try{
-        const r = await fetch(window.location.origin + "/api/health");
-        if(r.ok) setStatus("backend OK ✔"); else setStatus("backend non risponde", true);
-      }catch{ setStatus("errore rete verso backend", true); }
+      try{ const r = await fetch(window.location.origin + "/api/health"); if(r.ok) setStatus("backend OK ✔"); else setStatus("backend non risponde", true); }
+      catch{ setStatus("errore rete verso backend", true); }
+    }
+
+    let map, marker;
+    function initMap(){ map = L.map('map', {zoomControl:true}).setView([42.5,12.5], 6);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18, attribution:'&copy; OpenStreetMap'}).addTo(map);
+      marker = L.marker([42.5,12.5]).addTo(map); setTimeout(()=>map.invalidateSize(),150);
+      map.on("click", async (e)=> runWithCoords(e.latlng.lat, e.latlng.lng, "Punto sulla mappa"));
     }
 
     initMap(); ping();
