@@ -1,202 +1,157 @@
 
-from fastapi import FastAPI, Query, HTTPException
+# main.py
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-import httpx, math, asyncio
-from typing import Dict, List, Tuple
-from datetime import datetime, timezone
+import httpx
+import numpy as np
+from datetime import datetime, timedelta
 
-app = FastAPI(title="Trova Porcini API", version="0.7.2")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
+# --- MODELLO SCIENTIFICO AVANZATO ---
+class PorciniPredictor:
+    def _normalize(self, value, min_val, max_val):
+        return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))
 
-# ---------------- Helpers (manteniamo logica base 0.6) ----------------
-def half_life_coeff(days: float) -> float:
-    """Fattore di decadimento per P altrettanto alla ½ every days."""
-    return 0.5 ** (1.0 / days)
+    def _calculate_soil_temp_score(self, soil_temps):
+        # La temperatura media del suolo degli ultimi 10 giorni
+        avg_soil_temp = np.mean(soil_temps[-10:])
+        return 1.0 - self._normalize(abs(avg_soil_temp - 17.5), 0, 8)
 
-def api_index(precip: List[float], half_life: float = 8.0) -> float:
-    """Accumulated Precipitation Index (API*) con decadimento esponenziale."""
-    k = half_life_coeff(half_life)
-    api = 0.0
-    for p in precip:
-        api = k * api + (p or 0.0)
-    return api
+    def _calculate_rainfall_score(self, past_30d_precip):
+        last_soak_event_day_idx, soak_event_precip = -1, 0
+        for i in range(27, -1, -1):
+            window_precip = sum(past_30d_precip[i:i+3])
+            if window_precip >= 20:
+                last_soak_event_day_idx = i + 2
+                soak_event_precip = window_precip
+                break
+        
+        if last_soak_event_day_idx == -1:
+            return {"score": 0.0, "days_since_soak": 99, "soak_precip_mm": 0}
 
-def temperature_fit(tmin: float, tmax: float, tmean: float) -> float:
-    """Stima quanto la temperatura è ottimale per porcini (0-1)."""
-    if tmin < 1 or tmax > 32: return 0.0
-    if tmean <= 6: base = max(0.0, (tmean) / 6 * 0.3)
-    elif tmean <= 10: base = 0.3 + 0.2 * ((tmean - 6) / 4)
-    elif tmean <= 18: base = 0.5 + 0.5 * ((tmean - 10) / 8)
-    elif tmean <= 22: base = 0.8 - 0.2 * ((tmean - 18) / 4)
-    else: base = max(0.0, 0.6 - 0.6 * ((tmean - 22) / 10))
-    if tmin < 6: base *= max(0.3, 1 - (6 - tmin) / 8)
-    if tmax > 24: base *= max(0.3, 1 - (tmax - 24) / 10)
-    return max(0.0, min(1.0, base))
+        days_since_soak = (30 - 1) - last_soak_event_day_idx
+        incubation_score = 0
+        if 10 <= days_since_soak <= 22:
+            incubation_score = 1.0 - abs(days_since_soak - 16) / 6.0
+        
+        return { "score": incubation_score, "days_since_soak": days_since_soak, "soak_precip_mm": soak_event_precip }
 
-def final_index(api_val: float, et0: float, t_fit: float) -> int:
-    """Indice finale 0-100 combinando umidità (API-ET0) e finestra termica."""
-    # normalizzazione umidità 0-1: 0 mm -> 0.2; 50 mm -> 1.0
-    moisture = max(0.0, min(1.0, (api_val - 0.6 * et0) / 40.0 + 0.6))
-    return int(round(max(0.0, min(100.0, 100.0 * (0.6 * moisture + 0.4 * t_fit)))))
+    def _calculate_terrain_score(self, slope, aspect_deg, month):
+        slope_score = max(0.0, 1.0 - self._normalize(slope, 20, 45))
+        aspect_bonus = 1.0 - self._normalize(abs(aspect_deg - (0 if 6 <= month <= 9 else 180)), 0, 180)
+        return slope_score * 0.4 + aspect_bonus * 0.6
+        
+    def calculate_composite_score(self, weather_data, terrain_data):
+        current_month = datetime.now().month
+        
+        soil_temp_score = self._calculate_soil_temp_score(weather_data['past']['soil_temperature'])
+        rainfall_analysis = self._calculate_rainfall_score(weather_data['past']['precipitation'])
+        terrain_score = self._calculate_terrain_score(terrain_data['slope'], terrain_data['aspect'], current_month)
+        
+        weights = {'rainfall': 0.55, 'soil_temp': 0.30, 'terrain': 0.15}
+        final_score = (rainfall_analysis["score"] * weights['rainfall'] +
+                       soil_temp_score * weights['soil_temp'] +
+                       terrain_score * weights['terrain']) * 100
+        
+        if final_score < 45: harvest = "Nullo o molto scarso (< 0.1 kg)"
+        elif final_score < 65: harvest = "Discreto (0.2 - 0.7 kg)"
+        elif final_score < 85: harvest = "Buono (0.8 - 2.0 kg)"
+        else: harvest = "Eccellente (> 2.0 kg)"
 
-def best_3day_window(values: List[int]) -> Tuple[int,int,int]:
-    """Restituisce (start_index, end_index, mean) per finestra 3 giorni migliore."""
-    if len(values) < 3: return (0, 0, 0)
-    best = (0, 2, sum(values[:3])//3)
-    for i in range(1, len(values)-2):
-        m = (values[i] + values[i+1] + values[i+2]) // 3
-        if m > best[2]:
-            best = (i, i+2, m)
-    return best
+        days_since_soak = rainfall_analysis['days_since_soak']
+        future_rain_sum_5d = sum(weather_data['forecast']['precipitation'][:5])
+        
+        if days_since_soak > 22 and future_rain_sum_5d > 15:
+            days_to_new_rain = next((i for i, p in enumerate(weather_data['forecast']['precipitation']) if p > 10), 2)
+            new_start_in_days = days_to_new_rain + 10
+            new_peak_in_days = days_to_new_rain + 16
+            window_status = f"Nuova buttata prevista! Inizio tra {new_start_in_days} gg."
+            peak_date = (datetime.now() + timedelta(days=new_peak_in_days)).strftime("%d %B")
+        else:
+            start_in_days = max(0, 10 - days_since_soak)
+            peak_in_days = max(0, 16 - days_since_soak)
+            peak_date = (datetime.now() + timedelta(days=peak_in_days)).strftime("%d %B")
+            if days_since_soak <= 10: window_status = f"Inizio previsto tra {start_in_days} giorni."
+            elif 10 < days_since_soak <= 22: window_status = "La 'buttata' è in corso!"
+            else: window_status = "In attesa di piogge significative."
+        
+        advice = [window_status]
+        if terrain_data['slope'] > 20: advice.append("Il versante è ripido. Controlla le piccole terrazze.")
+        avg_forecast_temp = np.mean(weather_data['forecast']['temp_max'][:3])
+        if avg_forecast_temp > 25: advice.append("Caldo in arrivo. Cerca nei versanti esposti a Nord.")
+        elif avg_forecast_temp < 14: advice.append("Fresco in arrivo. Privilegia i versanti esposti a Sud.")
 
-def reliability_from_data(past: List[float], forecast: List[float]) -> float:
+        return {
+            "overall_score": int(final_score),
+            "estimated_harvest_per_2h": harvest,
+            "fruiting_window": { "status": window_status, "peak_date": peak_date },
+            "weather_forecast": weather_data['forecast'],
+            "practical_advice": advice
+        }
+
+# --- API FastAPI ---
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+predictor = PorciniPredictor()
+http_client = httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "TrovaPorcini/2.0"})
+
+async def get_real_weather_data(lat: float, lon: float):
     """
-    Stima affidabilità (0-1) in base a quanto la pioggia futura differisce dalla media passata.
-    Maggiore discrepanza => meno affidabile.
+    Contatta l'API di Open-Meteo per ottenere dati meteo reali, storici e previsionali.
     """
-    import statistics as stats
-    if not past or not forecast: return 0.5
-    mean_past = sum(past) / len(past)
-    diffs = [(f - mean_past) for f in forecast]
-    stdev = stats.pstdev(diffs) if len(diffs) > 1 else 0.0
-    # normalizza: varianza bassa -> alta affidabilità; varianza alta -> bassa affidabilità
-    return max(0.1, min(0.99, 1.0 / (1.0 + stdev)))
-
-def yield_estimate(idx: int) -> str:
-    """Stima numero di porcini in 2h di raccolta in base all'indice."""
-    if idx >= 80: return "6–10+ porcini"
-    if idx >= 60: return "2–5 porcini"
-    if idx >= 40: return "1–2 porcini"
-    return "0–1 porcini"
-
-# ---------------- API Calls ----------------
-async def get_open_meteo(lat: float, lon: float, past: int = 30, future: int = 10) -> Dict[str, any]:
-    """Richiede dati climatici (precip, temp, et0, radiazione, umidità) per passato e futuro."""
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
-        "latitude": lat, "longitude": lon, "timezone": "auto",
-        "daily": ",".join([
-            "precipitation_sum",
-            "temperature_2m_mean",
-            "temperature_2m_min",
-            "temperature_2m_max",
-            "et0_fao_evapotranspiration",
-            "relative_humidity_2m_mean"
-        ]),
-        "past_days": past, "forecast_days": future
+        "latitude": lat,
+        "longitude": lon,
+        "past_days": 30,
+        "forecast_days": 7,
+        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,relativehumidity_2m_mean,shortwave_radiation_sum,soil_temperature_0_to_7cm_mean",
+        "timezone": "auto"
     }
-    async with httpx.AsyncClient(timeout=30) as c:
-        r = await c.get(url, params=params)
-        r.raise_for_status()
-        return r.json()
+    try:
+        response = await http_client.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()['daily']
+        
+        # Suddivide i dati tra passati e futuri
+        return {
+            "past": {
+                "precipitation": data['precipitation_sum'][:-7],
+                "soil_temperature": data['soil_temperature_0_to_7cm_mean'][:-7],
+            },
+            "forecast": {
+                "time": data['time'][-7:],
+                "temp_max": data['temperature_2m_max'][-7:],
+                "temp_min": data['temperature_2m_min'][-7:],
+                "precipitation": data['precipitation_sum'][-7:],
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Errore nel recupero dei dati meteo: {str(e)}")
 
-async def get_elevation_grid(lat: float, lon: float) -> List[List[float]]:
-    """Richiede griglia 3x3 da Open Elevation per pendenza/esposizione."""
-    deg_lat = 1/111320.0
-    deg_lon = 1/(111320.0 * math.cos(math.radians(lat)))
-    coords = [{"latitude": lat+dr*deg_lat*30, "longitude": lon+dc*deg_lon*30} for dr in (-1,0,1) for dc in (-1,0,1)]
-    async with httpx.AsyncClient(timeout=20) as c:
-        r = await c.post("https://api.open-elevation.com/api/v1/lookup", json={"locations": coords})
-        r.raise_for_status()
-        res = r.json()["results"]
-    vals = [p["elevation"] for p in res]
-    return [vals[0:3], vals[3:6], vals[6:9]]
 
-async def geocode(q: str) -> Dict[str, float]:
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {"format":"json","q":q,"addressdetails":1,"limit":1}
-    async with httpx.AsyncClient(timeout=20) as c:
-        r = await c.get(url, params=params)
-        r.raise_for_status()
-        j = r.json()
-    if not j: raise HTTPException(404, "Località non trovata")
-    return {"lat": float(j[0]["lat"]), "lon": float(j[0]["lon"]), "display": j[0]["display_name"]}
+async def get_terrain_data(lat: float, lon: float):
+    # Questa funzione è ancora simulata. Per dati reali si potrebbe usare l'API di Open-Elevation.
+    np.random.seed(int(lat * lon))
+    return {"altitude": 800 + np.random.randint(-300, 300), "slope": 5 + np.random.rand() * 30, "aspect": np.random.rand() * 360}
 
-# ---------------- Endpoints ----------------
 @app.get("/api/geocode")
-async def api_geocode_endpoint(q: str):
-    return await geocode(q)
+async def geocode(q: str):
+    url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1&accept-language=it"
+    try:
+        r = await http_client.get(url, timeout=10)
+        r.raise_for_status(); data = r.json()
+        if not data: raise HTTPException(404, "Località non trovata")
+        return {"lat": data[0]['lat'], "lon": data[0]['lon'], "name": data[0]['display_name']}
+    except Exception as e: raise HTTPException(500, f"Errore di geocoding: {e}")
 
 @app.get("/api/score")
-async def api_score(
-    lat: float = Query(...),
-    lon: float = Query(...),
-    half: float = Query(8.0, gt=3.0, lt=15.0)
-):
-    # recupera dati
-    meteo, elev = await asyncio.gather(get_open_meteo(lat, lon), get_elevation_grid(lat, lon))
-    daily = meteo["daily"]
-    times = daily["time"]
-    p = [float(x or 0.0) for x in daily["precipitation_sum"]]
-    tmean = daily["temperature_2m_mean"]
-    tmin = daily["temperature_2m_min"]
-    tmax = daily["temperature_2m_max"]
-    et0 = daily.get("et0_fao_evapotranspiration",[0.0]*len(p))
-    rh = daily.get("relative_humidity_2m_mean",[None]*len(p))
-
-    pastN = 30
-    p_past = p[:pastN]; p_future = p[pastN:pastN+10]
-    et_past = et0[:pastN]; et_future = et0[pastN:pastN+10]
-    tmean_past = tmean[:pastN]; tmin_past = tmin[:pastN]; tmax_past = tmax[:pastN]
-    tmean_future = tmean[pastN:pastN+10]; tmin_future = tmin[pastN:pastN+10]; tmax_future = tmax[pastN:pastN+10]
-
-    api_val = api_index(p_past, half_life=half)
-    et7 = sum(et_past[-7:]) if et_past else 0.0
-    t_suit_today = temperature_fit(tmin_past[-1], tmax_past[-1], tmean_past[-1])
-    idx_today = final_index(api_val, et7, t_suit_today)
-
-    # calcola indici futuri (10 giorni)
-    scores = []
-    rolling_api = api_val
-    coeff = half_life_coeff(half)
-    for i in range(10):
-        rolling_api = coeff * rolling_api + (p_future[i] or 0.0)
-        et7f = sum(et_future[max(0,i-6):i+1])
-        tfit = temperature_fit(tmin_future[i], tmax_future[i], tmean_future[i])
-        scores.append(final_index(rolling_api, et7f, tfit))
-
-    s,e,m = best_3day_window(scores)
-
-    # stima affidabilità: varianza delle piogge future vs media passata
-    reliability = reliability_from_data(p_past[-14:], p_future)
-
-    # piogge passate/future mappate
-    rain_past = { times[i]: round(p_past[i],1) for i in range(pastN) }
-    rain_future = { times[pastN+i]: round(p_future[i],1) for i in range(10) }
-
-    elev_m = elev[1][1]
-    slope_deg, aspect_deg, aspect_oct = slope_aspect_from_elev_grid(elev)
-
-    # spiegazioni base
-    reasons=[]
-    if sum(p_past[-14:]) < 20: reasons.append("Piogge scarse negli ultimi 14 giorni")
-    if et7 > 30: reasons.append("Evapotraspirazione elevata (terreno tende a seccarsi)")
-    if (sum(p_past[-7:]) < 5 and sum(p_future) < 5): reasons.append("Piogge insufficienti in passato e previste")
-    if not reasons: reasons.append("Condizioni idonee (buona umidità e termica)")
-
-    # consigli dinamici
-    tips=[]
-    if idx_today >= 80: tips.append("Finestra ottima: cerca zone ombrose con lettiera spessa, specialmente su versanti N-NE.")
-    elif idx_today >= 60: tips.append("Condizioni discrete: privilegia i fondovalle, margini di bosco e conche umide.")
-    elif idx_today >= 40: tips.append("Moderato: monitora dopo eventuali piogge e preferisci aree con suolo profondo.")
-    else: tips.append("Basso potenziale: attendi piogge ≥10 mm e un paio di giorni di maturazione.")
-    if reliability < 0.6: tips.append("Affidabilità bassa: ricontrolla le previsioni tra 12–24 h.")
-    if rh[-1] is not None and rh[-1] < 60: tips.append("Umidità dell’aria bassa: prediligi conche riparate e vicino a corsi d’acqua.")
-
-    return {
-        "index": idx_today,
-        "forecast": scores,
-        "best_window": { "start": s, "end": e, "mean": m },
-        "rain_past": rain_past,
-        "rain_future": rain_future,
-        "harvest_estimate": yield_estimate(idx_today),
-        "reliability": round(reliability,3),
-        "explanation": { "reasons": reasons },
-        "tips": tips
-    }
-
+async def get_score(lat: float, lon: float):
+    try:
+        weather_data = await get_real_weather_data(lat, lon)
+        terrain_data = await get_terrain_data(lat, lon)
+        prediction = predictor.calculate_composite_score(weather_data, terrain_data)
+        prediction["coords"] = {"lat": lat, "lon": lon}
+        return prediction
+    except Exception as e:
+        # Includi il messaggio di errore originale per un debug più facile
+        raise HTTPException(status_code=500, detail=f"Errore interno del server: {str(e)}")
