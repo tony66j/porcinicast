@@ -1,155 +1,239 @@
-# main.py
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-import httpx
-import numpy as np
-from datetime import datetime, timedelta
+import httpx, os, math, asyncio
+from typing import Optional, Dict, Any, List, Tuple
+from datetime import datetime, timezone
 
-# --- MODELLO SCIENTIFICO AVANZATO ---
-class PorciniPredictor:
-    def _normalize(self, value, min_val, max_val):
-        return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))
+from utils import slope_aspect_from_elev_grid, best_window_3day, deg_to_octant
 
-    def _calculate_soil_temp_score(self, soil_temps):
-        avg_soil_temp = np.mean(soil_temps[-10:])
-        return 1.0 - self._normalize(abs(avg_soil_temp - 17.5), 0, 8)
+APP_NAME = "Trovaporcini/0.7 (+https://netlify.app)"
+HEADERS = {"User-Agent": APP_NAME, "Accept-Language": "it"}
 
-    def _calculate_rainfall_score(self, past_30d_precip):
-        last_soak_event_day_idx, soak_event_precip = -1, 0
-        for i in range(27, -1, -1):
-            window_precip = sum(past_30d_precip[i:i+3])
-            if window_precip >= 20:
-                last_soak_event_day_idx = i + 2
-                soak_event_precip = window_precip
-                break
-        
-        if last_soak_event_day_idx == -1:
-            return {"score": 0.0, "days_since_soak": 99, "soak_precip_mm": 0}
+OWM_KEY = os.environ.get("OPENWEATHER_API_KEY")  # opzionale
 
-        days_since_soak = (30 - 1) - last_soak_event_day_idx
-        incubation_score = 0
-        if 10 <= days_since_soak <= 22:
-            incubation_score = 1.0 - abs(days_since_soak - 16) / 6.0
-        
-        return { "score": incubation_score, "days_since_soak": days_since_soak, "soak_precip_mm": soak_event_precip }
+app = FastAPI(title="Trova Porcini API", version="0.7.3")
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
+)
 
-    def _calculate_terrain_score(self, slope, aspect_deg, month):
-        slope_score = max(0.0, 1.0 - self._normalize(slope, 20, 45))
-        aspect_bonus = 1.0 - self._normalize(abs(aspect_deg - (0 if 6 <= month <= 9 else 180)), 0, 180)
-        return slope_score * 0.4 + aspect_bonus * 0.6
-        
-    def calculate_composite_score(self, weather_data, terrain_data):
-        current_month = datetime.now().month
-        
-        soil_temp_score = self._calculate_soil_temp_score(weather_data['past']['soil_temperature'])
-        rainfall_analysis = self._calculate_rainfall_score(weather_data['past']['precipitation'])
-        terrain_score = self._calculate_terrain_score(terrain_data['slope'], terrain_data['aspect'], current_month)
-        
-        weights = {'rainfall': 0.55, 'soil_temp': 0.30, 'terrain': 0.15}
-        final_score = (rainfall_analysis["score"] * weights['rainfall'] +
-                       soil_temp_score * weights['soil_temp'] +
-                       terrain_score * weights['terrain']) * 100
-        
-        if final_score < 45: harvest = "Nullo o molto scarso (< 0.1 kg)"
-        elif final_score < 65: harvest = "Discreto (0.2 - 0.7 kg)"
-        elif final_score < 85: harvest = "Buono (0.8 - 2.0 kg)"
-        else: harvest = "Eccellente (> 2.0 kg)"
+# ---------------- Providers ----------------
+async def geocode(q: str) -> Dict[str, Any]:
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {"format": "json", "q": q, "addressdetails": 1, "limit": 1}
+    async with httpx.AsyncClient(timeout=20, headers=HEADERS) as c:
+        r = await c.get(url, params=params)
+        r.raise_for_status()
+        j = r.json()
+    if not j:
+        raise HTTPException(404, "Località non trovata")
+    return {"lat": float(j[0]["lat"]), "lon": float(j[0]["lon"]), "display": j[0].get("display_name","")}
 
-        days_since_soak = rainfall_analysis['days_since_soak']
-        future_rain_sum_5d = sum(weather_data['forecast']['precipitation'][:5])
-        
-        if days_since_soak > 22 and future_rain_sum_5d > 15:
-            days_to_new_rain = next((i for i, p in enumerate(weather_data['forecast']['precipitation']) if p > 10), 2)
-            new_start_in_days = days_to_new_rain + 10
-            new_peak_in_days = days_to_new_rain + 16
-            window_status = f"Nuova buttata prevista! Inizio tra {new_start_in_days} gg."
-            peak_date = (datetime.now() + timedelta(days=new_peak_in_days)).strftime("%d %B")
-        else:
-            start_in_days = max(0, 10 - days_since_soak)
-            peak_in_days = max(0, 16 - days_since_soak)
-            peak_date = (datetime.now() + timedelta(days=peak_in_days)).strftime("%d %B")
-            if days_since_soak <= 10: window_status = f"Inizio previsto tra {start_in_days} giorni."
-            elif 10 < days_since_soak <= 22: window_status = "La 'buttata' è in corso!"
-            else: window_status = "In attesa di piogge significative."
-        
-        advice = [window_status]
-        if terrain_data['slope'] > 20: advice.append("Il versante è ripido. Controlla le piccole terrazze.")
-        avg_forecast_temp = np.mean(weather_data['forecast']['temp_max'][:3])
-        if avg_forecast_temp > 25: advice.append("Caldo in arrivo. Cerca nei versanti esposti a Nord.")
-        elif avg_forecast_temp < 14: advice.append("Fresco in arrivo. Privilegia i versanti esposti a Sud.")
-
-        return {
-            "overall_score": int(final_score),
-            "estimated_harvest_per_2h": harvest,
-            "fruiting_window": { "status": window_status, "peak_date": peak_date },
-            "weather_forecast": weather_data['forecast'],
-            "practical_advice": advice
-        }
-
-# --- API FastAPI ---
-app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-predictor = PorciniPredictor()
-http_client = httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "TrovaPorcini/2.0"})
-
-async def get_real_weather_data(lat: float, lon: float):
-    url = "https://api.open-meteo.com/v1/forecast"
-    # FIX: Corretti i nomi dei parametri per l'API di Open-Meteo
+async def open_meteo_daily(lat: float, lon: float, past_days:int=30, forecast_days:int=10) -> Dict[str, Any]:
+    base = "https://api.open-meteo.com/v1/forecast"
     params = {
-        "latitude": lat,
-        "longitude": lon,
-        "past_days": 30,
-        "forecast_days": 7,
-        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,relative_humidity_2m,shortwave_radiation_sum,soil_temperature_0_to_7cm",
-        "timezone": "auto"
+        "latitude": lat, "longitude": lon, "timezone": "auto",
+        "daily": ",".join([
+            "precipitation_sum","temperature_2m_mean",
+            "temperature_2m_min","temperature_2m_max",
+            "et0_fao_evapotranspiration","relative_humidity_2m_mean"
+        ]),
+        "past_days": past_days, "forecast_days": forecast_days
     }
-    try:
-        response = await http_client.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()['daily']
-        
-        # Open-Meteo restituisce i dati passati e futuri insieme. Li separiamo qui.
-        split_point = -7 # Gli ultimi 7 giorni sono la previsione
-        
-        return {
-            "past": {
-                "precipitation": data['precipitation_sum'][:split_point],
-                "soil_temperature": data['soil_temperature_0_to_7cm'][:split_point],
-            },
-            "forecast": {
-                "time": data['time'][split_point:],
-                "temp_max": data['temperature_2m_max'][split_point:],
-                "temp_min": data['temperature_2m_min'][split_point:],
-                "precipitation": data['precipitation_sum'][split_point:],
-            }
-        }
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Errore nel recupero dei dati meteo: {str(e)}")
+    async with httpx.AsyncClient(timeout=30, headers=HEADERS) as c:
+        r = await c.get(base, params=params)
+        r.raise_for_status()
+        return r.json()
 
+async def open_meteo_hourly(lat: float, lon: float) -> Dict[str, Any]:
+    base = "https://api.open-meteo.com/v1/forecast"
+    params = {"latitude": lat, "longitude": lon, "hourly": "precipitation_probability", "forecast_days": 3, "timezone": "auto"}
+    async with httpx.AsyncClient(timeout=30, headers=HEADERS) as c:
+        r = await c.get(base, params=params)
+        r.raise_for_status()
+        return r.json()
 
-async def get_terrain_data(lat: float, lon: float):
-    np.random.seed(int(lat * lon))
-    return {"altitude": 800 + np.random.randint(-300, 300), "slope": 5 + np.random.rand() * 30, "aspect": np.random.rand() * 360}
+async def open_elevation_grid(lat: float, lon: float, step_m: float = 30.0) -> List[List[float]]:
+    deg_lat = 1.0/111320.0
+    deg_lon = 1.0/(111320.0*math.cos(math.radians(lat)))
+    dlat, dlon = step_m*deg_lat, step_m*deg_lon
+    coords = [{"latitude": lat + dr*dlat, "longitude": lon + dc*dlon} for dr in (-1,0,1) for dc in (-1,0,1)]
+    async with httpx.AsyncClient(timeout=20, headers=HEADERS) as c:
+        r = await c.post("https://api.open-elevation.com/api/v1/lookup", json={"locations": coords})
+        r.raise_for_status()
+        j = r.json()
+    els = [p["elevation"] for p in j["results"]]
+    return [els[0:3], els[3:6], els[6:9]]
+
+async def owm_current(lat:float, lon:float)->Optional[Dict[str,Any]]:
+    if not OWM_KEY: return None
+    url = "https://api.openweathermap.org/data/2.5/weather"
+    params = {"lat":lat,"lon":lon,"units":"metric","lang":"it","appid":OWM_KEY}
+    async with httpx.AsyncClient(timeout=15, headers=HEADERS) as c:
+        r = await c.get(url, params=params)
+        r.raise_for_status()
+        return r.json()
+
+# ---------------- Scoring helpers (base v0.6 migliorata) ----------------
+def k_from_half_life(days: float)->float: return 0.5**(1.0/days)
+
+def api_decay(precip: List[float], half_life_days: float=8.0)->float:
+    k = k_from_half_life(half_life_days); api = 0.0
+    for p in precip: api = k*api + (p or 0.0)
+    return api
+
+def temperature_suitability(tmin: float, tmax: float, tmean: float) -> float:
+    if tmin < 1 or tmax > 32: return 0.0
+    if tmean <= 6: base = max(0.0, (tmean)/6.0*0.3)
+    elif tmean <= 10: base = 0.3 + 0.2*((tmean-6)/4.0)
+    elif tmean <= 18: base = 0.5 + 0.5*((tmean-10)/8.0)
+    elif tmean <= 22: base = 0.8 - 0.2*((tmean-18)/4.0)
+    else: base = max(0.0, 0.6 - 0.6*((tmean-22)/10.0))
+    if tmin < 6: base *= max(0.3, 1 - (6 - tmin)/8.0)
+    if tmax > 24: base *= max(0.3, 1 - (tmax - 24)/10.0)
+    return max(0.0, min(1.0, base))
+
+def api_to_moisture(api: float)->float:
+    if api <= 5: return 0.05*api
+    if api <= 20: return 0.25 + 0.35*((api-5)/15.0)
+    if api <= 70: return 0.60 + 0.35*((api-20)/50.0)
+    if api <= 120: return 0.95 - 0.25*((api-70)/50.0)
+    return 0.65
+
+def aspect_modifier(aspect_deg: float) -> float:
+    octants = {'N':1.08,'NE':1.06,'E':1.0,'SE':0.92,'S':0.85,'SW':0.85,'W':0.92,'NW':1.03}
+    return octants.get(deg_to_octant(aspect_deg), 1.0)
+
+def slope_modifier(slope_deg: float)->float:
+    if slope_deg < 2: return 0.96
+    if slope_deg < 12: return 1.05
+    if slope_deg < 25: return 1.0
+    return 0.9
+
+def final_score(api_val: float, et0_7: float, t_suit: float, elev_m: float, aspect_deg: float, slope_deg: float) -> Tuple[float, Dict[str,float]]:
+    moisture = max(0.0, api_to_moisture(max(0.0, api_val - 0.6*et0_7)))
+    elev_mod = 1.05 if 700<=elev_m<=1400 else (0.6 if (elev_m<150 or elev_m>2200) else 0.95)
+    asp_m = aspect_modifier(aspect_deg); slp_m = slope_modifier(slope_deg)
+    base = 0.6*moisture + 0.4*t_suit
+    score = max(0.0, min(100.0, 100.0*base*elev_mod*asp_m*slp_m))
+    return score, {"moisture":moisture,"temp":t_suit,"elev_mod":elev_mod,"aspect_mod":asp_m,"slope_mod":slp_m}
+
+def reliability_from_data(past14: List[float], fut10: List[float]) -> float:
+    if not past14 or not fut10: return 0.5
+    mean_p = sum(past14)/len(past14)
+    diffs = [f-mean_p for f in fut10]
+    import statistics as st
+    stdev = st.pstdev(diffs) if len(diffs)>1 else 0.0
+    return max(0.1, min(0.99, 1.0/(1.0+stdev)))
+
+def yield_estimate(idx: int) -> str:
+    if idx >= 80: return "6–10+ porcini"
+    if idx >= 60: return "2–5 porcini"
+    if idx >= 40: return "1–2 porcini"
+    return "0–1 porcini"
+
+# ---------------- Endpoints ----------------
+@app.get("/api/health")
+async def health(): return {"ok": True, "time": datetime.now(timezone.utc).isoformat()}
 
 @app.get("/api/geocode")
-async def geocode(q: str):
-    url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1&accept-language=it"
-    try:
-        r = await http_client.get(url, timeout=10)
-        r.raise_for_status(); data = r.json()
-        if not data: raise HTTPException(404, "Località non trovata")
-        return {"lat": data[0]['lat'], "lon": data[0]['lon'], "name": data[0]['display_name']}
-    except Exception as e: raise HTTPException(500, f"Errore di geocoding: {e}")
+async def api_geocode(q: str): return await geocode(q)
 
 @app.get("/api/score")
-async def get_score(lat: float, lon: float):
-    try:
-        weather_data = await get_real_weather_data(lat, lon)
-        terrain_data = await get_terrain_data(lat, lon)
-        prediction = predictor.calculate_composite_score(weather_data, terrain_data)
-        prediction["coords"] = {"lat": lat, "lon": lon}
-        return prediction
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore interno del server: {str(e)}")
+async def api_score(lat: float = Query(...), lon: float = Query(...), half: float = Query(8.0, gt=3, lt=20)):
+    meteo_d, meteo_h, elev_grid, owm_now = await asyncio.gather(
+        open_meteo_daily(lat, lon, 30, 10),
+        open_meteo_hourly(lat, lon),
+        open_elevation_grid(lat, lon),
+        owm_current(lat, lon),
+    )
+
+    elev_m = float(elev_grid[1][1])
+    slope_deg, aspect_deg, aspect_oct = slope_aspect_from_elev_grid(elev_grid, cell_size_m=30.0)
+
+    d = meteo_d["daily"]; times = d["time"]
+    P = [float(x or 0.0) for x in d["precipitation_sum"]]
+    Tm, Tmin, Tmax = d["temperature_2m_mean"], d["temperature_2m_min"], d["temperature_2m_max"]
+    ET0 = d.get("et0_fao_evapotranspiration",[0.0]*len(P))
+    RH  = d.get("relative_humidity_2m_mean",[None]*len(P))
+
+    pastN=30; futN=10
+    P_past, P_fut = P[:pastN], P[pastN:pastN+futN]
+    ET_past, ET_fut = ET0[:pastN], ET0[pastN:pastN+futN]
+    Tmin_p, Tmin_f = Tmin[:pastN], Tmin[pastN:pastN+futN]
+    Tmax_p, Tmax_f = Tmax[:pastN], Tmax[pastN:pastN+futN]
+    Tm_p,  Tm_f   = Tm[:pastN],  Tm[pastN:pastN+futN]
+
+    P7, P14 = sum(P_past[-7:]), sum(P_past[-14:])
+    API_val = api_decay(P_past, half_life_days=half)
+    ET7 = sum(ET_past[-7:]) if ET_past else 0.0
+    Tmean7 = sum(Tm_p[-7:])/max(1,len(Tm_p[-7:])); Tmin7=min(Tmin_p[-7:]); Tmax7=max(Tmax_p[-7:])
+    last_rain_days = next((i for i,pv in enumerate(reversed(P_past)) if pv>1.0), -1)
+
+    T_suit_today = temperature_suitability(Tmin_p[-1], Tmax_p[-1], Tm_p[-1])
+    today_score, parts = final_score(API_val, ET7, T_suit_today, elev_m, aspect_deg, slope_deg)
+
+    # forecast 10d
+    scores=[]; k=k_from_half_life(half); rolling=API_val
+    for i in range(futN):
+        rolling = k*rolling + (P_fut[i] or 0.0)
+        tfit = temperature_suitability(Tmin_f[i], Tmax_f[i], Tm_f[i])
+        et7f = sum(ET_fut[max(0,i-6):i+1])
+        sc,_ = final_score(rolling, et7f, tfit, elev_m, aspect_deg, slope_deg)
+        scores.append(int(round(sc)))
+    s,e,m = best_window_3day(scores)
+
+    # Affidabilità
+    reliability = reliability_from_data(P_past[-14:], P_fut)
+
+    # Hourly rain prob (media 72h)
+    prob = meteo_h.get("hourly", {}).get("precipitation_probability", [])
+    prob_rain_next3d = round(sum(prob)/max(1,len(prob)),1) if prob else None
+
+    humid_now = None
+    if owm_now:
+        try: humid_now = int(owm_now["main"]["humidity"])
+        except: pass
+
+    reasons=[]
+    if P14 < 20: reasons.append(f"Piogge scarse 14g ({P14:.0f} mm).")
+    if API_val < 20: reasons.append("Bilancio idrico basso (API*).")
+    if ET7 > 30: reasons.append(f"ET0 7g elevata ({ET7:.0f} mm).")
+    if last_rain_days > 10: reasons.append("Ultima pioggia utile oltre 10 giorni fa.")
+    if Tmean7 < 10: reasons.append(f"Tmed7 bassa ({Tmean7:.1f} °C).")
+    if Tmean7 > 18: reasons.append(f"Tmed7 alta ({Tmean7:.1f} °C).")
+    if humid_now is not None and humid_now < 45: reasons.append(f"UR bassa ora ({humid_now}%).")
+    if not reasons: reasons.append("Buona combinazione di umidità e termica.")
+
+    tips=[]
+    if today_score >= 80: tips.append("Finestra ottima: versanti N–NE, conche umide, lettiera spessa.")
+    elif today_score >= 60: tips.append("Discreto: cerca fondovalle e bordi bosco ombreggiati.")
+    elif today_score >= 40: tips.append("Moderato: prova dopo piogge ≥10 mm e 2–3 giorni di maturazione.")
+    else: tips.append("Basso: attendi nuove piogge e raffreddamento.")
+    if reliability < 0.6: tips.append("Affidabilità bassa: ricontrolla tra 12–24 h.")
+
+    rain_past = {times[i]: round(P_past[i],1) for i in range(pastN)}
+    rain_fut  = {times[pastN+i]: round(P_fut[i],1) for i in range(futN)}
+
+    return {
+        "elevation_m": round(elev_m),
+        "slope_deg": round(slope_deg,1),
+        "aspect_deg": round(aspect_deg,0),
+        "aspect_octant": deg_to_octant(aspect_deg),
+        "API_star_mm": round(API_val,1),
+        "P7_mm": round(P7,1), "P14_mm": round(P14,1), "ET0_7d_mm": round(ET7,1),
+        "Tmean7_c": round(Tmean7,1), "Tmin7_c": round(Tmin7,1), "Tmax7_c": round(Tmax7,1),
+        "humidity_now": humid_now, "prob_rain_next3d": prob_rain_next3d,
+        "last_rain_days": last_rain_days,
+        "score_today": int(round(today_score)),
+        "scores_next10": scores,
+        "best_window": {"start": s, "end": e, "mean": m},
+        "harvest_estimate": yield_estimate(int(round(today_score))),
+        "reliability": round(reliability,3),
+        "explanation": {"reasons": reasons},
+        "tips": tips,
+        "rain_past": rain_past, "rain_future": rain_fut
+    }
+
 
 
