@@ -1,201 +1,222 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trova Porcini by Antonio Pio D'aloia</title>
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    
-    <style>
-        :root {
-            --bg-color: #f4f7f6; --card-bg: #ffffff; --text-color: #333;
-            --primary: #6d4c41; --primary-light: #efebe9; --shadow: 0 4px 15px rgba(0,0,0,0.08);
-            --accent-green: #28a745; --accent-orange: #fd7e14; --accent-red: #dc3545; --accent-blue: #007bff;
-        }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); }
-        .header { background-color: var(--primary); color: white; text-align: center; padding: 20px 10px; box-shadow: var(--shadow); }
-        .header h1 { margin: 0; font-size: 2.2rem; }
-        .header p { margin: 5px 0 0; font-style: italic; opacity: 0.9; }
-        main { max-width: 1400px; margin: 20px auto; padding: 0 15px; display: flex; gap: 20px; flex-wrap: wrap-reverse; }
-        .controls-container { flex: 1; min-width: 340px; }
-        .map-container { flex: 1.5; min-width: 400px; min-height: 600px; background: var(--card-bg); border-radius: 12px; box-shadow: var(--shadow); }
-        #map { width: 100%; height: 100%; border-radius: 12px; z-index: 1; }
-        .search-box { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 20px; }
-        h2 { margin-top: 0; color: var(--primary); font-size: 1.2rem; }
-        form { display: flex; gap: 10px; }
-        input[type="text"] { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; }
-        button { padding: 12px 20px; background-color: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; }
-        #loading { text-align: center; font-size: 1.2rem; color: var(--primary); display: none; margin: 20px; }
-        #results-area { display: grid; grid-template-columns: 1fr; gap: 20px; display: none; }
-        .result-card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: var(--shadow); }
-        .result-card h3 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 8px; font-size: 1.1rem; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: center; }
-        .info-item h4 { margin: 0 0 5px; font-size: 0.8rem; color: #777; font-weight: normal; text-transform: uppercase; }
-        .info-item p { margin: 0; font-size: 1.2rem; font-weight: bold; color: var(--primary); }
-        #score-value { font-size: 4rem; font-weight: bold; line-height: 1; text-align: center; }
-        #location-name { text-align: center; font-weight: normal; font-size: 1rem; color: #777; margin-top: 10px; word-break: break-word; }
-        #harvest-estimate { font-size: 1.2rem; color: var(--primary); font-weight: bold; text-align: center; margin: 15px 0 5px; }
-        .weather-forecast { display: flex; justify-content: space-between; text-align: center; }
-        .weather-day { flex: 1; padding: 5px; border-radius: 8px; }
-        .weather-day .day { font-weight: bold; font-size: 0.9rem; }
-        .weather-day .temp { font-size: 1.1rem; }
-        .weather-day .temp-min { font-size: 0.9rem; opacity: 0.7; }
-        .weather-day .rain { font-size: 0.9rem; color: var(--accent-blue); font-weight: bold; }
-    </style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Trova Porcini — by Antonio Pio D’Aloia</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    :root{--bg:#0b1220;--panel:#111b2b;--text:#e9f1fa;--muted:#9fb0c2;--accent:#1ee59a;--warn:#ffd166;--danger:#ef476f;--border:#233144;}
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#0a1020,#0f1930);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
+    header{padding:16px 20px;border-bottom:1px solid var(--border);backdrop-filter:blur(6px)}
+    .wrap{max-width:1280px;margin:0 auto;padding:20px;display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+    @media(max-width:960px){.wrap{grid-template-columns:1fr}}
+    .card{background:linear-gradient(180deg,#0e1728,#0f192c);padding:16px;border-radius:14px;border:1px solid var(--border);box-shadow:0 12px 28px rgba(0,0,0,.35);margin-bottom:16px}
+    input,button{padding:10px;border-radius:10px;border:1px solid #2b3b52;font-size:15px;color:var(--text);background:#0b1526}
+    button{cursor:pointer;font-weight:700}
+    button.ok{background:linear-gradient(90deg,#22d3ee,#1ee59a);border:none;color:#062f2a}
+    button.warn{background:linear-gradient(90deg,#ffd166,#22d3ee);border:none;color:#062f2a}
+    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+    .metric{background:#0b1526;padding:10px;border-radius:12px;text-align:center;border:1px solid #223249}
+    .metric .val{font-size:1.6rem;font-weight:800}
+    #map{height:460px;border-radius:12px;overflow:hidden}
+    .calendar{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:8px}
+    .bar{height:100px;position:relative;background:#1f2937;border-radius:8px}
+    .bar>i{position:absolute;bottom:0;left:0;width:100%;border-radius:8px}
+    .bar>span{position:absolute;top:-18px;left:0;width:100%;text-align:center;font-size:.7rem}
+    .table{border:1px solid #223249;border-radius:12px;overflow:hidden}
+    .tr{display:grid;grid-template-columns:1fr 80px;padding:8px 10px;border-bottom:1px solid #223249}
+    .tr.head{background:#0b1526;font-weight:bold}
+    .tr:last-child{border-bottom:none}
+    details summary{cursor:pointer;font-weight:700;margin-top:10px;color:#b9c7ff}
+    .muted{color:var(--muted);font-size:.9rem}
+    /* Spinner */
+    #loading{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.35);z-index:999}
+    #loading .ball{width:12px;height:12px;border-radius:50%;margin:6px;background:#22d3ee;display:inline-block;animation:bounce 0.8s infinite alternate}
+    #loading .ball:nth-child(2){animation-delay:.15s;background:#1ee59a}
+    #loading .ball:nth-child(3){animation-delay:.3s;background:#ffd166}
+    @keyframes bounce{to{transform:translateY(-10px)}}
+  </style>
 </head>
 <body>
-    <header class="header"><h1>Trova Porcini</h1><p>by Antonio Pio D'aloia</p></header>
-    <main>
-        <div class="controls-container">
-            <div class="search-box">
-                <h2>Cerca un'area</h2>
-                <form id="location-form"><input type="text" id="location-input" placeholder="Es. Camaldoli, Vallombrosa..." required><button type="submit">Cerca</button></form>
-                <form id="coords-form" style="margin-top: 15px;"><input type="text" id="coords-input" placeholder="O incolla coordinate: 43.76, 11.25" required><button type="submit">Cerca</button></form>
-            </div>
-            <div id="loading">Recupero dati meteo reali e analisi...</div>
-            <div id="results-area">
-                <div class="result-card" id="score-card">
-                    <h3>Indice Idoneità Odierna</h3>
-                    <div id="score-value">--</div>
-                    <div id="location-name"></div>
-                    <p id="harvest-estimate">--</p>
-                </div>
-                <div class="result-card" id="window-card">
-                    <h3>Finestra di Uscita</h3>
-                    <div class="info-item" style="text-align:center;"><h4>Stato Attuale</h4><p id="window-status" style="font-size: 1.1rem; font-style: italic;">--</p></div>
-                    <div class="info-item" style="margin-top: 15px; text-align:center;"><h4>Picco Previsto</h4><p id="window-peak">--</p></div>
-                </div>
-                <div class="result-card" id="weather-card">
-                    <h3>Meteo Prossimi 5 Giorni</h3>
-                    <div id="weather-forecast-container" class="weather-forecast"></div>
-                </div>
-                <div class="result-card" id="advice-card">
-                    <h3>Consigli Pratici</h3>
-                    <ul id="advice-list" style="padding-left:0; list-style:none; font-size:0.9rem;"></ul>
-                </div>
-            </div>
+  <header>
+    <h1 style="margin:0;font-size:1.4rem;">Trova Porcini — by Antonio Pio D’Aloia</h1>
+    <div class="muted" style="font-size:.85rem;">Modello avanzato: storico 15 gg + forecast 10 gg (OW 60% • OM 40%). Fallback automatici.</div>
+  </header>
+
+  <!-- spinner -->
+  <div id="loading"><div><span class="ball"></span><span class="ball"></span><span class="ball"></span></div></div>
+
+  <div class="wrap">
+    <div class="card">
+      <!-- Barre di ricerca -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <input id="place" type="text" placeholder="Località (es. Abbadia San Salvatore)" style="flex:1"/>
+        <button id="btnSearch" class="ok">Cerca</button>
+        <input id="coords" type="text" placeholder="lat, lon (Google)" style="flex:1;min-width:220px"/>
+        <button id="btnCoords" class="warn">Usa coordinate</button>
+      </div>
+      <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Suggerimento: incolla le coordinate da Google Maps (es. “44.12345, 11.23456”).</div>
+
+      <!-- KPI -->
+      <div class="metrics">
+        <div class="metric"><div class="muted">Indice</div><div id="metricIndex" class="val">—</div></div>
+        <div class="metric"><div class="muted">Stima raccolto (2 h)</div><div id="metricHarvest" class="val">—</div></div>
+        <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
+      </div>
+
+      <!-- Previsione indice -->
+      <div style="margin-top:14px;">
+        <div class="muted" style="margin-bottom:6px;">Previsione indice (10 giorni)</div>
+        <div id="forecast" class="calendar"></div>
+      </div>
+
+      <!-- Piogge passate/future -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Piogge passate (ultimi 15 giorni)</div>
+          <div id="rainPast" class="table">
+            <div class="tr head"><div>Data</div><div>mm</div></div>
+          </div>
         </div>
-        <div class="map-container"><div id="map"></div></div>
-    </main>
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Piogge future (prossimi 10 giorni)</div>
+          <div id="rainFuture" class="table">
+            <div class="tr head"><div>Data</div><div>mm</div></div>
+          </div>
+        </div>
+      </div>
 
-    <script>
-        const API_URL = '/api'; 
+      <!-- Specifiche + Consigli + Perché -->
+      <details open>
+        <summary>Specifiche tecniche (fattori usati)</summary>
+        <ul class="muted" style="margin-left:18px">
+          <li>Latitudine/longitudine, quota, pendenza, esposizione</li>
+          <li>Piogge P7/P15, API* (emivita ~8 gg), ET0 7 gg</li>
+          <li>Temperature medie/min/max (ultimi 7–15 giorni)</li>
+          <li>Previsioni multi-modello (OW 60% + OM 40%) con affidabilità</li>
+          <li>Finestra migliore di 3 giorni e stima raccolto (2 h)</li>
+        </ul>
+      </details>
+      <details open>
+        <summary>Consigli utili del giorno</summary>
+        <ul id="tipsList" style="margin-left:18px"></ul>
+      </details>
+      <details>
+        <summary>Perché questa stima?</summary>
+        <ul id="whyList" style="margin-left:18px"></ul>
+      </details>
+    </div>
 
-        const locationForm = document.getElementById('location-form');
-        const coordsForm = document.getElementById('coords-form');
-        const loadingDiv = document.getElementById('loading');
-        const resultsArea = document.getElementById('results-area');
-        const locationNameEl = document.getElementById('location-name');
+    <div class="card"><div id="map"></div></div>
+  </div>
 
-        const map = L.map('map').setView([42.8, 12.5], 6);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
-        let marker;
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const API = "/api";
+    const $ = s => document.querySelector(s);
 
-        locationForm.addEventListener('submit', e => { e.preventDefault(); handleLocationSearch(); });
-        coordsForm.addEventListener('submit', e => { e.preventDefault(); handleCoordsSearch(); });
-        
-        async function handleLocationSearch() {
-            document.getElementById('coords-input').value = '';
-            const location = document.getElementById('location-input').value;
-            setLoading(true, `Geocodifica di "${location}"...`);
-            try {
-                const geoReq = await fetch(`${API_URL}/geocode?q=${encodeURIComponent(location)}`);
-                if (!geoReq.ok) throw new Error((await geoReq.json()).detail || 'Località non trovata.');
-                const geoData = await geoReq.json();
-                locationNameEl.textContent = geoData.name;
-                await fetchAndDisplayScore(geoData.lat, geoData.lon);
-            } catch (error) { handleError(error.message); }
-        }
+    // Spinner
+    const showLoad = (v)=>{ $("#loading").style.display = v ? "grid" : "none"; };
 
-        async function handleCoordsSearch() {
-            document.getElementById('location-input').value = '';
-            try {
-                const [lat, lon] = parseCoordinates(document.getElementById('coords-input').value);
-                locationNameEl.textContent = `Coordinate: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-                await fetchAndDisplayScore(lat, lon);
-            } catch (error) { handleError(error.message); }
-        }
-        
-        function parseCoordinates(text) {
-            const parts = text.replace(/,/g, ' ').split(' ').filter(p => p.trim() !== '');
-            if (parts.length !== 2) throw new Error('Formato coordinate non valido. Usa "lat, lon".');
-            const [lat, lon] = [parseFloat(parts[0]), parseFloat(parts[1])];
-            if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lat < -180 || lon > 180) throw new Error('Valori di coordinate non validi.');
-            return [lat, lon];
-        }
+    // Mappa
+    let map, marker;
+    function initMap(){
+      map = L.map('map').setView([42.5,12.5], 6);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
+      marker = L.marker([42.5,12.5]).addTo(map);
+      setTimeout(()=>map.invalidateSize(), 250);
+      map.on("click", e => handleCoords(e.latlng.lat, e.latlng.lng));
+    }
 
-        async function fetchAndDisplayScore(lat, lon) {
-            setLoading(true, 'Recupero dati meteo reali e analisi scientifica...');
-            try {
-                const scoreReq = await fetch(`${API_URL}/score?lat=${lat}&lon=${lon}`);
-                if (!scoreReq.ok) {
-                    const errData = await scoreReq.json();
-                    throw new Error(errData.detail || 'Errore nel calcolo del punteggio.');
-                }
-                const data = await scoreReq.json();
-                displayResults(data);
-                updateMap(data.coords.lat, data.coords.lon, data.overall_score);
-            } catch (error) { handleError(error.message); } finally { setLoading(false); }
-        }
-        
-        function setLoading(isLoading, message = '') {
-            loadingDiv.style.display = isLoading ? 'block' : 'none';
-            resultsArea.style.display = isLoading ? 'none' : 'grid';
-            if(isLoading) loadingDiv.textContent = message;
-        }
-        
-        function handleError(message) {
-            alert(`Errore: ${message}`);
-            setLoading(false);
-        }
+    // Utils
+    function parseCoords(str){
+      const m = /^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/.exec((str||"").trim());
+      if(!m) return null;
+      const lat = parseFloat(m[1].replace(",", ".")), lon = parseFloat(m[2].replace(",", "."));
+      if(!isFinite(lat)||!isFinite(lon)||lat<-90||lat>90||lon<-180||lon>180) return null;
+      return {lat,lon};
+    }
+    async function apiGet(u){
+      const r = await fetch(u);
+      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error(t || "errore rete"); }
+      return r.json();
+    }
+    async function geocode(q){ return apiGet(`${API}/geocode?q=${encodeURIComponent(q)}`); }
+    async function score(lat,lon){ return apiGet(`${API}/score?lat=${lat}&lon=${lon}`); }
 
-        function displayResults(data) {
-            const scoreEl = document.getElementById('score-value');
-            scoreEl.textContent = data.overall_score;
-            scoreEl.style.color = getScoreColor(data.overall_score);
-            document.getElementById('harvest-estimate').textContent = data.estimated_harvest_per_2h;
-            
-            const win = data.fruiting_window;
-            document.getElementById('window-peak').textContent = win.peak_date;
-            document.getElementById('window-status').textContent = win.status;
+    // Render
+    function setMetrics(idx, harvest, rel){
+      $("#metricIndex").textContent = idx ?? "—";
+      $("#metricHarvest").textContent = harvest ?? "—";
+      $("#metricReliability").textContent = rel!=null ? Math.round(rel*100)+"%" : "—";
+    }
+    function setForecast(arr){
+      const cont=$("#forecast"); cont.innerHTML="";
+      (arr||[]).forEach(v=>{
+        const box=document.createElement("div"); box.className="bar";
+        const fill=document.createElement("i");
+        fill.style.height = Math.max(4, v) + "%";
+        fill.style.background = v>=70 ? "#1ee59a" : v>=55 ? "#ffd166" : "#ef476f";
+        const lab=document.createElement("span"); lab.textContent=v;
+        box.appendChild(fill); box.appendChild(lab); cont.appendChild(box);
+      });
+    }
+    function setTables(past, fut){
+      function fill(el, d){
+        el.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
+        Object.keys(d||{}).sort().forEach(k=>{
+          const tr=document.createElement("div"); tr.className="tr";
+          tr.innerHTML = `<div>${k}</div><div>${Number(d[k]).toFixed(1)}</div>`;
+          el.appendChild(tr);
+        });
+      }
+      fill($("#rainPast"), past||{});
+      fill($("#rainFuture"), fut||{});
+    }
+    function setLists(reasons, tips){
+      const wl=$("#whyList"); wl.innerHTML=""; (reasons||[]).forEach(t=>{const li=document.createElement("li"); li.textContent=t; wl.appendChild(li);});
+      const tl=$("#tipsList"); tl.innerHTML=""; (tips||[]).forEach(t=>{const li=document.createElement("li"); li.textContent=t; tl.appendChild(li);});
+    }
 
-            const adviceList = document.getElementById('advice-list');
-            adviceList.innerHTML = '';
-            data.practical_advice.forEach(tip => adviceList.insertAdjacentHTML('beforeend', `<li>${tip}</li>`));
+    // Handlers
+    async function handlePlace(){
+      const q=$("#place").value.trim();
+      if(!q){ alert("Inserisci una località"); return; }
+      showLoad(true);
+      try{
+        const g = await geocode(q);
+        await handleCoords(g.lat, g.lon);
+      }catch(e){
+        console.error(e); alert("Errore geocoding. Prova con le coordinate (lat, lon).");
+      }finally{ showLoad(false); }
+    }
+    async function handleCoordsStr(){
+      const c=parseCoords($("#coords").value.trim());
+      if(!c){ alert("Coordinate non valide. Esempio: 41.127, 14.782"); return; }
+      showLoad(true);
+      try{ await handleCoords(c.lat, c.lon); }
+      catch(e){ console.error(e); alert("Errore durante il calcolo. Riprova più tardi."); }
+      finally{ showLoad(false); }
+    }
+    async function handleCoords(lat,lon){
+      marker.setLatLng([lat,lon]); map.setView([lat,lon], 11);
+      const s = await score(lat,lon);
+      setForecast(s.forecast);
+      setTables(s.rain_past, s.rain_future);
+      setLists(s.explanation?.reasons, s.tips);
+      setMetrics(s.index, s.harvest_estimate, s.reliability);
+    }
 
-            const weatherContainer = document.getElementById('weather-forecast-container');
-            weatherContainer.innerHTML = '';
-            for(let i=0; i<5; i++) {
-                const dayName = new Date(data.weather_forecast.time[i]).toLocaleDateString('it-IT', { weekday: 'short' });
-                const tempMax = data.weather_forecast.temp_max[i].toFixed(0);
-                const tempMin = data.weather_forecast.temp_min[i].toFixed(0);
-                const rain = data.weather_forecast.precipitation[i].toFixed(1);
-                weatherContainer.innerHTML += `
-                    <div class="weather-day" style="background-color: ${rain > 1 ? 'rgba(0,123,255,0.1)' : 'transparent'}">
-                        <div class="day">${i === 0 ? "Oggi" : dayName}</div>
-                        <div class="temp">${tempMax}°</div>
-                        <div class="temp-min">${tempMin}°</div>
-                        <div class="rain">${rain} mm</div>
-                    </div>`;
-            }
-        }
-        
-        function updateMap(lat, lon, score) {
-            map.setView([lat, lon], 13);
-            if (marker) map.removeLayer(marker);
-            const color = getScoreColor(score);
-            const iconHtml = `<div style="background-color:${color}; width:24px; height:24px; border-radius:50%; border: 3px solid white; box-shadow: var(--shadow);"></div>`;
-            marker = L.marker([lat, lon], { icon: L.divIcon({ html: iconHtml, className: '' }) }).addTo(map);
-        }
+    // Bind
+    document.getElementById("btnSearch").addEventListener("click", handlePlace);
+    document.getElementById("btnCoords").addEventListener("click", handleCoordsStr);
+    document.getElementById("place").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handlePlace(); });
+    document.getElementById("coords").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handleCoordsStr(); });
 
-        function getScoreColor(score) {
-            if (score < 45) return 'var(--accent-red)';
-            if (score < 65) return 'var(--accent-orange)';
-            return 'var(--accent-green)';
-        }
-    </script>
+    // Start
+    initMap();
+  </script>
 </body>
 </html>
 
