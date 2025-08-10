@@ -129,7 +129,6 @@ def thermo_index(tmean):
     return 1.0 - (tmean-16)/8.0
 
 def night_humidity_bonus(rh7, tmin7):
-    """Bonus se notti umide e fresche (favoriscono primordi e mantenimento cappello)."""
     if rh7 is None or tmin7 is None: return 0.0
     bonus = 0.0
     if rh7 >= 85: bonus += 0.12
@@ -137,9 +136,8 @@ def night_humidity_bonus(rh7, tmin7):
     return clamp(bonus, 0.0, 0.25)
 
 def drying_penalty(sw7, wmax7):
-    """Penalità se radiazione forte e vento alto: asciugatura lettiera."""
     pen = 0.0
-    if sw7 is not None and sw7 > 18000:  # ~18 MJ/m2/giorno medio negli ultimi 7
+    if sw7 is not None and sw7 > 18000:  # ~18 MJ/m2/giorno medio (7gg)
         pen += 0.08
     if wmax7 is not None and wmax7 > 10: # >10 m/s massimi
         pen += 0.07
@@ -168,26 +166,23 @@ def reliability_from_spread(series_by_model: List[List[Optional[float]]]) -> flo
 
 def make_tips(score_today, reliab, last_rain_mm, factors):
     tips = []
-    # sicurezza e normativa (sempre)
-    tips.append("Raccogli solo esemplari adulti e integri; rispetta i limiti di raccolta locali e usa un coltellino per recidere il gambo.")
-    tips.append("Trasporta i funghi in cestino areato; evita sacchetti chiusi. Pulisci sul posto per non disperdere terra in casa.")
-    # operativi
+    tips.append("Raccogli solo esemplari adulti e integri; rispetta i limiti locali e recidi il gambo con coltellino.")
+    tips.append("Usa un cestino areato; evita sacchetti chiusi. Pulisci sul posto per ridurre contaminazioni.")
     if score_today >= 75:
-        tips.append("Finestra ottima: concentra la ricerca in faggete e castagneti tra 900–1500 m, versanti NE–N dove l’umidità si conserva meglio.")
+        tips.append("Finestra ottima: faggete/castagneti 900–1500 m, versanti N–NE più umidi.")
     elif score_today >= 55:
-        tips.append("Condizioni discrete: cerca nelle zone ombrose e in fondovalle; prediligi lettiere spesse e suolo non troppo esposto al vento.")
+        tips.append("Condizioni discrete: cerca in ombra, fondovalle e lettiere spesse.")
     else:
-        tips.append("Basso potenziale: monitora i prossimi episodi di pioggia >10–15 mm; ritorna dopo 5–10 giorni di maturazione.")
+        tips.append("Basso potenziale: attendi pioggia >10–15 mm e verifica dopo 5–10 giorni.")
     if reliab < 0.6:
-        tips.append("Affidabilità bassa: i modelli meteo sono discordi sulla pioggia; ricontrolla fra 12–24 ore.")
+        tips.append("Affidabilità bassa: modelli discordi; ricontrolla tra 12–24 ore.")
     if last_rain_mm is not None:
-        if last_rain_mm >= 10: tips.append("Ultima pioggia utile recente: controlla dopo 5–8 giorni a quote medio-alte; 3–5 giorni se fa caldo.")
-        elif last_rain_mm < 3: tips.append("Pioggia recente scarsa: punta a impluvi e aree con micro-ristagni.")
-    # fattori
+        if last_rain_mm >= 10: tips.append("Pioggia utile recente: 5–8 gg a quote medio-alte, 3–5 gg se fa caldo.")
+        elif last_rain_mm < 3: tips.append("Pioggia scarsa: punta a impluvi e micro-ristagni.")
     if factors.get("T7_mean_C") and factors["T7_mean_C"] > 20:
-        tips.append("Temperature medio-alte: privilegia esposizioni nord e quota maggiore.")
+        tips.append("Temperatura alta: privilegia esposizioni nord e quote maggiori.")
     if factors.get("RH7_mean_%") and factors["RH7_mean_%"] < 60:
-        tips.append("Umidità bassa: ricerca nelle conche e vicino a corsi d’acqua o sorgenti.")
+        tips.append("Umidità bassa: cerca in conche e vicino a sorgenti o corsi d’acqua.")
     return tips[:6]
 
 # -------------------- API --------------------
@@ -274,7 +269,7 @@ async def api_score(q: Optional[str] = Query(None), lat: Optional[float] = Query
         # affidabilità
         reliability = reliability_from_spread(precip_fc_models)
 
-        # ultima pioggia >=1 mm negli ultimi 30 gg osservati
+        # ultima pioggia >=1 mm negli ultimi 30 gg osservati (media modelli)
         last_rain = None
         for i in range(i_end-1, -1, -1):
             mm = [r["p"][i] for r in results if r["p"][i] is not None]
@@ -307,7 +302,6 @@ async def api_score(q: Optional[str] = Query(None), lat: Optional[float] = Query
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8080"))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
-
 
 
 
