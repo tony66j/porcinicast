@@ -1,200 +1,215 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trova Porcini by Antonio Pio D'aloia</title>
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    
-    <style>
-        :root {
-            --bg-color: #f4f7f6; --card-bg: #ffffff; --text-color: #333;
-            --primary: #6d4c41; --primary-light: #efebe9; --shadow: 0 4px 15px rgba(0,0,0,0.08);
-            --accent-green: #28a745; --accent-orange: #fd7e14; --accent-red: #dc3545; --accent-blue: #007bff;
-        }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); }
-        .header { background-color: var(--primary); color: white; text-align: center; padding: 20px 10px; box-shadow: var(--shadow); }
-        .header h1 { margin: 0; font-size: 2.2rem; }
-        .header p { margin: 5px 0 0; font-style: italic; opacity: 0.9; }
-        main { max-width: 1400px; margin: 20px auto; padding: 0 15px; display: flex; gap: 20px; flex-wrap: wrap-reverse; }
-        .controls-container { flex: 1; min-width: 340px; }
-        .map-container { flex: 1.5; min-width: 400px; min-height: 600px; background: var(--card-bg); border-radius: 12px; box-shadow: var(--shadow); }
-        #map { width: 100%; height: 100%; border-radius: 12px; z-index: 1; }
-        .search-box { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 20px; }
-        h2 { margin-top: 0; color: var(--primary); font-size: 1.2rem; }
-        form { display: flex; gap: 10px; }
-        input[type="text"] { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; }
-        button { padding: 12px 20px; background-color: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; }
-        #loading { text-align: center; font-size: 1.2rem; color: var(--primary); display: none; margin: 20px; }
-        #results-area { display: grid; grid-template-columns: 1fr; gap: 20px; display: none; }
-        .result-card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: var(--shadow); }
-        .result-card h3 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 8px; font-size: 1.1rem; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: center; }
-        .info-item h4 { margin: 0 0 5px; font-size: 0.8rem; color: #777; font-weight: normal; text-transform: uppercase; }
-        .info-item p { margin: 0; font-size: 1.2rem; font-weight: bold; color: var(--primary); }
-        #score-value { font-size: 4rem; font-weight: bold; line-height: 1; text-align: center; }
-        #location-name { text-align: center; font-weight: normal; font-size: 1rem; color: #777; margin-top: 10px; word-break: break-word; }
-        #harvest-estimate { font-size: 1.2rem; color: var(--primary); font-weight: bold; text-align: center; margin: 15px 0 5px; }
-        .weather-forecast { display: flex; justify-content: space-between; text-align: center; }
-        .weather-day { flex: 1; padding: 5px; border-radius: 8px; }
-        .weather-day .day { font-weight: bold; font-size: 0.9rem; }
-        .weather-day .temp { font-size: 1.1rem; }
-        .weather-day .temp-min { font-size: 0.9rem; opacity: 0.7; }
-        .weather-day .rain { font-size: 0.9rem; color: var(--accent-blue); font-weight: bold; }
-    </style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Trova Porcini — by Antonio Pio D’Aloia</title>
+  <style>
+    :root{--bg:#0f1b26;--panel:#15212e;--text:#eef5fb;--muted:#8fa7b8;--accent:#4caf50;--warn:#f9a825;--danger:#e53935;--border:#253548;}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
+    header{padding:16px 20px;border-bottom:1px solid var(--border)}
+    .wrap{max-width:1280px;margin:0 auto;padding:20px;display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+    @media(max-width:960px){.wrap{grid-template-columns:1fr}}
+    .card{background:var(--panel);padding:16px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.3);margin-bottom:16px}
+    input,button{padding:10px;border-radius:10px;border:1px solid #2c3e50;font-size:15px;color:var(--text);background:#102335}
+    button{cursor:pointer;font-weight:bold}
+    button.ok{background:var(--accent)}
+    button.warn{background:var(--warn);color:#101f26}
+    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+    .metric{background:#102335;padding:10px;border-radius:10px;text-align:center}
+    .metric .val{font-size:1.6rem;font-weight:bold}
+    #map{height:460px;border-radius:10px;overflow:hidden}
+    .badge{padding:4px 8px;border-radius:8px;font-size:.8rem;margin-left:6px}
+    .badge.good{background:#4caf5022;border:1px solid var(--accent);color:var(--accent)}
+    .badge.warn{background:#f9a82522;border:1px solid var(--warn);color:var(--warn)}
+    .badge.bad{background:#e5393522;border:1px solid var(--danger);color:var(--danger)}
+    details summary{cursor:pointer;font-weight:bold;margin-top:10px}
+    details p{margin:6px 0}
+  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 </head>
 <body>
-    <header class="header"><h1>Trova Porcini</h1><p>by Antonio Pio D'aloia</p></header>
-    <main>
-        <div class="controls-container">
-            <div class="search-box">
-                <h2>Cerca un'area</h2>
-                <form id="location-form"><input type="text" id="location-input" placeholder="Es. Camaldoli, Vallombrosa..." required><button type="submit">Cerca</button></form>
-                <form id="coords-form" style="margin-top: 15px;"><input type="text" id="coords-input" placeholder="O incolla coordinate: 43.76, 11.25" required><button type="submit">Cerca</button></form>
-            </div>
-            <div id="loading">Recupero dati meteo reali e analisi...</div>
-            <div id="results-area">
-                <div class="result-card" id="score-card">
-                    <h3>Indice Idoneità Odierna</h3>
-                    <div id="score-value">--</div>
-                    <div id="location-name"></div>
-                    <p id="harvest-estimate">--</p>
-                </div>
-                <div class="result-card" id="window-card">
-                    <h3>Finestra di Uscita</h3>
-                    <div class="info-item" style="text-align:center;"><h4>Stato Attuale</h4><p id="window-status" style="font-size: 1.1rem; font-style: italic;">--</p></div>
-                    <div class="info-item" style="margin-top: 15px; text-align:center;"><h4>Picco Previsto</h4><p id="window-peak">--</p></div>
-                </div>
-                <div class="result-card" id="weather-card">
-                    <h3>Meteo Prossimi 5 Giorni</h3>
-                    <div id="weather-forecast-container" class="weather-forecast"></div>
-                </div>
-                <div class="result-card" id="advice-card">
-                    <h3>Consigli Pratici</h3>
-                    <ul id="advice-list" style="padding-left:0; list-style:none; font-size:0.9rem;"></ul>
-                </div>
-            </div>
+  <header>
+    <h1 style="margin:0;font-size:1.4rem;">Trova Porcini — by Antonio Pio D’Aloia</h1>
+    <div class="muted" style="font-size:.85rem;">Stime basate su dati meteorologici, orografici e ambientali</div>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <!-- Input località + coordinate -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <input id="place" type="text" placeholder="Località (es. Abbadia San Salvatore)" style="flex:1"/>
+        <button id="btnSearch" class="ok">Cerca</button>
+        <input id="coords" type="text" placeholder="lat, lon (Google)" style="flex:1;min-width:220px"/>
+        <button id="btnCoords" class="warn">Usa coordinate</button>
+      </div>
+      <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Puoi incollare le coordinate direttamente da Google Maps, ad esempio “44.12345, 11.23456”.</div>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="muted">Indice</div>
+          <div id="metricIndex" class="val">—</div>
         </div>
-        <div class="map-container"><div id="map"></div></div>
-    </main>
+        <div class="metric">
+          <div class="muted">Stima raccolto</div>
+          <div id="metricHarvest" class="val">—</div>
+        </div>
+        <div class="metric">
+          <div class="muted">Affidabilità</div>
+          <div id="metricReliability" class="val">—</div>
+        </div>
+      </div>
 
-    <script>
-        const API_URL = '/api'; 
+      <!-- Previsione 10 giorni -->
+      <div style="margin-top:14px;">
+        <div class="muted" style="margin-bottom:6px;">Previsione indice 10 giorni</div>
+        <div id="forecast" style="display:flex;gap:4px;align-items:flex-end;height:120px;">
+          <!-- colonne generate in JS -->
+        </div>
+      </div>
 
-        const locationForm = document.getElementById('location-form');
-        const coordsForm = document.getElementById('coords-form');
-        const loadingDiv = document.getElementById('loading');
-        const resultsArea = document.getElementById('results-area');
-        const locationNameEl = document.getElementById('location-name');
+      <!-- Specifiche (stesso elenco come richiesto) -->
+      <details open>
+        <summary>Specifiche (fattori considerati)</summary>
+        <ul style="margin-left:18px;font-size:.9rem;">
+          <li>Latitudine e longitudine</li>
+          <li>Altitudine (m s.l.m.)</li>
+          <li>Pendenza e esposizione del versante</li>
+          <li>Piogge accumulate (P7 / P14)</li>
+          <li>Bilancio idrico (API*, ET0)</li>
+          <li>Temperature media/min/max</li>
+          <li>Umidità relativa media</li>
+          <li>Irraggiamento solare</li>
+          <li>Tipo di vegetazione</li>
+          <li>Finestra migliore (3 giorni)</li>
+        </ul>
+      </details>
 
-        const map = L.map('map').setView([42.8, 12.5], 6);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
-        let marker;
+      <!-- Consigli utili -->
+      <details open>
+        <summary>Consigli utili alla raccolta</summary>
+        <ul id="tipsList" style="margin-left:18px;font-size:.9rem;"></ul>
+      </details>
 
-        locationForm.addEventListener('submit', e => { e.preventDefault(); handleLocationSearch(); });
-        coordsForm.addEventListener('submit', e => { e.preventDefault(); handleCoordsSearch(); });
-        
-        async function handleLocationSearch() {
-            document.getElementById('coords-input').value = '';
-            const location = document.getElementById('location-input').value;
-            setLoading(true, `Geocodifica di "${location}"...`);
-            try {
-                const geoReq = await fetch(`${API_URL}/geocode?q=${encodeURIComponent(location)}`);
-                if (!geoReq.ok) throw new Error((await geoReq.json()).detail || 'Località non trovata.');
-                const geoData = await geoReq.json();
-                locationNameEl.textContent = geoData.name;
-                await fetchAndDisplayScore(geoData.lat, geoData.lon);
-            } catch (error) { handleError(error.message); }
-        }
+      <!-- Perché questa stima -->
+      <details open>
+        <summary>Perché questa stima?</summary>
+        <ul id="whyList" style="margin-left:18px;font-size:.9rem;"></ul>
+      </details>
+    </div>
 
-        async function handleCoordsSearch() {
-            document.getElementById('location-input').value = '';
-            try {
-                const [lat, lon] = parseCoordinates(document.getElementById('coords-input').value);
-                locationNameEl.textContent = `Coordinate: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-                await fetchAndDisplayScore(lat, lon);
-            } catch (error) { handleError(error.message); }
-        }
-        
-        function parseCoordinates(text) {
-            const parts = text.replace(/,/g, ' ').split(' ').filter(p => p.trim() !== '');
-            if (parts.length !== 2) throw new Error('Formato coordinate non valido. Usa "lat, lon".');
-            const [lat, lon] = [parseFloat(parts[0]), parseFloat(parts[1])];
-            if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lat < -180 || lon > 180) throw new Error('Valori di coordinate non validi.');
-            return [lat, lon];
-        }
+    <div class="card">
+      <div id="map"></div>
+    </div>
+  </div>
 
-        async function fetchAndDisplayScore(lat, lon) {
-            setLoading(true, 'Recupero dati meteo reali e analisi scientifica...');
-            try {
-                const scoreReq = await fetch(`${API_URL}/score?lat=${lat}&lon=${lon}`);
-                if (!scoreReq.ok) {
-                    const errData = await scoreReq.json();
-                    throw new Error(errData.detail || 'Errore nel calcolo del punteggio.');
-                }
-                const data = await scoreReq.json();
-                displayResults(data);
-                updateMap(data.coords.lat, data.coords.lon, data.overall_score);
-            } catch (error) { handleError(error.message); } finally { setLoading(false); }
-        }
-        
-        function setLoading(isLoading, message = '') {
-            loadingDiv.style.display = isLoading ? 'block' : 'none';
-            resultsArea.style.display = isLoading ? 'none' : 'grid';
-            if(isLoading) loadingDiv.textContent = message;
-        }
-        
-        function handleError(message) {
-            alert(`Errore: ${message}`);
-            setLoading(false);
-        }
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Utility parse coordinate string
+    function parseCoords(str){
+      const m = /^\s*([+-]?\\d+(?:[.,]\\d+)?)\\s*[,;\\s]\\s*([+-]?\\d+(?:[.,]\\d+)?)\\s*$/.exec((str||"").trim());
+      if(!m) return null;
+      const lat = parseFloat(m[1].replace(",", "."));
+      const lon = parseFloat(m[2].replace(",", "."));
+      if(isNaN(lat) || isNaN(lon) || lat<-90 || lat>90 || lon<-180 || lon>180) return null;
+      return {lat,lon};
+    }
 
-        function displayResults(data) {
-            const scoreEl = document.getElementById('score-value');
-            scoreEl.textContent = data.overall_score;
-            scoreEl.style.color = getScoreColor(data.overall_score);
-            document.getElementById('harvest-estimate').textContent = data.estimated_harvest_per_2h;
-            
-            const win = data.fruiting_window;
-            document.getElementById('window-peak').textContent = win.peak_date;
-            document.getElementById('window-status').textContent = win.status;
+    // Mappa
+    let map, marker;
+    function initMap(){
+      map = L.map('map').setView([42.5,12.5], 6);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18}).addTo(map);
+      marker = L.marker([42.5,12.5]).addTo(map);
+      setTimeout(()=>map.invalidateSize(), 200);
+      map.on("click", e => handleCoords(e.latlng.lat, e.latlng.lng, "Punto selezionato"));
+    }
 
-            const adviceList = document.getElementById('advice-list');
-            adviceList.innerHTML = '';
-            data.practical_advice.forEach(tip => adviceList.insertAdjacentHTML('beforeend', `<li>${tip}</li>`));
+    // Aggiorna previsione 10 colonne
+    function updateForecast(arr){
+      const cont = document.getElementById("forecast");
+      cont.innerHTML = "";
+      arr.forEach((val,i)=>{
+        const bar = document.createElement("div");
+        bar.style.flex="1";
+        bar.style.background= val>=70? "#4caf50" : val>=55? "#f9a825" : "#e53935";
+        bar.style.height = Math.max(4,(val/100)*100) + "px";
+        const label = document.createElement("div");
+        label.style.fontSize=".7rem"; label.style.position="relative"; label.style.top="-18px"; label.style.textAlign="center";
+        label.textContent = val;
+        bar.appendChild(label);
+        cont.appendChild(bar);
+      });
+    }
 
-            const weatherContainer = document.getElementById('weather-forecast-container');
-            weatherContainer.innerHTML = '';
-            for(let i=0; i<5; i++) {
-                const dayName = new Date(data.weather_forecast.time[i]).toLocaleDateString('it-IT', { weekday: 'short' });
-                const tempMax = data.weather_forecast.temp_max[i].toFixed(0);
-                const tempMin = data.weather_forecast.temp_min[i].toFixed(0);
-                const rain = data.weather_forecast.precipitation[i].toFixed(1);
-                weatherContainer.innerHTML += `
-                    <div class="weather-day" style="background-color: ${rain > 1 ? 'rgba(0,123,255,0.1)' : 'transparent'}">
-                        <div class="day">${i === 0 ? "Oggi" : dayName}</div>
-                        <div class="temp">${tempMax}°</div>
-                        <div class="temp-min">${tempMin}°</div>
-                        <div class="rain">${rain} mm</div>
-                    </div>`;
-            }
-        }
-        
-        function updateMap(lat, lon, score) {
-            map.setView([lat, lon], 13);
-            if (marker) map.removeLayer(marker);
-            const color = getScoreColor(score);
-            const iconHtml = `<div style="background-color:${color}; width:24px; height:24px; border-radius:50%; border: 3px solid white; box-shadow: var(--shadow);"></div>`;
-            marker = L.marker([lat, lon], { icon: L.divIcon({ html: iconHtml, className: '' }) }).addTo(map);
-        }
+    // Aggiorna metriche
+    function updateMetrics(idx, harvest, rel){
+      document.getElementById("metricIndex").textContent = idx ?? "—";
+      document.getElementById("metricHarvest").textContent = harvest ?? "—";
+      document.getElementById("metricReliability").textContent = rel!=null ? Math.round(rel*100)+"%" : "—";
+    }
 
-        function getScoreColor(score) {
-            if (score < 45) return 'var(--accent-red)';
-            if (score < 65) return 'var(--accent-orange)';
-            return 'var(--accent-green)';
-        }
-    </script>
+    function updateLists(reasons, tips){
+      const why = document.getElementById("whyList");
+      why.innerHTML=""; (reasons||[]).forEach(r=>{ const li=document.createElement("li"); li.textContent=r; why.appendChild(li); });
+      const tipsList = document.getElementById("tipsList");
+      tipsList.innerHTML=""; (tips||[]).forEach(t=>{ const li=document.createElement("li"); li.textContent=t; tipsList.appendChild(li); });
+    }
+
+    // Chiamate API
+    async function apiGet(url){
+      const r = await fetch(url);
+      if(!r.ok){ const t=await r.text(); throw new Error(t||"errore richiesta"); }
+      return r.json();
+    }
+
+    async function geocode(q){
+      return apiGet("/api/geocode?q=" + encodeURIComponent(q));
+    }
+
+    async function getScore(lat,lon){
+      return apiGet(`/api/score?lat=${lat}&lon=${lon}`);
+    }
+
+    async function handlePlace(){
+      const q = document.getElementById("place").value.trim();
+      if(!q){ alert("Inserisci una località valida"); return; }
+      try{
+        const g = await geocode(q);
+        handleCoords(g.lat, g.lon, g.display);
+      }catch(err){
+        console.error(err);
+        alert("Errore geocoding: " + err.message);
+      }
+    }
+
+    async function handleCoordsStr(){
+      const c = parseCoords(document.getElementById("coords").value.trim());
+      if(!c){ alert("Formato coordinate non valido"); return; }
+      handleCoords(c.lat, c.lon, `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`);
+    }
+
+    async function handleCoords(lat, lon, label){
+      try{
+        marker.setLatLng([lat,lon]); map.setView([lat,lon], 11);
+        const data = await getScore(lat, lon);
+        updateForecast(data.forecast);
+        updateMetrics(data.index, data.harvest_estimate, data.reliability);
+        updateLists(data.explanation.reasons, data.tips);
+      }catch(err){
+        console.error(err);
+        alert("Errore durante la ricerca: " + err.message);
+      }
+    }
+
+    document.getElementById("btnSearch").addEventListener("click", handlePlace);
+    document.getElementById("btnCoords").addEventListener("click", handleCoordsStr);
+    document.getElementById("place").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handlePlace(); });
+    document.getElementById("coords").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handleCoordsStr(); });
+
+    // Avvio
+    initMap();
+  </script>
 </body>
 </html>
