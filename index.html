@@ -1,42 +1,31 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Trovapolcini by Antonio D’Aloia</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://tile.openstreetmap.org">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <style>
-    :root{
-      --bg:#0c1222; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#10b981; --accent2:#22d3ee; --danger:#ef4444;
-      --border:#1f2937; --chip:#0b1324;
-    }
+    :root{--bg:#0c1222;--panel:#0f172a;--text:#e5e7eb;--muted:#94a3b8;--accent:#10b981;--accent2:#22d3ee;--border:#1f2937;}
     *{box-sizing:border-box}
-    body{margin:0;background:linear-gradient(180deg,#0b1020,#0f172a);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    body{margin:0;background:linear-gradient(180deg,#0b1020,#0f172a);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
     header{display:flex;align-items:center;gap:.7rem;padding:14px 16px;border-bottom:1px solid var(--border);background:rgba(15,23,42,.6);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
-    .logo{display:flex;align-items:center;gap:.5rem}
-    .logo svg{width:26px;height:26px}
     .brand{font-weight:800;letter-spacing:.3px}
     main{max-width:1180px;margin:22px auto;padding:0 16px}
-    .card{background:linear-gradient(180deg,#0b1220,#0f172a);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);margin-bottom:14px}
+    .card{background:linear-gradient(180deg,#0b1220,#0f172a);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.25);margin-bottom:14px}
     .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:14px}
     input,button{border-radius:10px;border:1px solid #334155;background:#0b1324;color:var(--text);padding:12px 14px;font-size:15px}
     button{background:linear-gradient(90deg,var(--accent2),var(--accent));border:none;cursor:pointer;color:#062f2a;font-weight:700}
-    button:disabled{opacity:.5;cursor:default}
     .muted{color:var(--muted);font-size:13px}
-    .score{font-size:40px;font-weight:800}
-    .pill{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;border:1px solid var(--border);background:#0b1324}
-    .ok{background:rgba(16,185,129,.15);color:#22c55e;border-color:#064e3b}
-    .warn{background:rgba(245,158,11,.12);color:#f59e0b;border-color:#7c2d12}
-    .bad{background:rgba(239,68,68,.12);color:#ef4444;border-color:#7f1d1d}
-    .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px}
-    .list{margin:6px 0 0 18px;line-height:1.6}
-    .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-    .chip{font-size:12px;padding:4px 8px;border-radius:999px;background:var(--chip);border:1px solid #243244}
     #map{height:420px;border-radius:12px;overflow:hidden}
-    .hstack{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .kpi{font-size:40px;font-weight:800}
+    .pill{display:inline-block;padding:4px 12px;border-radius:999px;border:1px solid var(--border);background:#0b1324}
+    .ok{color:#22c55e;border-color:#064e3b;background:rgba(16,185,129,.15)}
+    .mid{color:#f59e0b;border-color:#7c2d12;background:rgba(245,158,11,.12)}
+    .low{color:#ef4444;border-color:#7f1d1d;background:rgba(239,68,68,.12)}
     .table{border:1px solid var(--border);border-radius:10px;overflow:hidden}
     .tr{display:grid;grid-template-columns:1fr 1fr;padding:8px 10px;border-bottom:1px solid #1f2937}
     .tr.head{background:#0b1324;color:#cbd5e1;font-weight:700}
@@ -48,29 +37,18 @@
 </head>
 <body>
   <div id="status" class="status">Diagnostica: avvio…</div>
-  <header>
-    <div class="logo">
-      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#22d3ee"/><stop offset="1" stop-color="#10b981"/></linearGradient></defs>
-        <path d="M12 26c0-9 10-16 20-16s20 7 20 16c0 3-6 6-16 7v7h6a2 2 0 110 4H22a2 2 0 110-4h6v-7c-10-1-16-4-16-7z" fill="url(#g)"/>
-        <circle cx="32" cy="48" r="5" fill="#22d3ee"/>
-      </svg>
-      <div class="brand">Trovapolcini by Antonio D’Aloia</div>
-    </div>
-  </header>
+  <header><div class="brand">Trovapolcini by Antonio D’Aloia</div></header>
 
   <main>
     <div class="card">
-      <div class="hstack">
-        <input id="qPlace" placeholder="Località (es. Benevento)">
-        <button id="btnPlace">Cerca località</button>
-        <input id="qCoords" placeholder="Coordinate (incolla da Google: 41.12345, 14.67890)" style="min-width:320px">
-        <button id="btnCoords">Usa coordinate</button>
-        <button id="btnGeo" title="Usa la mia posizione">📍</button>
+      <div class="row">
+        <input id="q" placeholder="Cerca località (es. Benevento)">
+        <button id="go">Cerca</button>
+        <input id="coords" placeholder="Oppure incolla coordinate Google: 41.127, 14.782" style="min-width:320px">
+        <button id="goC">Usa coordinate</button>
+        <button id="geo" title="Usa la mia posizione">📍</button>
       </div>
-      <div class="muted" style="margin-top:6px">
-        Suggerimento: su Google Maps fai click destro su un punto → copia le coordinate (es. “41.127, 14.782”) e incollale qui.
-      </div>
+      <div class="muted" style="margin-top:6px">Suggerimento: click destro su Google Maps → copia le coordinate, incolla qui.</div>
     </div>
 
     <div class="grid">
@@ -78,183 +56,127 @@
         <div class="card" id="map"></div>
 
         <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
-              <div class="muted">Indice oggi (0–10)</div>
-              <div class="score" id="score">—</div>
+              <div class="muted">Indice oggi (0–100)</div>
+              <div id="score" class="kpi">—</div>
             </div>
-            <div id="advice" class="pill">—</div>
+            <div id="harvest" class="pill">—</div>
           </div>
-          <div id="best" class="muted" style="margin-top:8px">Indicazioni basate su piogge, temperatura e umidità (OpenWeather).</div>
+          <div class="muted" id="bestWin" style="margin-top:8px">—</div>
         </div>
 
-        <div class="card twocol">
-          <div>
-            <div style="font-weight:700;margin-bottom:6px">Piogge future (prossimi giorni)</div>
-            <div class="table" id="rainFuture">
-              <div class="tr head"><div>Data</div><div>mm</div></div>
-            </div>
-          </div>
-          <div>
-            <div style="font-weight:700;margin-bottom:6px">Piogge passate (ultimi giorni)</div>
-            <div class="table" id="rainPast">
-              <div class="tr head"><div>Data</div><div>mm</div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" id="adviceCard" style="display:none">
-          <div style="font-weight:700">Consigli sul campo</div>
-          <ul id="adviceTips" class="list"></ul>
+        <div class="card" id="whyCard" style="display:none">
+          <div style="font-weight:700">Perché questo giudizio?</div>
+          <ul id="whyList" class="muted" style="margin-left:16px"></ul>
         </div>
       </div>
 
       <div>
         <div class="card">
-          <div style="font-weight:700;margin-bottom:6px">Stima raccolto (2 ore)</div>
-          <div id="harvest" class="pill">—</div>
+          <div style="font-weight:700;margin-bottom:6px">Piogge future (prossimi 10 giorni)</div>
+          <div class="table" id="rainFuture"><div class="tr head"><div>Data</div><div>mm</div></div></div>
         </div>
-
         <div class="card">
-          <div class="kv" id="kv"></div>
+          <div style="font-weight:700;margin-bottom:6px">Piogge passate (ultimi 30 giorni)</div>
+          <div class="table" id="rainPast"><div class="tr head"><div>Data</div><div>mm</div></div></div>
         </div>
-
         <div class="card">
-          <details>
-            <summary>Metodi & note (clicca per aprire)</summary>
-            <div style="font-size:14px;line-height:1.6;margin-top:6px">
-              Modello “avanzato”: piogge passate/future (OpenWeather), temperatura media e umidità previste (5 giorni),
-              altitudine da Open-Elevation, normalizzazione in indice 0–10 e stima **porcini/2h**.  
-              Dati: OpenWeather (chiave già impostata), Open-Elevation (gratuito), Nominatim (geocoding).
-            </div>
-          </details>
+          <div style="font-weight:700;margin-bottom:6px">Fattori analizzati</div>
+          <div id="facts" class="muted"></div>
         </div>
       </div>
     </div>
-
-    <footer>
-      <div class="attribution">© Trovapolcini — By Antonio D’Aloia. Dati di terze parti con licenze proprie.</div>
-    </footer>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
-    const $ = (s)=>document.querySelector(s);
+    const $ = s=>document.querySelector(s);
     function setStatus(t,err=false){ const el=$("#status"); el.textContent="Diagnostica: "+t; el.className="status"+(err?" err":""); }
     const COORD_RE=/^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/;
     function parseCoords(txt){ const m=COORD_RE.exec((txt||"").trim()); if(!m) return null; const lat=parseFloat(m[1].replace(",", ".")); const lon=parseFloat(m[2].replace(",", ".")); if(!(isFinite(lat)&&isFinite(lon))) return null; if(lat<-90||lat>90||lon<-180||lon>180) return null; return {lat,lon}; }
+    const API = window.location.origin + "/api";
 
-    // Map
+    // mappa come nella versione funzionante
     let map, marker;
     function initMap(){
       map = L.map('map', {zoomControl:true}).setView([42.5,12.5], 6);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18, attribution:'&copy; OpenStreetMap'}).addTo(map);
       marker = L.marker([42.5,12.5]).addTo(map);
       setTimeout(()=>map.invalidateSize(),150);
-      map.on("click", async (e)=> runWithCoords(e.latlng.lat, e.latlng.lng, "Punto sulla mappa"));
+      map.on("click", e => runWithCoords(e.latlng.lat, e.latlng.lng, "Punto sulla mappa"));
     }
 
-    // Geocoding + Elevation
-    async function geocodePlace(q){
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&addressdetails=1`;
-      const r = await fetch(url, {headers:{"Accept":"application/json"}});
-      if(!r.ok) throw new Error("Geocoder non disponibile");
-      const j = await r.json(); if(!j || !j.length) throw new Error("Località non trovata");
-      return {lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon), display: j[0].display_name};
+    async function geocode(q){
+      const r = await fetch(`${API}/geocode?q=${encodeURIComponent(q)}`); if(!r.ok) throw new Error("geocode"); return r.json();
     }
-    async function getElevation(lat,lon){
-      try{
-        const r = await fetch("https://api.open-elevation.com/api/v1/lookup", {
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({locations:[{latitude:lat, longitude:lon}]})
-        });
-        if(!r.ok) return null; const j = await r.json(); return j?.results?.[0]?.elevation ?? null;
-      }catch{ return null; }
+    async function score(lat,lon){
+      const r = await fetch(`${API}/score?lat=${lat}&lon=${lon}`); if(!r.ok) throw new Error("score"); return r.json();
     }
 
-    // Backend
-    const API_BASE = window.location.origin + "/api";
-    async function callScore(lat, lon, alt){
-      const u = new URL(API_BASE + "/score"); u.searchParams.set("lat", lat); u.searchParams.set("lon", lon); if(alt!=null) u.searchParams.set("alt", alt);
-      const r = await fetch(u.toString(), {headers:{"Accept":"application/json"}});
-      if(!r.ok){ const t=await r.text(); throw new Error("Backend: "+t); }
-      return r.json();
+    function cls(score){ if(score>=70) return "ok"; if(score>=55) return "mid"; return "low"; }
+    function tableFill(el, dict){
+      el.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
+      const keys = Object.keys(dict||{}).sort();
+      keys.forEach(d=>{
+        const tr=document.createElement("div"); tr.className="tr";
+        tr.innerHTML=`<div>${d}</div><div>${Number(dict[d]).toFixed(1)}</div>`;
+        el.appendChild(tr);
+      });
     }
 
-    // UI helpers
-    function clsIdx(idx){ if(idx>=8) return "ok"; if(idx>=5) return "warn"; return "bad"; }
-    function renderTables(past, future){
-      const pastEl = $("#rainPast"); const futEl = $("#rainFuture");
-      pastEl.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
-      futEl.innerHTML  = '<div class="tr head"><div>Data</div><div>mm</div></div>';
-      const pkeys = Object.keys(past||{}).sort();
-      const fkeys = Object.keys(future||{}).sort();
-      pkeys.forEach(d=>{ const tr=document.createElement("div"); tr.className="tr"; tr.innerHTML = `<div>${d}</div><div>${Number(past[d]).toFixed(1)}</div>`; pastEl.appendChild(tr); });
-      fkeys.forEach(d=>{ const tr=document.createElement("div"); tr.className="tr"; tr.innerHTML = `<div>${d}</div><div>${Number(future[d]).toFixed(1)}</div>`; futEl.appendChild(tr); });
-    }
-    function fillKV(rows){
-      const container=$("#kv"); container.innerHTML="";
-      rows.forEach(([k,v])=>{ const div=document.createElement("div"); div.innerHTML=`<div class="muted">${k}</div><div>${v??"—"}</div>`; container.appendChild(div); });
-    }
-    function renderAll(displayName, lat, lon, data){
-      $("#score").textContent = data.indice_attuale ?? "—";
-      const pill=$("#advice"); pill.className = `pill ${clsIdx(data.indice_attuale||0)}`; pill.textContent = data.stima_raccolto || "—";
-      renderTables(data.piogge_passate, data.piogge_future);
-      const tipsEl=$("#adviceCard"); const ul=$("#adviceTips"); ul.innerHTML=""; (data.consigli||[]).forEach(t=>{ const li=document.createElement("li"); li.textContent=t; ul.appendChild(li); }); tipsEl.style.display = (data.consigli && data.consigli.length) ? "block" : "none";
-      const f = data.fattori||{};
-      fillKV([
-        ["Località", displayName],
-        ["Lat/Lon", `${lat.toFixed(5)}, ${lon.toFixed(5)}`],
-        ["Altitudine usata", (f.altitudine!=null? `${Math.round(f.altitudine)} m` : "—")],
-        ["Temp media 5gg", (f.temperatura_media!=null? `${f.temperatura_media} °C`:"—")],
-        ["Umidità media 5gg", (f.umidita_media!=null? `${f.umidita_media}%`:"—")],
-        ["Pioggia tot passata", (f.pioggia_tot_passata_mm!=null? `${Number(f.pioggia_tot_passata_mm).toFixed(1)} mm`:"—")],
-        ["Pioggia tot futura", (f.pioggia_tot_futura_mm!=null? `${Number(f.pioggia_tot_futura_mm).toFixed(1)} mm`:"—")]
-      ]);
+    function render(displayName, lat, lon, s){
+      // indice & harvest
+      $("#score").textContent = s.score_today ?? "—";
+      const h=$("#harvest"); h.textContent = s.harvest_estimate || "—"; h.className = `pill ${cls(s.score_today||0)}`;
+      // best window
+      const bw=s.best_window; $("#bestWin").textContent = bw ? `Finestra migliore (3 giorni): D+${bw.start} → D+${bw.end} (media ${bw.mean})` : "—";
+      // piogge
+      tableFill($("#rainFuture"), s.rain_future);
+      tableFill($("#rainPast"), s.rain_past);
+      // spiegazioni
+      const why = s.explanation?.reasons || []; const ul=$("#whyList"); ul.innerHTML=""; if(why.length){ $("#whyCard").style.display="block"; why.forEach(t=>{ const li=document.createElement("li"); li.textContent=t; ul.appendChild(li); }); } else { $("#whyCard").style.display="none"; }
+      // fattori
+      $("#facts").innerHTML = `
+        Lat/Lon: ${lat.toFixed(5)}, ${lon.toFixed(5)}<br>
+        Quota: ${s.elevation_m} m — Pendenza: ${s.slope_deg}° — Esposizione: ${s.aspect_octant} (${s.aspect_deg}°)<br>
+        P7/P14: ${s.P7_mm} / ${s.P14_mm} mm — API*: ${s.API_star_mm} mm — ET0 7g: ${s.ET0_7d_mm} mm<br>
+        Tmed7: ${s.Tmean7_c} °C (Tmin7 ${s.Tmin7_c}–Tmax7 ${s.Tmax7_c}) — UR7: ${s.RH7_mean_% ?? "—"} %`;
     }
 
-    async function runWithCoords(lat, lon, displayName){
-      try{
-        setStatus("calcolo in corso…");
-        marker.setLatLng([lat,lon]); map.setView([lat,lon], 11);
-        let alt = await getElevation(lat,lon);
-        const data = await callScore(lat, lon, alt);
-        renderAll(displayName, lat, lon, data);
-        setStatus("OK ✔");
-      }catch(e){ console.error(e); setStatus(e.message || "Errore", true); alert("Errore durante il calcolo. Riprova tra poco."); }
-    }
     async function runPlace(){
-      const q = $("#qPlace").value.trim(); if(!q){ $("#qPlace").focus(); return; }
-      try{ setStatus("geocoding…"); const g = await geocodePlace(q); await runWithCoords(g.lat, g.lon, g.display); }
-      catch(e){ console.error(e); setStatus("geocoding fallito", true); alert("Località non trovata o servizio non disponibile."); }
+      const q = $("#q").value.trim(); if(!q){ $("#q").focus(); return; }
+      try{ setStatus("geocoding…"); const g = await geocode(q); await runWithCoords(g.lat, g.lon, g.display); }
+      catch(e){ setStatus("errore geocoding", true); alert("Località non trovata o servizio non disponibile."); }
     }
     async function runCoords(){
-      const txt = $("#qCoords").value.trim(); const c=parseCoords(txt);
-      if(!c){ $("#qCoords").focus(); alert("Formato coordinate non valido. Es: 41.12345, 14.67890"); return; }
+      const c = parseCoords($("#coords").value); if(!c){ alert("Formato coordinate non valido. Es: 41.127, 14.782"); return; }
       await runWithCoords(c.lat, c.lon, `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`);
     }
+    async function runWithCoords(lat, lon, label){
+      try{
+        setStatus("calcolo…");
+        marker.setLatLng([lat,lon]); map.setView([lat,lon], 11);
+        const s = await score(lat, lon);
+        render(label, lat, lon, s);
+        setStatus("OK ✔");
+      }catch(e){ console.error(e); setStatus("errore backend", true); alert("Errore durante il calcolo. Riprova tra poco."); }
+    }
 
-    document.addEventListener("keydown", e=>{ if(e.key==="Enter") runPlace(); });
-    $("#btnPlace").addEventListener("click", runPlace);
-    $("#btnCoords").addEventListener("click", runCoords);
-    $("#btnGeo").addEventListener("click", ()=>{
+    document.getElementById("go").addEventListener("click", runPlace);
+    document.getElementById("goC").addEventListener("click", runCoords);
+    document.getElementById("geo").addEventListener("click", ()=>{
       if(!navigator.geolocation){ alert("Geolocalizzazione non supportata"); return; }
       navigator.geolocation.getCurrentPosition(
         (pos)=> runWithCoords(pos.coords.latitude, pos.coords.longitude, "La mia posizione"),
         ()=> alert("Impossibile ottenere la posizione")
       );
     });
+    document.addEventListener("keydown", e=>{ if(e.key==="Enter") runPlace(); });
 
     async function ping(){
       try{ const r = await fetch(window.location.origin + "/api/health"); if(r.ok) setStatus("backend OK ✔"); else setStatus("backend non risponde", true); }
       catch{ setStatus("errore rete verso backend", true); }
-    }
-
-    let map, marker;
-    function initMap(){ map = L.map('map', {zoomControl:true}).setView([42.5,12.5], 6);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18, attribution:'&copy; OpenStreetMap'}).addTo(map);
-      marker = L.marker([42.5,12.5]).addTo(map); setTimeout(()=>map.invalidateSize(),150);
-      map.on("click", async (e)=> runWithCoords(e.latlng.lat, e.latlng.lng, "Punto sulla mappa"));
     }
 
     initMap(); ping();
