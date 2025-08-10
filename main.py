@@ -13,115 +13,112 @@ class PorciniPredictor:
     def _calculate_soil_temp_score(self, soil_temp_5cm):
         return 1.0 - self._normalize(abs(soil_temp_5cm - 17), 0, 8)
 
-    def _calculate_rainfall_score(self, past_30d_precip, past_30d_radiation):
-        last_soak_event_day = -1
-        for i in range(29, 0, -1):
-            if past_30d_precip[i] + past_30d_precip[i-1] > 15:
-                last_soak_event_day = i
+    def _calculate_rainfall_score(self, past_30d_precip):
+        last_soak_event_day_idx, soak_event_precip = -1, 0
+        for i in range(27, -1, -1):
+            window_precip = sum(past_30d_precip[i:i+3])
+            if window_precip >= 20:
+                last_soak_event_day_idx = i + 2
+                soak_event_precip = window_precip
                 break
         
-        if last_soak_event_day == -1:
-            return {"score": 0.0, "days_since_soak": 99, "total_precip_since_soak": 0}
+        if last_soak_event_day_idx == -1:
+            return {"score": 0.0, "days_since_soak": 99, "soak_precip_mm": 0}
 
-        days_since_soak = 30 - last_soak_event_day
+        days_since_soak = (30 - 1) - last_soak_event_day_idx
         incubation_score = 0
         if 10 <= days_since_soak <= 22:
             incubation_score = 1.0 - abs(days_since_soak - 16) / 6.0
         
-        precip_since_soak = sum(past_30d_precip[last_soak_event_day:])
-        radiation_since_soak = sum(past_30d_radiation[last_soak_event_day:])
-        moisture_retention_score = self._normalize(precip_since_soak / (radiation_since_soak * 0.05 + 1), 0.5, 3.0)
-
-        return {
-            "score": incubation_score * moisture_retention_score,
-            "days_since_soak": days_since_soak,
-            "total_precip_since_soak": precip_since_soak
-        }
+        return { "score": incubation_score, "days_since_soak": days_since_soak, "soak_precip_mm": soak_event_precip }
 
     def _calculate_terrain_score(self, slope, aspect_deg):
         slope_score = max(0.0, 1.0 - self._normalize(slope, 20, 45))
         month = datetime.now().month
-        if 6 <= month <= 9:
-            aspect_score = 1.0 - self._normalize(abs(aspect_deg - 0), 0, 180)
-        else:
-            aspect_score = 1.0 - self._normalize(abs(aspect_deg - 180), 0, 180)
-        return slope_score * 0.4 + aspect_score * 0.6
+        aspect_bonus = 1.0 - self._normalize(abs(aspect_deg - (0 if 6 <= month <= 9 else 180)), 0, 180)
+        return slope_score * 0.4 + aspect_bonus * 0.6
         
     def calculate_composite_score(self, weather_data, terrain_data):
         soil_temp_score = self._calculate_soil_temp_score(np.mean(weather_data['soil_temperature_5cm'][-10:]))
-        rainfall_analysis = self._calculate_rainfall_score(weather_data['precipitation'], weather_data['shortwave_radiation'])
-        rainfall_score = rainfall_analysis["score"]
+        rainfall_analysis = self._calculate_rainfall_score(weather_data['precipitation'])
         terrain_score = self._calculate_terrain_score(terrain_data['slope'], terrain_data['aspect'])
         
-        weights = {'rainfall': 0.50, 'soil_temp': 0.35, 'terrain': 0.15}
-        final_score = (rainfall_score * weights['rainfall'] +
+        weights = {'rainfall': 0.55, 'soil_temp': 0.30, 'terrain': 0.15}
+        final_score = (rainfall_analysis["score"] * weights['rainfall'] +
                        soil_temp_score * weights['soil_temp'] +
                        terrain_score * weights['terrain']) * 100
         
-        forecast = [final_score]
-        for i in range(1, 10):
-            temp_factor = 1 - abs(weather_data['temperature_2m_forecast'][i] - 18) / 20
-            rain_factor = 1 + weather_data['precipitation_forecast'][i] / 50
-            next_day_score = forecast[-1] * 0.95 * temp_factor * rain_factor
-            forecast.append(max(0, min(100, next_day_score)))
-        
+        # Stima Raccolta (invariata)
         if final_score < 45: harvest = "Nullo o molto scarso (< 0.1 kg)"
         elif final_score < 65: harvest = "Discreto (0.2 - 0.7 kg)"
         elif final_score < 85: harvest = "Buono (0.8 - 2.0 kg)"
         else: harvest = "Eccellente (> 2.0 kg)"
 
-        advice = []
-        days_since_rain = rainfall_analysis['days_since_soak']
-        if days_since_rain < 10: advice.append("Pioggia scatenante recente. La 'buttata' è imminente, ma il bosco è ancora bagnato. Attendi qualche giorno.")
-        elif 10 <= days_since_rain <= 18: advice.append(f"PERIODO IDEALE! La 'buttata' dovrebbe essere in corso. Concentra la ricerca nelle zone con le caratteristiche di habitat migliori.")
-        elif days_since_rain > 22: advice.append("È passato troppo tempo dall'ultima pioggia significativa. Cerca solo in zone molto umide o in ombra per trovare gli ultimi esemplari.")
+        # Finestra di Uscita (invariata)
+        days_since_soak = rainfall_analysis['days_since_soak']
+        start_in_days = max(0, 10 - days_since_soak)
+        peak_in_days = max(0, 16 - days_since_soak)
+        peak_date = (datetime.now() + timedelta(days=peak_in_days)).strftime("%d %B")
+
+        # MODELLO PREDITTIVO MIGLIORATO CON PIOGGE FUTURE
+        # Controlla se una nuova "buttata" inizierà a causa delle piogge future
+        future_rain_sum_5d = sum(weather_data['precipitation_forecast'][:5])
+        if days_since_soak > 22 and future_rain_sum_5d > 15:
+            # Una nuova pioggia significativa è prevista!
+            days_to_new_rain = next((i for i, p in enumerate(weather_data['precipitation_forecast']) if p > 10), 2)
+            new_start_in_days = days_to_new_rain + 10
+            new_peak_in_days = days_to_new_rain + 16
+            
+            window_status = f"Nuova buttata prevista! Inizio tra {new_start_in_days} gg."
+            peak_date = (datetime.now() + timedelta(days=new_peak_in_days)).strftime("%d %B")
+        else:
+            # Logica precedente se non ci sono nuove piogge previste
+            if days_since_soak <= 10: window_status = f"Inizio previsto tra {start_in_days} giorni."
+            elif 10 < days_since_soak <= 22: window_status = "La 'buttata' è in corso!"
+            else: window_status = "In attesa di piogge significative."
         
-        if terrain_data['slope'] > 20: advice.append("Il versante è ripido. Controlla le piccole terrazze e i punti dove si accumula il terriccio.")
-        
+        # Consigli Dinamici
+        advice = [window_status]
+        if terrain_data['slope'] > 20: advice.append("Il versante è ripido. Controlla le piccole terrazze.")
         current_temp = np.mean(weather_data['temperature_2m'][-3:])
-        if current_temp > 24: advice.append("Fa caldo. Cerca nei versanti esposti a Nord, più freschi e ombreggiati.")
-        elif current_temp < 12: advice.append("Fa fresco. Privilegia i versanti esposti a Sud che ricevono più sole e calore durante il giorno.")
+        if current_temp > 24: advice.append("Fa caldo. Cerca nei versanti esposti a Nord.")
+        elif current_temp < 12: advice.append("Fa fresco. Privilegia i versanti esposti a Sud.")
 
         return {
             "overall_score": int(final_score),
             "estimated_harvest_per_2h": harvest,
-            "forecast_10_days": [int(s) for s in forecast],
-            "past_30d_rain_mm": weather_data['precipitation'],
-            "future_10d_weather": { "temperature": weather_data['temperature_2m_forecast'], "precipitation": weather_data['precipitation_forecast'] },
-            "practical_advice": advice
+            "fruiting_window": {
+                "status": window_status,
+                "start_in_days": start_in_days,
+                "peak_date": peak_date
+            },
+            "specifications": {
+                "days_since_last_soak": days_since_soak,
+                "last_soak_precipitation_mm": round(rainfall_analysis['soak_precip_mm']),
+                "future_5d_weather": weather_data['precipitation_forecast'][:5], # Invia tutti i 5 giorni
+                "altitude_m": int(terrain_data['altitude']),
+                "slope_deg": int(terrain_data['slope']),
+                "aspect_deg": int(terrain_data['aspect']),
+            },
+            "practical_advice": advice,
+            "future_5d_temps": weather_data['temperature_forecast'][:5]
         }
 
 # --- API FastAPI ---
 app = FastAPI()
-
-# Configurazione CORS per consentire le chiamate dal tuo sito Netlify e da localhost
-origins = [
-    "https://clinquant-truffle-90349.netlify.app",
-    "http://localhost",
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "null",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 predictor = PorciniPredictor()
-http_client = httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "PorciniCast/2.0"})
+http_client = httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "TrovaPorcini/1.1"})
 
 async def get_external_data(lat, lon):
     np.random.seed(int(lat + lon))
     return {
-        "precipitation": np.random.gamma(1.5, 3.0, 30).tolist(), "soil_temperature_5cm": (18 + np.random.randn(30) * 3).tolist(),
-        "shortwave_radiation": (150 + np.random.rand(30) * 100).tolist(), "temperature_2m": (20 + np.random.randn(30) * 4).tolist(),
-        "precipitation_forecast": np.random.gamma(0.8, 2.0, 10).tolist(), "temperature_2m_forecast": (19 + np.random.randn(10) * 3).tolist(),
+        "precipitation": np.random.gamma(1.5, 3.0, 30).tolist(),
+        "soil_temperature_5cm": (18 + np.random.randn(30) * 3).tolist(),
+        "temperature_2m": (20 + np.random.randn(30) * 4).tolist(),
+        "precipitation_forecast": np.random.gamma(0.8, 4.0, 10).tolist(), # Aumentata la variabilità per test
+        "temperature_forecast": (19 + np.random.randn(10) * 4).tolist(),
     }
-
 async def get_terrain_data(lat, lon):
     np.random.seed(int(lat * lon))
     return {"altitude": 800 + np.random.randint(-300, 300), "slope": 5 + np.random.rand() * 30, "aspect": np.random.rand() * 360}
@@ -130,9 +127,9 @@ async def get_terrain_data(lat, lon):
 async def geocode(q: str):
     url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1&accept-language=it"
     try:
-        r = await http_client.get(url)
+        r = await http_client.get(url, timeout=10)
         r.raise_for_status()
-        data = r.json()
+        data = r.json();
         if not data: raise HTTPException(404, "Località non trovata")
         return {"lat": data[0]['lat'], "lon": data[0]['lon'], "name": data[0]['display_name']}
     except Exception as e: raise HTTPException(500, f"Errore di geocoding: {e}")
@@ -143,11 +140,8 @@ async def get_score(lat: float, lon: float):
         weather_data = await get_external_data(lat, lon)
         terrain_data = await get_terrain_data(lat, lon)
         prediction = predictor.calculate_composite_score(weather_data, terrain_data)
-        prediction["coords"] = {"lat": lat, "lon": lon} # Aggiungo le coordinate alla risposta per la mappa
+        prediction["coords"] = {"lat": lat, "lon": lon}
         return prediction
-    except Exception as e: raise HTTPException(500, f"Errore nel calcolo del punteggio: {e}")
-
-
-
+    except Exception as e: raise HTTPException(500, f"Errore nel calcolo: {e}")
 
 
