@@ -4,13 +4,13 @@ import os, httpx, math, asyncio
 from typing import Dict, List, Tuple, Any, Optional
 from datetime import datetime, timezone
 
-app = FastAPI(title="Trova Porcini API (stable+fallback)", version="1.1.0")
+app = FastAPI(title="Trova Porcini API (stable+info)", version="1.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
-HEADERS = {"User-Agent":"Trovaporcini/1.1 (+site)", "Accept-Language":"it"}
+HEADERS = {"User-Agent":"Trovaporcini/1.2 (+site)", "Accept-Language":"it"}
 OWM_KEY = os.environ.get("OPENWEATHER_API_KEY")  # imposta su Render
 
 # ----------------- Utilità numeriche/scientifiche -----------------
@@ -48,9 +48,8 @@ def best_window(values: List[int]) -> Tuple[int,int,int]:
     return best
 
 def reliability_from_sources(ow_vals: List[float], om_vals: List[float]) -> float:
-    # Concordanza tra modelli: più concordano, più alta l’affidabilità
     n = min(len(ow_vals), len(om_vals))
-    if n == 0: return 0.55
+    if n == 0: return 0.60
     diffs = [abs((ow_vals[i] or 0.0) - (om_vals[i] or 0.0)) for i in range(n)]
     avg_diff = sum(diffs)/n
     return max(0.25, min(0.95, 0.95/(1.0 + avg_diff/6.0)))
@@ -97,7 +96,6 @@ async def fetch_openweather(lat: float, lon: float) -> Dict[str,Any]:
             r=await c.get(url, params=params); r.raise_for_status()
             return r.json()
     except Exception:
-        # fallback silenzioso: nessun dato OW
         return {}
 
 async def fetch_elevation_grid(lat: float, lon: float, step_m: float=30.0)->Optional[List[List[float]]]:
@@ -112,7 +110,7 @@ async def fetch_elevation_grid(lat: float, lon: float, step_m: float=30.0)->Opti
         vals=[p["elevation"] for p in j["results"]]
         return [vals[0:3], vals[3:6], vals[6:9]]
     except Exception:
-        return None  # fallback: niente pendenza/esposizione
+        return None
 
 async def geocode_nominatim(q: str)->Dict[str,Any]:
     url="https://nominatim.openstreetmap.org/search"
@@ -122,6 +120,57 @@ async def geocode_nominatim(q: str)->Dict[str,Any]:
         data=r.json()
     if not data: raise HTTPException(404, "Località non trovata")
     return {"lat": float(data[0]["lat"]), "lon": float(data[0]["lon"]), "display": data[0].get("display_name","")}
+
+# ----------------- Helpers per ‘Informazioni’ -----------------
+def _last_rain(past_dates: List[str], past_mm: List[float]) -> Optional[Tuple[str,float,int]]:
+    """Ritorna (data_iso, mm, giorni_da_oggi) dell’ultima pioggia >0.5 mm, se esiste."""
+    for i in range(len(past_mm)-1, -1, -1):
+        if past_mm[i] and past_mm[i] > 0.5:
+            # giorni_da_oggi: distanza dall’ultimo elemento passato
+            days_from_today = (len(past_mm)-1) - i
+            return past_dates[i], round(past_mm[i],1), days_from_today
+    return None
+
+def _next_significant_rain(future_dates: List[str], fut_mm: List[float], thr: float=5.0) -> Optional[Tuple[str,float,int]]:
+    """Prima pioggia futura ≥ thr mm."""
+    for i, mm in enumerate(fut_mm):
+        if mm and mm >= thr:
+            return future_dates[i], round(mm,1), i+1
+    return None
+
+def compose_narrative(
+    lat: float, lon: float,
+    elev_m: float, slope_deg: float, aspect_oct: str,
+    dates_all: List[str], p_past: List[float], p_future: List[float],
+    idx_today: int, best_win: Tuple[int,int,int],
+    tmean7: float
+) -> str:
+    past_dates = dates_all[:len(p_past)]
+    future_dates = dates_all[len(p_past):len(p_past)+len(p_future)]
+
+    last_r = _last_rain(past_dates, p_past)
+    next_r = _next_significant_rain(future_dates, p_future, thr=5.0)
+
+    line1 = f"Quota {int(round(elev_m))} m s.l.m., pendenza {slope_deg}° con esposizione {aspect_oct}. Area centrata a lat {lat:.4f}, lon {lon:.4f}."
+    if last_r:
+        d, mm, daysago = last_r
+        line2 = f"L’ultima precipitazione significativa è del {d} con {mm} mm; sono passati ~{daysago} giorni."
+    else:
+        line2 = "Nessuna precipitazione significativa negli ultimi 15 giorni (mm < 0.5)."
+
+    line3 = f"La temperatura media recente è ~{tmean7:.1f} °C: rispetto alla finestra ottimale dei porcini, il contributo termico è considerato nel calcolo dell’indice (oggi = {idx_today})."
+    s,e,m = best_win
+    line4 = f"La finestra migliore prevista (3 giorni medi) cade nei giorni +{s+1}…+{e+1} con indice medio ~{m}."
+
+    if next_r:
+        fd, fmm, in_d = next_r
+        line5 = f"Se il {fd} cadranno ~{fmm} mm, la fruttificazione potrà essere riattivata: tipicamente la massima emergenza avviene dopo 5–10 giorni, quindi torna intorno a +{in_d+5}..+{in_d+10}."
+    else:
+        line5 = "Le piogge previste sono modeste (<5 mm/giorno): per un salto di qualità servono piogge ≥10–15 mm e un successivo periodo di 5–10 giorni."
+
+    line6 = "L’indice integra umidità efficace (API* con decadimento ~8 giorni e ET0), regime termico e somma pluviometrica recente, fornendo una stima robusta e replicabile."
+
+    return " ".join([line1, line2, line3, line4, line5, line6])
 
 # ----------------- Endpoints -----------------
 @app.get("/api/health")
@@ -138,13 +187,13 @@ async def api_score(
     lon: float = Query(...),
     half: float = Query(8.0, gt=3.0, lt=20.0)
 ):
-    # 1) acquisizione dati in parallelo (con fallback silenziosi)
+    # 1) dati in parallelo
     om_task  = asyncio.create_task(fetch_open_meteo(lat,lon,past=15,future=10))
     ow_task  = asyncio.create_task(fetch_openweather(lat,lon))
     dem_task = asyncio.create_task(fetch_elevation_grid(lat,lon))
     om, ow, elev_grid = await asyncio.gather(om_task, ow_task, dem_task)
 
-    # 2) parsing Open-Meteo (storico + futuro)
+    # 2) parsing Open-Meteo
     d = om["daily"]
     timev = d["time"]
     P_om  = [float(x or 0.0) for x in d["precipitation_sum"]]
@@ -162,11 +211,8 @@ async def api_score(
     Tmin_f_om, Tmax_f_om, Tm_f_om = Tmin_om[pastN:pastN+futN], Tmax_om[pastN:pastN+futN], Tm_om[pastN:pastN+futN]
     ET0_p_om = ET0_om[:pastN]; ET0_f_om = ET0_om[pastN:pastN+futN]
 
-    # 3) parsing OpenWeather (se disponibile)
-    P_fut_ow: List[float] = []
-    Tmin_f_ow: List[float] = []
-    Tmax_f_ow: List[float] = []
-    Tm_f_ow:   List[float] = []
+    # 3) OpenWeather (se disponibile)
+    P_fut_ow: List[float] = []; Tmin_f_ow: List[float] = []; Tmax_f_ow: List[float] = []; Tm_f_ow: List[float] = []
     if ow and "daily" in ow:
         for day in ow["daily"]:
             P_fut_ow.append(float(day.get("rain", 0.0)))
@@ -176,7 +222,7 @@ async def api_score(
             Tm_f_ow.append(float(t.get("day", (t.get("min",0.0)+t.get("max",0.0))/2.0)))
     ow_len = min(len(P_fut_ow), futN)
 
-    # 4) BLENDING previsioni (OW 60% + OM 40% dove disponibile; altrimenti OM)
+    # 4) Blending forecast (OW 60% + OM 40%)
     w_ow, w_om = 0.60, 0.40
     def blend(arr_ow, arr_om, i):
         if i < ow_len:
@@ -190,14 +236,14 @@ async def api_score(
         Tmax_f_blend.append(blend(Tmax_f_ow, Tmax_f_om, i) if ow_len else Tmax_f_om[i])
         Tm_f_blend.append(  blend(Tm_f_ow,   Tm_f_om,   i) if ow_len else Tm_f_om[i])
 
-    # 5) Orografia (fallback se DEM non disponibile)
+    # 5) Orografia
     if elev_grid:
         elev_m = float(elev_grid[1][1])
         slope_deg, aspect_deg, aspect_oct = slope_aspect_from_grid(elev_grid)
     else:
-        elev_m, slope_deg, aspect_deg, aspect_oct = 800.0, 5.0, 0.0, "N"  # valori neutri
+        elev_m, slope_deg, aspect_deg, aspect_oct = 800.0, 5.0, 0.0, "N"
 
-    # 6) Indice oggi (storico OM)
+    # 6) Indice oggi
     API_val = api_index(P_past_om, half_life=half)
     ET7     = sum(ET0_p_om[-7:]) if ET0_p_om else 0.0
     Tfit_today = temperature_fit(Tmin_p_om[-1], Tmax_p_om[-1], Tm_p_om[-1])
@@ -220,7 +266,7 @@ async def api_score(
     rain_past = { timev[i]: round(P_past_om[i],1) for i in range(min(pastN,len(timev))) }
     rain_future = { timev[pastN+i] if pastN+i < len(timev) else f"+{i+1}d": round(P_fut_blend[i],1) for i in range(futN) }
 
-    # 10) Spiegazioni/consigli
+    # 10) Spiegazioni/consigli + testo scientifico “Informazioni”
     P7 = sum(P_past_om[-7:]); P15 = sum(P_past_om[-15:])
     Tm7 = sum(Tm_p_om[-7:])/max(1,len(Tm_p_om[-7:]))
     reasons=[]
@@ -235,6 +281,11 @@ async def api_score(
     elif idx_today >= 40: tips.append("Moderato: attendi piogge ≥10–15 mm e 2–3 giorni di maturazione.")
     else: tips.append("Basso potenziale: meglio aspettare precipitazioni significative.")
     if reliability < 0.6: tips.append("Affidabilità bassa: modelli in disaccordo; ricontrolla tra 12–24 h.")
+
+    narrative = compose_narrative(
+        lat, lon, elev_m, slope_deg, aspect_oct,
+        timev, P_past_om, P_fut_blend, idx_today, (s,e,m), Tm7
+    )
 
     return {
         "lat": lat, "lon": lon,
@@ -252,7 +303,14 @@ async def api_score(
         "rain_past": rain_past,
         "rain_future": rain_future,
         "explanation": {"reasons": reasons},
-        "tips": tips
+        "tips": tips,
+        # --- nuovo blocco per il riquadro Informazioni ---
+        "info": {
+            "elevation_m": round(elev_m),
+            "slope_deg": slope_deg,
+            "aspect_octant": aspect_oct,
+            "narrative": narrative
+        }
     }
 
 
