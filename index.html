@@ -25,11 +25,6 @@
     .bar{height:100px;position:relative;background:#1f2937;border-radius:8px}
     .bar>i{position:absolute;bottom:0;left:0;width:100%;border-radius:8px}
     .bar>span{position:absolute;top:-18px;left:0;width:100%;text-align:center;font-size:.7rem}
-    .table{border:1px solid #223249;border-radius:12px;overflow:hidden}
-    .tr{display:grid;grid-template-columns:1fr 80px;padding:8px 10px;border-bottom:1px solid #223249}
-    .tr.head{background:#0b1526;font-weight:bold}
-    .tr:last-child{border-bottom:none}
-    details summary{cursor:pointer;font-weight:700;margin-top:10px;color:#b9c7ff}
     .muted{color:var(--muted);font-size:.9rem}
     #explanationPanel h3{margin-top:0;color:#b9c7ff} #explanationPanel p{line-height:1.6;color:var(--muted)}
     #loading{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.35);z-index:999}
@@ -37,6 +32,12 @@
     #loading .ball:nth-child(2){animation-delay:.15s;background:#1ee59a}
     #loading .ball:nth-child(3){animation-delay:.3s;background:#ffd166}
     @keyframes bounce{to{transform:translateY(-10px)}}
+    .field-guide h4{color:#b9c7ff;border-top:1px solid var(--border);padding-top:12px;margin-top:12px;font-size:1rem}
+    .species-list{display:flex;flex-direction:column;gap:12px}
+    .species-item{display:flex;gap:12px;align-items:center}
+    .species-item img{width:60px;height:60px;border-radius:10px;object-fit:cover;border:1px solid var(--border)}
+    .species-item .desc{font-size:.85rem;color:var(--muted)}
+    .where-to-look-list li{margin-bottom:8px;line-height:1.5}
   </style>
 </head>
 <body>
@@ -57,10 +58,9 @@
           <button id="btnCoords" class="warn">Usa coordinate</button>
         </div>
         <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Suggerimento: incolla le coordinate da Google Maps o clicca sulla mappa.</div>
-
         <div class="metrics">
           <div class="metric"><div class="muted">Indice</div><div id="metricIndex" class="val">—</div></div>
-          <div class="metric"><div class="muted">Stima Raccolto (2 h)</div><div id="metricHarvest" class="val">—</div></div>
+          <div class="metric"><div class="muted">Stima raccolto (4 h)</div><div id="metricHarvest" class="val">—</div></div>
           <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
         </div>
         <div id="metricAltitude" class="muted" style="text-align:center; margin-top:8px;"></div>
@@ -69,11 +69,13 @@
         <div class="muted" style="margin-bottom:6px;">Previsione indice (10 giorni)</div>
         <div id="forecast" class="calendar"></div>
       </div>
-      <div class="card">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div><div class="muted" style="margin-bottom:6px;">Piogge passate (15 gg)</div><div id="rainPast" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div></div>
-          <div><div class="muted" style="margin-bottom:6px;">Piogge future (10 gg)</div><div id="rainFuture" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div></div>
-        </div>
+      <div class="card field-guide" id="fieldGuidePanel" style="display:none;">
+        <h4>Dove Cercare nel Dettaglio</h4>
+        <ul id="whereToLookList" class="where-to-look-list" style="padding-left:18px"></ul>
+        <h4>Altri Porcini Comuni in Zona</h4>
+        <div id="otherPorciniList" class="species-list"></div>
+        <h4>Attenzione a Possibili Sòsia</h4>
+        <div id="toAvoidList" class="species-list"></div>
       </div>
     </div>
 
@@ -115,13 +117,11 @@
     }
 
     function renderUI(s){
-        // Metriche e altitudine
         $("#metricIndex").textContent = s.index ?? "—";
         $("#metricHarvest").textContent = s.harvest_estimate ?? "—";
         $("#metricReliability").textContent = s.reliability != null ? Math.round(s.reliability * 100) + "%" : "—";
         $("#metricAltitude").textContent = s.elevation_m != null ? `Altitudine: ${s.elevation_m} m s.l.m.` : "";
 
-        // Previsione a barre
         const forecastCont = $("#forecast"); forecastCont.innerHTML="";
         (s.forecast || []).forEach(v => {
             const box = document.createElement("div"); box.className="bar";
@@ -131,27 +131,32 @@
             const lab = document.createElement("span"); lab.textContent = v;
             box.appendChild(fill); box.appendChild(lab); forecastCont.appendChild(box);
         });
-
-        // Tabelle piogge
-        const fillTable = (el, d) => {
-            el.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
-            Object.keys(d || {}).sort().forEach(k => {
-                const tr = document.createElement("div"); tr.className = "tr";
-                tr.innerHTML = `<div>${k}</div><div>${Number(d[k]).toFixed(1)}</div>`;
-                el.appendChild(tr);
-            });
-        };
-        fillTable($("#rainPast"), s.rain_past || {});
-        fillTable($("#rainFuture"), s.rain_future || {});
-
-        // Spiegazione dinamica
+        
         const expPanel = $("#explanationPanel");
         const expText = $("#explanationText");
         if (s.dynamic_explanation) {
-            expText.innerHTML = s.dynamic_explanation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // Rende il testo bold
+            expText.innerHTML = s.dynamic_explanation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             expPanel.style.display = "block";
         } else {
             expPanel.style.display = "none";
+        }
+
+        const fieldGuidePanel = $("#fieldGuidePanel");
+        if (s.field_guide) {
+            const { where_to_look_tips, other_porcini, to_avoid } = s.field_guide;
+            const renderSpecies = (list, containerId) => {
+                const container = $(containerId);
+                container.innerHTML = "";
+                (list || []).forEach(item => {
+                    container.innerHTML += `<div class="species-item"><img src="${item.img}" alt="${item.name}" loading="lazy"><div><strong>${item.name}</strong><div class="desc">${item.desc}</div></div></div>`;
+                });
+            };
+            $("#whereToLookList").innerHTML = (where_to_look_tips || []).map(tip => `<li>${tip.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</li>`).join('');
+            renderSpecies(other_porcini, "#otherPorciniList");
+            renderSpecies(to_avoid, "#toAvoidList");
+            fieldGuidePanel.style.display = "block";
+        } else {
+            fieldGuidePanel.style.display = "none";
         }
     }
     
@@ -162,12 +167,8 @@
             map.setView([lat, lon], 11);
             const s = await apiGet(`${API}/score?lat=${lat}&lon=${lon}`);
             renderUI(s);
-        } catch(e) {
-            console.error(e);
-            alert("Errore durante il calcolo. Dettagli in console.");
-        } finally {
-            showLoad(false);
-        }
+        } catch(e) { console.error(e); alert("Errore durante il calcolo. Dettagli in console.");
+        } finally { showLoad(false); }
     }
     async function handlePlace() {
         const q = $("#place").value.trim();
@@ -177,18 +178,14 @@
             const g = await apiGet(`${API}/geocode?q=${encodeURIComponent(q)}`);
             $("#place").value = g.display;
             await handleCoords(g.lat, g.lon);
-        } catch (e) {
-            console.error(e);
-            alert("Errore geocoding. Prova con le coordinate.");
-        } finally {
-            showLoad(false);
-        }
+        } catch (e) { console.error(e); alert("Errore geocoding. Prova con le coordinate.");
+        } finally { showLoad(false); }
     }
     async function handleCoordsStr(){
         const c = parseCoords($("#coords").value.trim());
-        if (!c) { alert("Coordinate non valide. Esempio: 41.127, 14.782"); return; }
+        if(!c){ alert("Coordinate non valide. Esempio: 41.127, 14.782"); return; }
         showLoad(true);
-        try { await handleCoords(c.lat, c.lon); }
+        try{ await handleCoords(c.lat, c.lon); }
         catch(e){ console.error(e); alert("Errore durante il calcolo."); }
         finally{ showLoad(false); }
     }
