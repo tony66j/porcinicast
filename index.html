@@ -1,222 +1,276 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TrovaPorcini vPRO+ 5.0</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    :root{
-      --bg:#0f1620; --panel:#121b27; --accent:#2dd4bf; --text:#e6edf3; --muted:#92a2b5; --bad:#ef4444; --ok:#f59e0b; --good:#22c55e;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,Segoe UI,Roboto,Arial}
-    header{display:flex;align-items:center;gap:.6rem;padding:16px 20px;border-bottom:1px solid #172233}
-    .logo{font-weight:800;font-size:22px}
-    .badge{background:#1f2a3a;color:#9fd3ff;border:1px solid #243247;padding:2px 8px;border-radius:8px}
-    .by{margin-left:auto;color:#9bb3c9}
-    main{max-width:1200px;margin:18px auto;padding:0 14px;display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
-    .card{background:var(--panel);border:1px solid #1b2738;border-radius:12px;padding:14px}
-    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    input[type=text]{background:#0c131d;border:1px solid #23344b;color:var(--text);padding:10px 12px;border-radius:10px;flex:1;min-width:220px}
-    button{background:var(--accent);color:#05252a;border:0;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer}
-    button.secondary{background:#203045;color:#cfe7ff}
-    .big{font-size:46px;font-weight:800}
-    .chip{display:inline-block;padding:6px 10px;border-radius:999px;background:#162235;border:1px solid #223146;margin-right:6px}
-    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .muted{color:var(--muted)}
-    details{margin-top:6px}
-    summary{cursor:pointer;color:#cfe7ff}
-    #map{height:520px;border-radius:12px;border:1px solid #1b2738}
-    .kpi{display:flex;align-items:center;gap:12px}
-    .kpi .label{color:#9bb3c9}
-    .index-badge{display:inline-block;min-width:90px;text-align:center;padding:8px 10px;border-radius:10px;background:#0d1520;border:1px solid #203049}
-    .row .small{font-size:13px;color:#a8c0d6}
-    @media (max-width: 980px){ main{grid-template-columns:1fr} #map{height:420px} .big{font-size:38px}}
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>TrovaPorcini vPRO+ 5.1</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#17212b; --muted:#8aa0b3; --accent:#51d2a8; --danger:#ff6b6b; --text:#eaf2f9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.45 system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+  header{display:flex;align-items:center;gap:.6rem;padding:14px 18px;border-bottom:1px solid #1e2a36}
+  header .title{font-weight:700;font-size:20px}
+  header .badge{background:#203040;padding:2px 8px;border-radius:8px;font-size:12px}
+  header .by{margin-left:auto;color:var(--muted);font-size:14px}
+
+  .container{max-width:1200px;margin:14px auto;padding:0 14px}
+  .grid{display:grid;grid-template-columns: 1.15fr 1fr; gap:16px}
+  @media (max-width:980px){ .grid{grid-template-columns:1fr} }
+
+  .panel{background:var(--panel);border:1px solid #233243;border-radius:12px}
+  .panel.pad{padding:14px}
+  .label{font-weight:600;color:var(--muted);font-size:13px;margin-bottom:6px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  input[type=text]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #253647;background:#0d141c;color:var(--text)}
+  .btn{padding:10px 14px;border-radius:10px;border:1px solid #29485a;background:#103647;color:#eaf2f9;cursor:pointer}
+  .btn.primary{background:#115e49;border-color:#2a7b67}
+  .btn:hover{filter:brightness(1.05)}
+  .stack{display:grid;gap:10px}
+  .metrics{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin-top:12px}
+  .metric{flex:0 0 auto;min-width:120px;background:#0e1922;border:1px solid #223244;border-radius:12px;padding:10px;text-align:center}
+  .metric h2{margin:0;font-size:42px;line-height:1.0}
+  .metric small{color:var(--muted)}
+  .slider{margin:8px 0 2px}
+  input[type=range]{width:100%}
+
+  details{background:#0f1b24;border:1px solid #213243;border-radius:10px; padding:10px;margin:10px 0}
+  details summary{cursor:pointer;font-weight:700}
+  .muted{color:var(--muted)}
+
+  /* destra */
+  #map{height:420px;border-radius:12px;border:1px solid #223244}
+  .weathbar{margin-top:12px;background:#0e1922;border:1px solid #223244;border-radius:12px;padding:10px;overflow:auto}
+  .wrow{display:flex;gap:10px;align-items:center;white-space:nowrap}
+  .witem{min-width:70px;text-align:center}
+  .witem .d{font-size:12px;color:var(--muted)}
+  .witem .mm{font-weight:700}
+</style>
 </head>
 <body>
 <header>
-  <div class="logo">🍄 TrovaPorcini</div>
-  <div class="badge">vPRO+ 5.0</div>
-  <div class="by">by <strong>Antonio Pio D’Aloia</strong></div>
+  <div class="title">🍄 TrovaPorcini</div>
+  <div class="badge">vPRO+ 5.1</div>
+  <div class="by">by <b>Antonio Pio D’Aloia</b></div>
 </header>
 
-<main>
-  <section class="card">
-    <div class="row">
-      <input id="q" type="text" placeholder="Località (es. Bocca della Selva)" />
-      <input id="coords" type="text" placeholder="Coordinate lat,lon (es. 41,4170010, 14,4707168)" />
-      <button id="go">Calcola</button>
-      <button id="clear" class="secondary">Pulisci</button>
+<main class="container grid">
+
+  <!-- COLONNA SINISTRA -->
+  <section class="panel pad">
+    <div class="stack">
+      <div class="label">Ricerca</div>
+      <div class="row">
+        <input id="q" type="text" placeholder="Località (es. Bocca della Selva)" style="flex:1 1 360px">
+        <input id="coords" type="text" placeholder="Coordinate lat,lon (es. 41,4170010, 14,4707168)" style="flex:1 1 360px">
+        <button id="go" class="btn primary">Calcola</button>
+        <button id="clear" class="btn">Pulisci</button>
+      </div>
     </div>
 
-    <div id="where" class="muted" style="margin-top:6px;"></div>
+    <div id="place" class="muted" style="margin-top:8px;"></div>
 
-    <div class="grid2" style="margin-top:12px">
-      <div>
-        <div class="kpi">
-          <span class="label">Indice:</span>
-          <span id="index" class="big index-badge">—</span>
-          <span class="chip" id="caps">Stima 3h: — cappelli</span>
-          <span class="chip" id="nextrain">Pioggia prossima: —</span>
-        </div>
-
-        <div style="margin-top:14px">
-          <div class="small">Previsione (prossimi 10 giorni)</div>
-          <input id="day" type="range" min="0" max="9" value="0" style="width:100%">
-          <div class="muted small" id="daylabel">Giorno selezionato: oggi</div>
-        </div>
-
-        <details open style="margin-top:10px">
-          <summary>Consigli pratici (cambiano col giorno)</summary>
-          <div id="advice" style="margin-top:6px">—</div>
-        </details>
-
-        <details open>
-          <summary>Perché questa stima</summary>
-          <div id="because" style="margin-top:6px">—</div>
-        </details>
-
-        <details>
-          <summary>Specie di porcini probabili</summary>
-          <div id="species" style="margin-top:6px">—</div>
-        </details>
-
-        <details>
-          <summary>Dati tecnici</summary>
-          <pre id="tech" style="background:#0b111a;border:1px solid #1d2b40;padding:8px;border-radius:8px;overflow:auto;max-height:220px"></pre>
-        </details>
-
-        <details>
-          <summary>Piogge (ultimi 14 gg e prossimi 10 gg)</summary>
-          <div class="small muted" style="margin-top:6px">Storico</div>
-          <div id="rainpast" class="small"></div>
-          <div class="small muted" style="margin-top:6px">Previsione</div>
-          <div id="rainnext" class="small"></div>
-        </details>
+    <div class="metrics">
+      <div class="metric" style="min-width:140px">
+        <small>Indice</small>
+        <h2 id="mIndex">—</h2>
       </div>
-
-      <div><div id="map"></div>
-        <div class="small muted" style="margin-top:6px">Il cerchio cambia colore = indice del giorno selezionato.</div>
+      <div class="metric">
+        <small>Stima 3h</small>
+        <div id="mCaps" style="font-size:22px;margin-top:6px;">— cappelli</div>
       </div>
+      <div class="metric">
+        <small>Pioggia prossima</small>
+        <div id="mRain" style="font-size:16px;margin-top:6px;">—</div>
+      </div>
+    </div>
+
+    <div class="panel pad" style="margin-top:12px">
+      <div class="label">Previsione (prossimi 10 giorni) — <span id="daylabel" class="muted">oggi</span></div>
+      <div class="slider"><input id="day" type="range" min="0" max="9" step="1" value="0"></div>
+    </div>
+
+    <details open>
+      <summary>Consigli pratici <span class="muted">(cambiano col giorno)</span></summary>
+      <div id="tips" style="margin-top:6px;">—</div>
+    </details>
+
+    <details open>
+      <summary>Perché questa stima</summary>
+      <div id="why" style="margin-top:6px;">—</div>
+    </details>
+
+    <details>
+      <summary>Specie di porcini probabili</summary>
+      <div id="species" style="margin-top:6px;">Pinus/Abies/Picea (stima orientativa)</div>
+    </details>
+
+    <details>
+      <summary>Dati tecnici</summary>
+      <pre id="tech" style="font-size:12px;white-space:pre-wrap;"></pre>
+    </details>
+  </section>
+
+  <!-- COLONNA DESTRA -->
+  <section class="panel pad">
+    <div id="map"></div>
+    <div class="weathbar">
+      <div class="label">Barra meteo (prossimi 10 giorni)</div>
+      <div id="wstrip" class="wrow"></div>
     </div>
   </section>
+
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const API = "/api/score"; // Netlify redirect -> Render
+let Lmap, Lmarker, Lcircle;
+let DATA = null;   // risposta backend
+let SEL = 0;       // giorno selezionato
 
-const qEl = document.getElementById("q");
-const cEl = document.getElementById("coords");
-const goEl = document.getElementById("go");
-const clrEl = document.getElementById("clear");
-const idxEl = document.getElementById("index");
-const capsEl = document.getElementById("caps");
-const nrEl = document.getElementById("nextrain");
-const whereEl = document.getElementById("where");
-const dayEl = document.getElementById("day");
-const dayLbl = document.getElementById("daylabel");
-const advEl = document.getElementById("advice");
-const becEl = document.getElementById("because");
-const spcEl = document.getElementById("species");
-const techEl = document.getElementById("tech");
-const rainPastEl = document.getElementById("rainpast");
-const rainNextEl = document.getElementById("rainnext");
-
-let lastData = null;
-
-function fmtDate(s){ return s; }
-function colorForScore(s){ if(s>=70) return "#22c55e"; if(s>=40) return "#f59e0b"; return "#ef4444"; }
-
-const map = L.map('map').setView([41.9, 12.5], 6);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 18, attribution: '&copy; OpenStreetMap'
-}).addTo(map);
-const marker = L.marker([41.9,12.5]).addTo(map);
-const circle = L.circle([41.9,12.5], {radius:1500,color:"#ef4444"}).addTo(map);
-
-function setMap(lat, lon, score){
-  marker.setLatLng([lat,lon]);
-  circle.setLatLng([lat,lon]);
-  circle.setStyle({color: colorForScore(score)});
-  map.setView([lat,lon], 12);
+function parseCoordsLocal(text){
+  if(!text) return null;
+  // prendi i primi 2 numeri (accetta virgola italiana)
+  const re=/[-+]?\d{1,3}(?:[.,]\d+)?/g;
+  const nums = text.match(re);
+  if(!nums || nums.length<2) return null;
+  const lat = parseFloat(nums[0].replace(",", "."));
+  const lon = parseFloat(nums[1].replace(",", "."));
+  if(isNaN(lat)||isNaN(lon)) return null;
+  if(lat<-90||lat>90||lon<-180||lon>180) return null;
+  return {lat,lon};
 }
 
-function showRains(past, next){
-  rainPastEl.innerHTML = past.map(p=>`${p.date}: ${p.mm} mm`).join(" · ") || "—";
-  rainNextEl.innerHTML = next.map(p=>`${p.date}: ${p.mm} mm`).join(" · ") || "—";
+function initMap(){
+  Lmap = L.map('map',{zoomControl:true}).setView([42.0,12.5], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:18, attribution:'&copy; OpenStreetMap'
+  }).addTo(Lmap);
 }
 
-function setDayLabel(v, data){
-  const dd = v===0 ? "oggi" : `D+${v}`;
-  dayLbl.textContent = `Giorno selezionato: ${dd}`;
-  const sc = data.scores_next10?.[v] ?? data.index;
-  circle.setStyle({color: colorForScore(sc)});
+function setMap(lat, lon, color='#ffb648'){
+  if(!Lmap) initMap();
+  Lmap.setView([lat,lon], 12);
+  if(Lmarker) Lmap.removeLayer(Lmarker);
+  if(Lcircle) Lmap.removeLayer(Lcircle);
+  Lmarker = L.marker([lat,lon]).addTo(Lmap);
+  Lcircle = L.circle([lat,lon], {radius:1500,color:color,fillOpacity:0.1}).addTo(Lmap);
 }
 
-async function callAPI(day=0){
+function dayName(iso){
+  const d=new Date(iso+"T12:00:00");
+  return d.toLocaleDateString('it-IT',{weekday:'short', day:'2-digit', month:'2-digit'});
+}
+
+function paintWeatherStrip(dates, rain){
+  const host = document.getElementById('wstrip');
+  host.innerHTML = "";
+  dates.forEach((dt,i)=>{
+    const el = document.createElement('div');
+    el.className = "witem";
+    el.innerHTML = `<div class="d">${dayName(dt)}</div>
+                    <div class="mm">${(rain[i]||0).toFixed(1)} mm</div>`;
+    host.appendChild(el);
+  });
+}
+
+function adviceForDay(d){
+  // discorsivo e più ricco; usa slope/aspect/umidità/piogge future
+  const asp = DATA.aspect_octant;
+  const elev = Math.round(DATA.elevation_m);
+  const next = DATA.next_rain;
+  let s = `Preferisci zone ombreggiate (N–NE–NW) e suoli che trattengono umidità; ` +
+          `evita versanti troppo secchi; esposizione locale ${asp}. ` +
+          `Quota ${elev} m`;
+  if(next && next.days_ahead!==null){
+    s += `; attesa pioggia di ~${next.mm.toFixed(1)} mm tra D+${next.days_ahead} (${next.date}) — finestra 7–10 gg dopo.`;
+  }
+  // piccola modulazione in base allo score del giorno
+  const sc = DATA.scores_next10[SEL] || 0;
+  if(sc>=70) s += " Giornata promettente: muoviti presto e cerca lettiere fresche.";
+  else if(sc>=50) s += " Possibile raccolta: insisti su faggete o castagneti con micro-umidità.";
+  else s += " Nascite limitate: esplora quote/versanti alternativi.";
+  return s;
+}
+
+function whyForDay(){
+  // spiega cosa pesa di più usando tech + day arrays
+  const sc = DATA.scores_next10[SEL] || 0;
+  const r  = DATA.rain_next10_mm[SEL] || 0;
+  const t  = DATA.tmean_next10_c[SEL] || 0;
+  const tech = DATA.tech || {};
+  const asp = DATA.aspect_octant;
+  return `Indice ${sc} per D+${SEL}: ` +
+         `P14_eff ~${(tech.P14_last14_mm||0).toFixed(1)} mm (decadimento 7 gg), ` +
+         `T7 ~${(tech.Tmean7_c||t).toFixed(1)} °C, ` +
+         `ET0_7d ~${(tech.ET0_7d_mm||3).toFixed(1)} mm; ` +
+         `aspetto locale ${asp}; ` +
+         `pioggia giorno selezionato ~${r.toFixed(1)} mm.`;
+}
+
+function setDay(n){
+  SEL = n;
+  const idx = DATA.scores_next10[n] || 0;
+  document.getElementById('mIndex').textContent = idx;
+  document.getElementById('mCaps').textContent  = (idx? `${DATA.caps_3h} (oggi)` : "— cappelli");
+  document.getElementById('daylabel').textContent = (n===0? "oggi" : `D+${n} — ${dayName(DATA.dates[n])}`);
+  document.getElementById('tips').textContent = adviceForDay();
+  document.getElementById('why').textContent  = whyForDay();
+  // colore cerchio in base allo score
+  let color = '#ffb648';
+  if     (idx>=70) color = '#51d2a8';
+  else if(idx<45)  color = '#ff6b6b';
+  if(Lcircle) Lcircle.setStyle({color:color});
+}
+
+async function run(){
+  const q = document.getElementById('q').value.trim();
+  const txt = document.getElementById('coords').value.trim();
+  const coords = parseCoordsLocal(txt);
   const params = new URLSearchParams();
-  params.set("day", String(day));
-  const coords = cEl.value.trim();
-  const q = qEl.value.trim();
-  if(coords) params.set("coords", coords);
-  else if(q) params.set("q", q);
-  else { alert("Errore: inserisci località o coordinate"); return; }
+  if(coords){ params.set("coords", `${coords.lat},${coords.lon}`); }
+  else if(q){ params.set("q", q); }
+  else { alert("Inserisci località o coordinate"); return; }
 
-  const url = API + "?" + params.toString();
-  let r;
   try{
-    r = await fetch(url);
+    const r = await fetch(`/api/score?${params.toString()}`);
+    if(!r.ok){
+      const t = await r.text();
+      throw new Error(`API ${r.status}: ${t || r.statusText}`);
+    }
+    DATA = await r.json();
   }catch(e){
-    alert("Errore di rete: " + e.message); return;
+    alert(e.message.replace(/\"/g,""));
+    return;
   }
-  if(!r.ok){
-    let msg="API " + r.status;
-    try{ const j=await r.json(); if(j.detail) msg += `: ${j.detail}` }catch{}
-    alert(msg); return;
-  }
-  const data = await r.json();
-  lastData = data;
-  renderAll(0);
+
+  // UI fill
+  const p = document.getElementById('place');
+  p.textContent = DATA.display ? DATA.display : `(${DATA.coords.lat.toFixed(5)}, ${DATA.coords.lon.toFixed(5)}) — quota ${Math.round(DATA.elevation_m)} m — esposizione ${DATA.aspect_octant}`;
+  setMap(DATA.coords.lat, DATA.coords.lon);
+  document.getElementById('mIndex').textContent = DATA.score_today ?? "—";
+  document.getElementById('mCaps').textContent  = DATA.caps_3h ? `${DATA.caps_3h} (oggi)` : "—";
+  const nr = DATA.next_rain;
+  document.getElementById('mRain').textContent  = (nr && nr.date) ? `${nr.mm.toFixed(1)} mm (D+${nr.days_ahead} – ${nr.date})` : "—";
+  paintWeatherStrip(DATA.dates, DATA.rain_next10_mm);
+  document.getElementById('tech').textContent = JSON.stringify(DATA.tech, null, 2);
+
+  // reset slider e pannelli
+  document.getElementById('day').value = 0;
+  setDay(0);
 }
 
-function renderAll(day){
-  const d = lastData; if(!d) return;
-  const sc = d.scores_next10?.[day] ?? d.index;
-  idxEl.textContent = sc;
-  idxEl.style.borderColor = colorForScore(sc);
-  whereEl.textContent = `(${d.lat.toFixed(6)}, ${d.lon.toFixed(6)}) — quota ${Math.round(d.elev_m)} m — esposizione ${d.aspect_octant}`;
-  // stima cappelli 3h
-  if(d.caps_3h) capsEl.textContent = `Stima 3h: ${d.caps_3h.low}–${d.caps_3h.high} cappelli`;
-  // prossima pioggia
-  if(d.next_rain){ nrEl.textContent = `Pioggia prossima: ${d.next_rain.mm} mm (D+${d.next_rain.d} — ${d.next_rain.date})`; }
-  else nrEl.textContent = "Pioggia prossima: —";
-  // testi
-  advEl.textContent = d.advice || "—";
-  becEl.textContent = d.because || "—";
-  spcEl.textContent = (d.species_prob || []).join(", ") || "—";
-  techEl.textContent = JSON.stringify({
-    lat:d.lat, lon:d.lon, elev_m:d.elev_m, slope_deg:d.slope_deg, aspect_deg:d.aspect_deg,
-    p14_mm:d.p14_mm, tmean7_c:d.tmean7_c, et0_7g:d.et0_7g
-  }, null, 2);
-  // piogge
-  showRains(d.rain_past14_mm?.map((mm,i)=>({date:d.dates_past14[i], mm}))||[], d.rain_next10_mm?.map((mm,i)=>({date:d.dates_next10[i], mm}))||[]);
-  // mappa
-  setMap(d.lat, d.lon, sc);
-  setDayLabel(day, d);
-}
+document.getElementById('go').addEventListener('click', run);
+document.getElementById('clear').addEventListener('click', ()=>{
+  document.getElementById('q').value="";
+  document.getElementById('coords').value="";
+});
 
-goEl.onclick = ()=>callAPI( Number(dayEl.value) || 0 );
-clrEl.onclick = ()=>{
-  qEl.value=""; cEl.value="";
-  idxEl.textContent="—"; capsEl.textContent="Stima 3h: — cappelli"; nrEl.textContent="Pioggia prossima: —";
-  advEl.textContent=becEl.textContent=spcEl.textContent="—"; techEl.textContent=""; rainPastEl.textContent=rainNextEl.textContent="";
-};
-dayEl.oninput = ()=>{ renderAll( Number(dayEl.value)||0 ); };
+document.getElementById('day').addEventListener('input', (e)=> setDay(parseInt(e.target.value,10)));
 
+window.addEventListener('load', initMap);
 </script>
 </body>
 </html>
-
