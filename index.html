@@ -3,151 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PorciniCast - Previsioni Avanzate</title>
+    <title>PorciniCast - Mappa e Previsioni Avanzate</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
     <style>
-        :root {
+        :root { /* Stessa palette di colori di prima */
             --bg-color: #f4f7f6; --card-bg: #ffffff; --text-color: #333;
             --primary: #8a6d3b; --primary-light: #fcf8e3; --shadow: 0 4px 15px rgba(0,0,0,0.08);
         }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); }
         header { background-color: var(--primary); color: white; text-align: center; padding: 20px; box-shadow: var(--shadow); }
         header h1 { margin: 0; font-size: 2.5rem; }
-        main { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
-        .search-container { display: flex; gap: 20px; margin-bottom: 30px; flex-wrap: wrap; }
-        .search-box { flex: 1; min-width: 300px; background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: var(--shadow); }
+        main { max-width: 1400px; margin: 30px auto; padding: 0 20px; display: flex; gap: 20px; flex-wrap: wrap-reverse; }
+        .controls-container { flex: 1; min-width: 320px; display: flex; flex-direction: column; gap: 20px; }
+        .map-container { flex: 2; min-width: 400px; min-height: 500px; background: var(--card-bg); border-radius: 12px; box-shadow: var(--shadow); }
+        #map { width: 100%; height: 100%; border-radius: 12px; z-index: 1; }
+        .search-box { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: var(--shadow); }
         .search-box h2 { margin-top: 0; color: var(--primary); font-size: 1.2rem; }
         form { display: flex; gap: 10px; }
-        input[type="text"], input[type="number"] { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; }
-        button { padding: 12px 20px; background-color: var(--primary); color: white; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; transition: transform 0.2s; }
-        button:hover { transform: scale(1.05); }
-        #loading { text-align: center; font-size: 1.2rem; color: var(--primary); display: none; }
-        #results-area { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; display: none; }
+        input[type="text"] { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; }
+        button { padding: 12px 20px; background-color: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; transition: transform 0.2s; }
+        #loading { text-align: center; font-size: 1.2rem; color: var(--primary); display: none; margin: 20px; }
+        #results-area { display: flex; flex-direction: column; gap: 20px; display: none; }
         .result-card { background: var(--card-bg); padding: 25px; border-radius: 12px; box-shadow: var(--shadow); }
-        .result-card h3 { margin-top: 0; color: var(--primary); border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .result-card h3 { margin-top: 0; color: var(--primary); }
         #score-display { text-align: center; }
-        #score-value { font-size: 5rem; font-weight: bold; line-height: 1; }
+        #score-value { font-size: 4rem; font-weight: bold; line-height: 1; }
         #location-name { font-weight: normal; font-size: 1rem; color: #777; margin-top: 10px; }
-        #harvest-estimate { font-size: 1.5rem; color: var(--primary); font-weight: bold; text-align: center; margin-top: 15px; }
-        .chart-container { display: flex; align-items: flex-end; justify-content: space-between; height: 120px; padding: 10px 0; }
-        .chart-bar { flex: 1; background-color: var(--primary-light); text-align: center; position: relative; border: 1px solid #eee; border-bottom: none; }
-        .chart-bar span { font-size: 0.7rem; position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); }
-        .chart-bar .value { font-size: 0.9rem; font-weight: bold; color: var(--primary); }
+        #harvest-estimate { font-size: 1.2rem; color: var(--primary); font-weight: bold; text-align: center; margin-top: 15px; }
+        /* Stili aggiuntivi per i consigli e i grafici */
+        .chart-container { display: flex; align-items: flex-end; justify-content: space-between; height: 100px; padding: 10px 0; }
+        .chart-bar { flex: 1; background-color: var(--primary-light); text-align: center; position: relative; border: 1px solid #eee; margin: 0 1px; }
+        .chart-bar .value { font-size: 0.8rem; font-weight: bold; color: var(--primary); }
         #advice-list { list-style: none; padding-left: 0; }
-        #advice-list li { padding: 8px 0 8px 30px; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="%238a6d3b" viewBox="0 0 16 16"><path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zM8 1.918l-.797.161A4.002 4.002 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4.002 4.002 0 0 0-3.203-3.92L8 1.917zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5.002 5.002 0 0 1 13 6c0 .88.32 4.2 1.22 6z"/></svg>') no-repeat left center; }
     </style>
 </head>
 <body>
     <header>
         <h1>🍄 PorciniCast</h1>
-        <p>Previsioni scientifiche per la nascita dei funghi porcini</p>
+        <p>Mappa e Previsioni Scientifiche per la Ricerca dei Funghi Porcini</p>
     </header>
 
     <main>
-        <div class="search-container">
+        <div class="controls-container">
             <div class="search-box">
-                <h2>Cerca per Località</h2>
+                <h2>1. Cerca un'area</h2>
                 <form id="location-form">
                     <input type="text" id="location-input" placeholder="Es. Camaldoli, Vallombrosa..." required>
-                    <button type="submit">Analizza</button>
+                    <button type="submit">Cerca</button>
+                </form>
+                <form id="coords-form" style="margin-top: 15px;">
+                    <input type="text" id="coords-input" placeholder="O incolla coordinate: 43.76, 11.25" required>
+                    <button type="submit">Cerca</button>
                 </form>
             </div>
-            <div class="search-box">
-                <h2>Cerca per Coordinate</h2>
-                <form id="coords-form">
-                    <input type="number" step="any" id="lat-input" placeholder="Latitudine (es. 43.76)" required>
-                    <input type="number" step="any" id="lon-input" placeholder="Longitudine (es. 11.25)" required>
-                    <button type="submit">Analizza</button>
-                </form>
+            <div id="loading">Analisi scientifica in corso...</div>
+            <div id="results-area">
+                <div class="result-card" id="score-display">
+                    <div id="score-value">--</div>
+                    <div id="location-name"></div>
+                    <h3>Stima Raccolta (2h)</h3>
+                    <p id="harvest-estimate">--</p>
+                </div>
+                <div class="result-card">
+                    <h3>Consigli Pratici</h3>
+                    <ul id="advice-list"></ul>
+                </div>
             </div>
         </div>
 
-        <div id="loading">Analisi scientifica in corso...</div>
-        <div id="results-area">
-            <div class="result-card" id="score-display">
-                <h3>Indice di Presenza Porcini</h3>
-                <div id="score-value">--</div>
-                <div id="location-name"></div>
-                <h3>Stima Raccolta (2 ore)</h3>
-                <p id="harvest-estimate">--</p>
-            </div>
-
-            <div class="result-card">
-                <h3>Previsione Nascita a 10 Giorni</h3>
-                <div id="forecast-chart" class="chart-container"></div>
-                <h3>Previsione Meteo (prossimi 3gg)</h3>
-                <p id="future-weather"></p>
-            </div>
-
-            <div class="result-card">
-                <h3>Consigli Pratici di Raccolta</h3>
-                <ul id="advice-list"></ul>
-                <h3>Piogge Passate (ultimi 30gg)</h3>
-                <div id="past-rain-chart" class="chart-container"></div>
-            </div>
+        <div class="map-container">
+            <div id="map"></div>
         </div>
     </main>
 
     <script>
-        const API_URL = 'http://127.0.0.1:8000'; // CAMBIA QUESTO SE IL TUO BACKEND È ALTROVE
+        // L'URL relativo funziona con il proxy di Netlify e in locale se configurato
+        const API_URL = '/api'; 
 
         const locationForm = document.getElementById('location-form');
         const coordsForm = document.getElementById('coords-form');
+        const locationInput = document.getElementById('location-input');
+        const coordsInput = document.getElementById('coords-input');
         const loadingDiv = document.getElementById('loading');
         const resultsArea = document.getElementById('results-area');
+        const locationNameEl = document.getElementById('location-name');
 
+        // --- Inizializzazione Mappa ---
+        const map = L.map('map').setView([42.8, 12.5], 6); // Vista iniziale sull'Italia
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        let marker;
+
+        // --- Gestione Eventi ---
         locationForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const location = document.getElementById('location-input').value;
+            coordsInput.value = ''; // Pulisce l'altro campo
+            const location = locationInput.value;
             setLoading(true, `Geocodifica di "${location}"...`);
             try {
-                const geoReq = await fetch(`${API_URL}/api/geocode?q=${encodeURIComponent(location)}`);
-                if (!geoReq.ok) throw new Error('Località non trovata.');
+                const geoReq = await fetch(`${API_URL}/geocode?q=${encodeURIComponent(location)}`);
+                if (!geoReq.ok) {
+                    const err = await geoReq.json();
+                    throw new Error(err.detail || 'Località non trovata.');
+                }
                 const geoData = await geoReq.json();
-                document.getElementById('location-name').textContent = geoData.name;
+                locationNameEl.textContent = geoData.name;
                 await fetchAndDisplayScore(geoData.lat, geoData.lon);
             } catch (error) {
-                alert(error.message);
-                setLoading(false);
+                handleError(error.message);
             }
         });
 
         coordsForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const lat = document.getElementById('lat-input').value;
-            const lon = document.getElementById('lon-input').value;
-            document.getElementById('location-name').textContent = `Coordinate: ${lat}, ${lon}`;
-            await fetchAndDisplayScore(lat, lon);
+            locationInput.value = ''; // Pulisce l'altro campo
+            const coordsText = coordsInput.value;
+            try {
+                const [lat, lon] = parseCoordinates(coordsText);
+                locationNameEl.textContent = `Coordinate: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                await fetchAndDisplayScore(lat, lon);
+            } catch (error) {
+                handleError(error.message);
+            }
         });
+        
+        function parseCoordinates(text) {
+            const parts = text.replace(/,/g, ' ').split(' ').filter(p => p.trim() !== '');
+            if (parts.length !== 2) throw new Error('Formato coordinate non valido. Usa "lat, lon".');
+            const lat = parseFloat(parts[0]);
+            const lon = parseFloat(parts[1]);
+            if (isNaN(lat) || isNaN(lon)) throw new Error('Coordinate non numeriche.');
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) throw new Error('Valori di coordinate non validi.');
+            return [lat, lon];
+        }
 
         async function fetchAndDisplayScore(lat, lon) {
             setLoading(true, 'Analisi scientifica in corso...');
             try {
-                const scoreReq = await fetch(`${API_URL}/api/score?lat=${lat}&lon=${lon}`);
-                if (!scoreReq.ok) throw new Error('Errore nel calcolo del punteggio.');
+                const scoreReq = await fetch(`${API_URL}/score?lat=${lat}&lon=${lon}`);
+                if (!scoreReq.ok) {
+                    const err = await scoreReq.json();
+                    throw new Error(err.detail || 'Errore nel calcolo del punteggio.');
+                }
                 const data = await scoreReq.json();
                 displayResults(data);
+                updateMap(data.coords.lat, data.coords.lon, data.overall_score);
                 setLoading(false);
             } catch (error) {
-                alert(error.message);
-                setLoading(false);
+                handleError(error.message);
             }
         }
-
+        
         function setLoading(isLoading, message = '') {
             loadingDiv.style.display = isLoading ? 'block' : 'none';
-            resultsArea.style.display = isLoading ? 'none' : 'grid';
-            if(isLoading) loadingDiv.textContent = message;
+            resultsArea.style.display = isLoading ? 'none' : 'flex';
+            if(isLoading) {
+                loadingDiv.textContent = message;
+                resultsArea.style.display = 'none';
+            }
+        }
+        
+        function handleError(message) {
+            alert(`Errore: ${message}`);
+            setLoading(false);
         }
 
         function displayResults(data) {
             // Punteggio
             const scoreEl = document.getElementById('score-value');
             scoreEl.textContent = data.overall_score;
-            scoreEl.style.color = data.overall_score < 50 ? '#d9534f' : data.overall_score < 75 ? '#f0ad4e' : '#5cb85c';
-
+            scoreEl.style.color = getScoreColor(data.overall_score);
             // Stima Raccolta
             document.getElementById('harvest-estimate').textContent = data.estimated_harvest_per_2h;
-            
             // Consigli
             const adviceList = document.getElementById('advice-list');
             adviceList.innerHTML = '';
@@ -156,29 +187,29 @@
                 li.textContent = tip;
                 adviceList.appendChild(li);
             });
+        }
+        
+        function updateMap(lat, lon, score) {
+            map.setView([lat, lon], 13); // Zoom sulla località
+            if (marker) {
+                map.removeLayer(marker); // Rimuove il vecchio marker
+            }
             
-            // Meteo Futuro
-            const futureWeather = data.future_10d_weather;
-            document.getElementById('future-weather').textContent = 
-                `Temp: ${futureWeather.temperature[0].toFixed(1)}°C, ${futureWeather.temperature[1].toFixed(1)}°C, ${futureWeather.temperature[2].toFixed(1)}°C. ` +
-                `Pioggia: ${futureWeather.precipitation[0].toFixed(1)}mm, ${futureWeather.precipitation[1].toFixed(1)}mm, ${futureWeather.precipitation[2].toFixed(1)}mm.`;
+            // Crea una icona personalizzata con colore dinamico
+            const color = getScoreColor(score);
+            const iconHtml = `<div style="background-color:${color}; width:24px; height:24px; border-radius:50%; border: 3px solid white; box-shadow: var(--shadow);"></div>`;
+            const customIcon = L.divIcon({
+                html: iconHtml,
+                className: '' // Necessario per non avere stili di default
+            });
 
-            // Grafici
-            createBarChart('forecast-chart', data.forecast_10_days.map((val, i) => ({ value: val, label: `D+${i}` })));
-            createBarChart('past-rain-chart', data.past_30d_rain_mm.map((val, i) => ({ value: val, label: `-${29-i}gg` })).filter((_, i) => i % 3 === 0)); // Mostra ogni 3gg
+            marker = L.marker([lat, lon], { icon: customIcon }).addTo(map);
         }
 
-        function createBarChart(containerId, data) {
-            const container = document.getElementById(containerId);
-            container.innerHTML = '';
-            const maxValue = Math.max(...data.map(d => d.value), 1); // Evita divisione per zero
-            data.forEach(d => {
-                const bar = document.createElement('div');
-                bar.className = 'chart-bar';
-                bar.style.height = `${(d.value / maxValue) * 100}%`;
-                bar.innerHTML = `<div class="value">${d.value.toFixed(0)}</div><span>${d.label}</span>`;
-                container.appendChild(bar);
-            });
+        function getScoreColor(score) {
+            if (score < 45) return '#d9534f'; // Rosso
+            if (score < 65) return '#f0ad4e'; // Arancione
+            return '#5cb85c'; // Verde
         }
     </script>
 </body>
