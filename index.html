@@ -1,172 +1,209 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Trova Porcini — by Antonio Pio D’Aloia</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
-    :root{--bg:#0c1222;--panel:#0f172a;--text:#e5e7eb;--muted:#94a3b8;--accent:#10b981;--accent2:#22d3ee;--border:#1f2937;--warn:#f9a825;--bad:#ef4444;}
+    :root{--bg:#0f1b26;--panel:#15212e;--text:#eef5fb;--muted:#8fa7b8;--accent:#4caf50;--warn:#f9a825;--danger:#e53935;--border:#253548;}
     *{box-sizing:border-box}
-    body{margin:0;background:linear-gradient(180deg,#0b1020,#0f172a);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
-    header{padding:14px 16px;border-bottom:1px solid var(--border);background:rgba(15,23,42,.6);backdrop-filter:blur(8px)}
-    h1{margin:0;font-size:1.35rem}
-    main{max-width:1120px;margin:18px auto;padding:0 16px}
-    .card{background:linear-gradient(180deg,#0b1220,#0f172a);border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);margin-bottom:14px}
-    .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:14px}
-    @media(max-width:980px){.grid{grid-template-columns:1fr}}
-    input,button{border-radius:10px;border:1px solid #334155;background:#0b1324;color:var(--text);padding:10px 12px;font-size:15px}
-    button{background:linear-gradient(90deg,var(--accent2),var(--accent));border:none;cursor:pointer;color:#062f2a;font-weight:700}
-    .muted{color:var(--muted);font-size:13px}
-    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-    .metric{background:#0b1324;border:1px solid #243244;border-radius:10px;padding:10px;text-align:center}
-    .metric .val{font-size:1.6rem;font-weight:800}
-    #map{height:460px;border-radius:12px;overflow:hidden}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
+    header{padding:16px 20px;border-bottom:1px solid var(--border)}
+    .wrap{max-width:1280px;margin:0 auto;padding:20px;display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+    @media(max-width:960px){.wrap{grid-template-columns:1fr}}
+    .card{background:var(--panel);padding:16px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.3);margin-bottom:16px}
+    input,button{padding:10px;border-radius:10px;border:1px solid #2c3e50;font-size:15px;color:var(--text);background:#102335}
+    button{cursor:pointer;font-weight:bold}
+    button.ok{background:var(--accent)}
+    button.warn{background:var(--warn);color:#101f26}
+    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+    .metric{background:#102335;padding:10px;border-radius:10px;text-align:center}
+    .metric .val{font-size:1.6rem;font-weight:bold}
+    #map{height:460px;border-radius:10px;overflow:hidden}
     .calendar{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:8px}
     .bar{height:100px;position:relative;background:#1f2937;border-radius:6px}
     .bar>i{position:absolute;bottom:0;left:0;width:100%;border-radius:6px}
     .bar>span{position:absolute;top:-18px;left:0;width:100%;text-align:center;font-size:.7rem}
-    details{background:#0b1324;border:1px solid #1f2937;border-radius:10px;padding:10px}
-    summary{cursor:pointer;color:#a5b4fc}
+    .table{border:1px solid #2c3e50;border-radius:10px;overflow:hidden}
+    .tr{display:grid;grid-template-columns:1fr 80px;padding:8px 10px;border-bottom:1px solid #2c3e50}
+    .tr.head{background:#102335;font-weight:bold}
+    .tr:last-child{border-bottom:none}
+    details summary{cursor:pointer;font-weight:bold;margin-top:10px}
+    details p{margin:6px 0}
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 </head>
 <body>
-<header>
-  <h1>Trova Porcini — by Antonio Pio D’Aloia</h1>
-  <div class="muted">Modello previsionale avanzato con dati storici e forecast (Open-Meteo + opz. OpenWeather)</div>
-</header>
+  <header>
+    <h1 style="margin:0;font-size:1.4rem;">Trova Porcini — by Antonio Pio D’Aloia</h1>
+    <div class="muted" style="font-size:.85rem;">Blending meteo (OpenWeather 60% + Open-Meteo 40%), storico reale 15 gg, previsione 10 gg</div>
+  </header>
 
-<main>
-  <div class="card">
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <input id="place" placeholder="Località (es. Abbadia San Salvatore)" style="flex:1">
-      <button id="btnPlace">Cerca</button>
-      <input id="coords" placeholder="oppure coordinate: 41.127, 14.782" style="flex:1;min-width:260px">
-      <button id="btnCoords" style="background:linear-gradient(90deg,#f59e0b,#22d3ee)">Usa coordinate</button>
-    </div>
-    <div class="muted" style="margin-top:6px">Suggerimento: click destro in Google Maps → copia coordinate → incolla qui.</div>
-  </div>
+  <div class="wrap">
+    <div class="card">
+      <!-- Barra località + coordinate -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <input id="place" type="text" placeholder="Località (es. Abbadia San Salvatore)" style="flex:1"/>
+        <button id="btnSearch" class="ok">Cerca</button>
+        <input id="coords" type="text" placeholder="lat, lon (Google)" style="flex:1;min-width:220px"/>
+        <button id="btnCoords" class="warn">Usa coordinate</button>
+      </div>
+      <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Suggerimento: incolla le coordinate da Google Maps, es. “44.12345, 11.23456”.</div>
 
-  <div class="grid">
-    <div>
-      <div class="card">
-        <div class="metrics">
-          <div class="metric"><div class="muted">Indice</div><div id="mIndex" class="val">—</div></div>
-          <div class="metric"><div class="muted">Stima raccolto (2 h)</div><div id="mHarvest" class="val">—</div></div>
-          <div class="metric"><div class="muted">Affidabilità</div><div id="mRel" class="val">—</div></div>
+      <!-- KPI -->
+      <div class="metrics">
+        <div class="metric"><div class="muted">Indice</div><div id="metricIndex" class="val">—</div></div>
+        <div class="metric"><div class="muted">Stima raccolto</div><div id="metricHarvest" class="val">—</div></div>
+        <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
+      </div>
+
+      <!-- Previsione indice -->
+      <div style="margin-top:14px;">
+        <div class="muted" style="margin-bottom:6px;">Previsione indice (10 giorni)</div>
+        <div id="forecast" class="calendar"></div>
+      </div>
+
+      <!-- Piogge passate / future -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Piogge passate (ultimi 15 giorni)</div>
+          <div id="rainPast" class="table">
+            <div class="tr head"><div>Data</div><div>mm</div></div>
+          </div>
         </div>
-        <div class="muted" style="margin-top:10px">Previsione indice (10 giorni)</div>
-        <div id="fc" class="calendar"></div>
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Piogge future (prossimi 10 giorni)</div>
+          <div id="rainFuture" class="table">
+            <div class="tr head"><div>Data</div><div>mm</div></div>
+          </div>
+        </div>
       </div>
 
-      <div class="card">
-        <details open>
-          <summary>Specifiche tecniche (fattori usati)</summary>
-          <ul class="muted" style="margin-left:18px">
-            <li>Latitudine/longitudine, quota, pendenza, esposizione</li>
-            <li>Piogge P7/P14, API* (decadimento ~8 gg) e ET₀ 7 gg</li>
-            <li>Temperatura media/min/max (ultimi 7–15 giorni)</li>
-            <li>Umidità relativa (ora, opzionale), probabilità pioggia 72 h</li>
-            <li>Affidabilità da dispersione previsione vs storico</li>
-          </ul>
-        </details>
-        <details open>
-          <summary>Consigli utili del giorno</summary>
-          <ul id="tips" style="margin-left:18px"></ul>
-        </details>
-        <details>
-          <summary>Perché questa stima?</summary>
-          <ul id="why" style="margin-left:18px"></ul>
-        </details>
-      </div>
+      <!-- Specifiche + Consigli + Perché -->
+      <details open>
+        <summary>Specifiche (fattori considerati)</summary>
+        <ul style="margin-left:18px;font-size:.9rem;">
+          <li>Latitudine/longitudine, altitudine, pendenza, esposizione</li>
+          <li>Piogge P7/P15, API* (emivita ~8 gg), ET0 7 gg</li>
+          <li>Temperature medie/min/max (ultimi 7–15 giorni)</li>
+          <li>Umidità relativa media (quando disponibile)</li>
+          <li>Previsioni multi-modello (OW 60% + OM 40%) con affidabilità</li>
+          <li>Finestra migliore di 3 giorni e stima raccolto (2 h)</li>
+        </ul>
+      </details>
+      <details open>
+        <summary>Consigli utili del giorno</summary>
+        <ul id="tipsList" style="margin-left:18px;font-size:.9rem;"></ul>
+      </details>
+      <details>
+        <summary>Perché questa stima?</summary>
+        <ul id="whyList" style="margin-left:18px;font-size:.9rem;"></ul>
+      </details>
     </div>
 
+    <!-- Mappa -->
     <div class="card"><div id="map"></div></div>
   </div>
-</main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-const API = "/api";
-const $ = (s)=>document.querySelector(s);
-let map, marker;
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const API_BASE = "/api";
+    const $ = s => document.querySelector(s);
 
-function initMap(){
-  map = L.map('map').setView([42.5,12.5], 6);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
-  marker = L.marker([42.5,12.5]).addTo(map);
-  setTimeout(()=>map.invalidateSize(), 200);
-  map.on("click", e => runCoords(e.latlng.lat, e.latlng.lng));
-}
+    // Mappa
+    let map, marker;
+    function initMap(){
+      map = L.map('map').setView([42.5,12.5], 6);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18}).addTo(map);
+      marker = L.marker([42.5,12.5]).addTo(map);
+      setTimeout(()=>map.invalidateSize(), 200);
+      map.on("click", e => handleCoords(e.latlng.lat, e.latlng.lng));
+    }
 
-function parseCoords(str){
-  const m=/^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/.exec((str||"").trim());
-  if(!m) return null;
-  const lat=parseFloat(m[1].replace(",", ".")), lon=parseFloat(m[2].replace(",", "."));
-  if(!isFinite(lat)||!isFinite(lon)||lat<-90||lat>90||lon<-180||lon>180) return null;
-  return {lat,lon};
-}
+    // Utils
+    function parseCoords(str){
+      const m = /^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/.exec((str||"").trim());
+      if(!m) return null;
+      const lat = parseFloat(m[1].replace(",", ".")), lon = parseFloat(m[2].replace(",", "."));
+      if(!isFinite(lat)||!isFinite(lon)||lat<-90||lat>90||lon<-180||lon>180) return null;
+      return {lat,lon};
+    }
+    async function apiGet(u){
+      const r = await fetch(u);
+      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error(t || "errore rete"); }
+      return r.json();
+    }
+    async function geocode(q){ return apiGet(`${API_BASE}/geocode?q=${encodeURIComponent(q)}`); }
+    async function score(lat,lon){ return apiGet(`${API_BASE}/score?lat=${lat}&lon=${lon}`); }
 
-async function getJSON(u){
-  const r = await fetch(u);
-  if(!r.ok){
-    let msg="errore di rete";
-    try{ msg = (await r.text()) || msg; }catch{}
-    throw new Error(msg);
-  }
-  return r.json();
-}
-async function geocode(q){ return getJSON(`${API}/geocode?q=${encodeURIComponent(q)}`); }
-async function score(lat,lon){ return getJSON(`${API}/score?lat=${lat}&lon=${lon}`); }
+    // UI render
+    function renderForecast(arr){
+      const cont = $("#forecast"); cont.innerHTML = "";
+      (arr||[]).forEach(v=>{
+        const box = document.createElement("div"); box.className="bar";
+        const fill = document.createElement("i");
+        fill.style.height = Math.max(4, v) + "%";
+        fill.style.background = v>=70 ? "#4caf50" : (v>=55 ? "#f9a825" : "#e53935");
+        const lab = document.createElement("span"); lab.textContent = v;
+        box.appendChild(fill); box.appendChild(lab); cont.appendChild(box);
+      });
+    }
+    function renderTables(pastDict, futDict){
+      function fill(el, d){
+        el.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
+        Object.keys(d||{}).sort().forEach(k=>{
+          const tr=document.createElement("div"); tr.className="tr";
+          tr.innerHTML = `<div>${k}</div><div>${Number(d[k]).toFixed(1)}</div>`;
+          el.appendChild(tr);
+        });
+      }
+      fill($("#rainPast"), pastDict||{});
+      fill($("#rainFuture"), futDict||{});
+    }
+    function renderLists(reasons, tips){
+      const wl=$("#whyList"); wl.innerHTML=""; (reasons||[]).forEach(t=>{ const li=document.createElement("li"); li.textContent=t; wl.appendChild(li); });
+      const tl=$("#tipsList"); tl.innerHTML=""; (tips||[]).forEach(t=>{ const li=document.createElement("li"); li.textContent=t; tl.appendChild(li); });
+    }
+    function renderMetrics(idx, harvest, rel){
+      $("#metricIndex").textContent = idx ?? "—";
+      $("#metricHarvest").textContent = harvest ?? "—";
+      $("#metricReliability").textContent = rel!=null ? Math.round(rel*100)+"%" : "—";
+    }
 
-function setMetrics(s){
-  $("#mIndex").textContent = s.score_today ?? "—";
-  $("#mHarvest").textContent = s.harvest_estimate ?? "—";
-  $("#mRel").textContent = s.reliability!=null ? Math.round(s.reliability*100)+"%" : "—";
-}
-function setForecast(arr){
-  const fc=$("#fc"); fc.innerHTML="";
-  (arr||[]).forEach(v=>{
-    const bar=document.createElement("div"); bar.className="bar";
-    const fill=document.createElement("i");
-    const h=Math.max(4, v); fill.style.height=h+"%";
-    fill.style.background= v>=70 ? "#10b981" : v>=55 ? "#f59e0b" : "#ef4444";
-    const lab=document.createElement("span"); lab.textContent=v;
-    bar.appendChild(fill); bar.appendChild(lab); fc.appendChild(bar);
-  });
-}
-function setLists(reasons, tips){
-  const wl=$("#why"); wl.innerHTML=""; (reasons||[]).forEach(t=>{const li=document.createElement("li"); li.textContent=t; wl.appendChild(li);});
-  const tl=$("#tips"); tl.innerHTML=""; (tips||[]).forEach(t=>{const li=document.createElement("li"); li.textContent=t; tl.appendChild(li);});
-}
+    // Handlers
+    async function handlePlace(){
+      const q = $("#place").value.trim();
+      if(!q){ alert("Inserisci una località"); return; }
+      try{
+        const g = await geocode(q);
+        await handleCoords(g.lat, g.lon);
+      }catch(e){ console.error(e); alert("Errore geocoding. Prova con le coordinate lat, lon."); }
+    }
+    async function handleCoordsStr(){
+      const c = parseCoords($("#coords").value.trim());
+      if(!c){ alert("Coordinate non valide. Esempio: 41.127, 14.782"); return; }
+      await handleCoords(c.lat, c.lon);
+    }
+    async function handleCoords(lat,lon){
+      marker.setLatLng([lat,lon]); map.setView([lat,lon], 11);
+      try{
+        const s = await score(lat, lon);
+        renderForecast(s.forecast);
+        renderTables(s.rain_past, s.rain_future);
+        renderLists(s.explanation?.reasons, s.tips);
+        renderMetrics(s.index, s.harvest_estimate, s.reliability);
+      }catch(e){ console.error(e); alert("Errore durante il calcolo. Riprova più tardi."); }
+    }
 
-async function runPlace(){
-  const q=$("#place").value.trim(); if(!q){alert("Inserisci una località"); return;}
-  try{
-    const g=await geocode(q);
-    await runCoords(g.lat, g.lon);
-  }catch(e){ console.error(e); alert("Errore durante il geocoding. Prova con le coordinate (lat, lon)."); }
-}
+    // Bind
+    document.getElementById("btnSearch").addEventListener("click", handlePlace);
+    document.getElementById("btnCoords").addEventListener("click", handleCoordsStr);
+    document.getElementById("place").addEventListener("keydown", e=>{ if(e.key==="Enter") handlePlace(); });
+    document.getElementById("coords").addEventListener("keydown", e=>{ if(e.key==="Enter") handleCoordsStr(); });
 
-async function runCoordsStr(){
-  const c=parseCoords($("#coords").value); if(!c){alert("Coordinate non valide. Esempio: 41.127, 14.782"); return;}
-  await runCoords(c.lat, c.lon);
-}
-
-async function runCoords(lat,lon){
-  marker.setLatLng([lat,lon]); map.setView([lat,lon], 11);
-  try{
-    const s=await score(lat,lon);
-    setMetrics(s); setForecast(s.scores_next10); setLists(s.explanation?.reasons, s.tips);
-  }catch(e){ console.error(e); alert("Errore durante il calcolo. Riprova più tardi."); }
-}
-
-$("#btnPlace").addEventListener("click", runPlace);
-$("#btnCoords").addEventListener("click", runCoordsStr);
-document.addEventListener("keydown",(e)=>{ if(e.key==="Enter") runPlace(); });
-
-initMap();
-</script>
+    // Start
+    initMap();
+  </script>
 </body>
 </html>
 
