@@ -19,6 +19,7 @@
     .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
     .metric{background:#0b1526;padding:10px;border-radius:12px;text-align:center;border:1px solid #223249}
     .metric .val{font-size:1.6rem;font-weight:800}
+    .right-panel{display:flex;flex-direction:column;gap:16px}
     #map{height:460px;border-radius:12px;overflow:hidden}
     .calendar{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:8px}
     .bar{height:100px;position:relative;background:#1f2937;border-radius:8px}
@@ -30,7 +31,7 @@
     .tr:last-child{border-bottom:none}
     details summary{cursor:pointer;font-weight:700;margin-top:10px;color:#b9c7ff}
     .muted{color:var(--muted);font-size:.9rem}
-    /* Spinner */
+    #explanationPanel h3{margin-top:0;color:#b9c7ff} #explanationPanel p{line-height:1.6;color:var(--muted)}
     #loading{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.35);z-index:999}
     #loading .ball{width:12px;height:12px;border-radius:50%;margin:6px;background:#22d3ee;display:inline-block;animation:bounce 0.8s infinite alternate}
     #loading .ball:nth-child(2){animation-delay:.15s;background:#1ee59a}
@@ -44,77 +45,43 @@
     <div class="muted" style="font-size:.85rem;">Modello avanzato: storico 15 gg + forecast 10 gg (OW 60% • OM 40%). Fallback automatici.</div>
   </header>
 
-  <!-- spinner -->
   <div id="loading"><div><span class="ball"></span><span class="ball"></span><span class="ball"></span></div></div>
 
   <div class="wrap">
-    <div class="card">
-      <!-- Barre di ricerca -->
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-        <input id="place" type="text" placeholder="Località (es. Abbadia San Salvatore)" style="flex:1"/>
-        <button id="btnSearch" class="ok">Cerca</button>
-        <input id="coords" type="text" placeholder="lat, lon (Google)" style="flex:1;min-width:220px"/>
-        <button id="btnCoords" class="warn">Usa coordinate</button>
-      </div>
-      <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Suggerimento: incolla le coordinate da Google Maps (es. “44.12345, 11.23456”).</div>
+    <div class="left-panel">
+      <div class="card">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <input id="place" type="text" placeholder="Località (es. Abbadia San Salvatore)" style="flex:1"/>
+          <button id="btnSearch" class="ok">Cerca</button>
+          <input id="coords" type="text" placeholder="lat, lon (Google)" style="flex:1;min-width:220px"/>
+          <button id="btnCoords" class="warn">Usa coordinate</button>
+        </div>
+        <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Suggerimento: incolla le coordinate da Google Maps o clicca sulla mappa.</div>
 
-      <!-- KPI -->
-      <div class="metrics">
-        <div class="metric"><div class="muted">Indice</div><div id="metricIndex" class="val">—</div></div>
-        <div class="metric"><div class="muted">Stima raccolto (2 h)</div><div id="metricHarvest" class="val">—</div></div>
-        <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
+        <div class="metrics">
+          <div class="metric"><div class="muted">Indice</div><div id="metricIndex" class="val">—</div></div>
+          <div class="metric"><div class="muted">Stima Raccolto (2 h)</div><div id="metricHarvest" class="val">—</div></div>
+          <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
+        </div>
+        <div id="metricAltitude" class="muted" style="text-align:center; margin-top:8px;"></div>
       </div>
-
-      <!-- Previsione indice -->
-      <div style="margin-top:14px;">
+      <div class="card">
         <div class="muted" style="margin-bottom:6px;">Previsione indice (10 giorni)</div>
         <div id="forecast" class="calendar"></div>
       </div>
-
-      <!-- Piogge passate/future -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
-        <div>
-          <div class="muted" style="margin-bottom:6px;">Piogge passate (ultimi 15 giorni)</div>
-          <div id="rainPast" class="table">
-            <div class="tr head"><div>Data</div><div>mm</div></div>
-          </div>
-        </div>
-        <div>
-          <div class="muted" style="margin-bottom:6px;">Piogge future (prossimi 10 giorni)</div>
-          <div id="rainFuture" class="table">
-            <div class="tr head"><div>Data</div><div>mm</div></div>
-          </div>
+      <div class="card">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><div class="muted" style="margin-bottom:6px;">Piogge passate (15 gg)</div><div id="rainPast" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div></div>
+          <div><div class="muted" style="margin-bottom:6px;">Piogge future (10 gg)</div><div id="rainFuture" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div></div>
         </div>
       </div>
-
-      <!-- Specifiche + Consigli + Perché -->
-      <details open>
-        <summary>Specifiche tecniche (fattori usati)</summary>
-        <ul class="muted" style="margin-left:18px">
-          <li>Latitudine/longitudine, quota, pendenza, esposizione</li>
-          <li>Piogge P7/P15, API* (emivita ~8 gg), ET0 7 gg</li>
-          <li>Temperature medie/min/max (ultimi 7–15 giorni)</li>
-          <li>Previsioni multi-modello (OW 60% + OM 40%) con affidabilità</li>
-          <li>Finestra migliore di 3 giorni e stima raccolto (2 h)</li>
-        </ul>
-      </details>
-      <details open>
-        <summary>Consigli utili del giorno</summary>
-        <ul id="tipsList" style="margin-left:18px"></ul>
-      </details>
-      <details>
-        <summary>Perché questa stima?</summary>
-        <ul id="whyList" style="margin-left:18px"></ul>
-      </details>
     </div>
 
-    <!-- Colonna destra -->
-    <div>
+    <div class="right-panel">
       <div class="card"><div id="map"></div></div>
-      <!-- NUOVO RIQUADRO: Informazioni -->
-      <div class="card">
-        <h3 style="margin:0 0 6px 0;">Informazioni</h3>
-        <div id="infoText" class="muted">Cerca una località o clicca sulla mappa per visualizzare quota ed analisi dettagliata.</div>
+      <div class="card" id="explanationPanel" style="display:none;">
+          <h3>Analisi del Modello</h3>
+          <p id="explanationText"></p>
       </div>
     </div>
   </div>
@@ -123,11 +90,8 @@
   <script>
     const API = "/api";
     const $ = s => document.querySelector(s);
-
-    // Spinner
     const showLoad = (v)=>{ $("#loading").style.display = v ? "grid" : "none"; };
 
-    // Mappa
     let map, marker;
     function initMap(){
       map = L.map('map').setView([42.5,12.5], 6);
@@ -137,7 +101,6 @@
       map.on("click", e => handleCoords(e.latlng.lat, e.latlng.lng));
     }
 
-    // Utils
     function parseCoords(str){
       const m = /^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/.exec((str||"").trim());
       if(!m) return null;
@@ -147,94 +110,95 @@
     }
     async function apiGet(u){
       const r = await fetch(u);
-      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error(t || "errore rete"); }
+      if(!r.ok){ const t = await r.text().catch(()=>""); throw new Error(t||"errore rete"); }
       return r.json();
     }
-    async function geocode(q){ return apiGet(`${API}/geocode?q=${encodeURIComponent(q)}`); }
-    async function score(lat,lon){ return apiGet(`${API}/score?lat=${lat}&lon=${lon}`); }
 
-    // Render
-    function setMetrics(idx, harvest, rel){
-      $("#metricIndex").textContent = idx ?? "—";
-      $("#metricHarvest").textContent = harvest ?? "—";
-      $("#metricReliability").textContent = rel!=null ? Math.round(rel*100)+"%" : "—";
-    }
-    function setForecast(arr){
-      const cont=$("#forecast"); cont.innerHTML="";
-      (arr||[]).forEach(v=>{
-        const box=document.createElement("div"); box.className="bar";
-        const fill=document.createElement("i");
-        fill.style.height = Math.max(4, v) + "%";
-        fill.style.background = v>=70 ? "#1ee59a" : v>=55 ? "#ffd166" : "#ef476f";
-        const lab=document.createElement("span"); lab.textContent=v;
-        box.appendChild(fill); box.appendChild(lab); cont.appendChild(box);
-      });
-    }
-    function setTables(past, fut){
-      function fill(el, d){
-        el.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
-        Object.keys(d||{}).sort().forEach(k=>{
-          const tr=document.createElement("div"); tr.className="tr";
-          tr.innerHTML = `<div>${k}</div><div>${Number(d[k]).toFixed(1)}</div>`;
-          el.appendChild(tr);
+    function renderUI(s){
+        // Metriche e altitudine
+        $("#metricIndex").textContent = s.index ?? "—";
+        $("#metricHarvest").textContent = s.harvest_estimate ?? "—";
+        $("#metricReliability").textContent = s.reliability != null ? Math.round(s.reliability * 100) + "%" : "—";
+        $("#metricAltitude").textContent = s.elevation_m != null ? `Altitudine: ${s.elevation_m} m s.l.m.` : "";
+
+        // Previsione a barre
+        const forecastCont = $("#forecast"); forecastCont.innerHTML="";
+        (s.forecast || []).forEach(v => {
+            const box = document.createElement("div"); box.className="bar";
+            const fill = document.createElement("i");
+            fill.style.height = Math.max(4, v) + "%";
+            fill.style.background = v >= 70 ? "var(--accent)" : v >= 55 ? "var(--warn)" : "var(--danger)";
+            const lab = document.createElement("span"); lab.textContent = v;
+            box.appendChild(fill); box.appendChild(lab); forecastCont.appendChild(box);
         });
-      }
-      fill($("#rainPast"), past||{});
-      fill($("#rainFuture"), fut||{});
-    }
-    function setLists(reasons, tips){
-      const wl=$("#whyList"); wl.innerHTML=""; (reasons||[]).forEach(t=>{const li=document.createElement("li"); li.textContent=t; wl.appendChild(li);});
-      const tl=$("#tipsList"); tl.innerHTML=""; (tips||[]).forEach(t=>{const li=document.createElement("li"); li.textContent=t; tl.appendChild(li);});
-    }
-    function setInfo(info){
-      if(!info){ $("#infoText").textContent = "—"; return; }
-      const q = info.elevation_m!=null ? `${info.elevation_m} m s.l.m.` : "—";
-      const exp = info.aspect_octant ?? "—";
-      const pnd = info.slope_deg!=null ? `${info.slope_deg}°` : "—";
-      const text = `<b>Quota:</b> ${q} — <b>Pendenza:</b> ${pnd} — <b>Esposizione:</b> ${exp}.<br><br>${info.narrative || ""}`;
-      $("#infoText").innerHTML = text;
-    }
 
-    // Handlers
-    async function handlePlace(){
-      const q=$("#place").value.trim();
-      if(!q){ alert("Inserisci una località"); return; }
-      showLoad(true);
-      try{
-        const g = await geocode(q);
-        await handleCoords(g.lat, g.lon);
-      }catch(e){
-        console.error(e); alert("Errore geocoding. Prova con le coordinate (lat, lon).");
-      }finally{ showLoad(false); }
+        // Tabelle piogge
+        const fillTable = (el, d) => {
+            el.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
+            Object.keys(d || {}).sort().forEach(k => {
+                const tr = document.createElement("div"); tr.className = "tr";
+                tr.innerHTML = `<div>${k}</div><div>${Number(d[k]).toFixed(1)}</div>`;
+                el.appendChild(tr);
+            });
+        };
+        fillTable($("#rainPast"), s.rain_past || {});
+        fillTable($("#rainFuture"), s.rain_future || {});
+
+        // Spiegazione dinamica
+        const expPanel = $("#explanationPanel");
+        const expText = $("#explanationText");
+        if (s.dynamic_explanation) {
+            expText.innerHTML = s.dynamic_explanation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // Rende il testo bold
+            expPanel.style.display = "block";
+        } else {
+            expPanel.style.display = "none";
+        }
+    }
+    
+    async function handleCoords(lat, lon) {
+        showLoad(true);
+        try {
+            marker.setLatLng([lat, lon]);
+            map.setView([lat, lon], 11);
+            const s = await apiGet(`${API}/score?lat=${lat}&lon=${lon}`);
+            renderUI(s);
+        } catch(e) {
+            console.error(e);
+            alert("Errore durante il calcolo. Dettagli in console.");
+        } finally {
+            showLoad(false);
+        }
+    }
+    async function handlePlace() {
+        const q = $("#place").value.trim();
+        if (!q) { alert("Inserisci una località"); return; }
+        showLoad(true);
+        try {
+            const g = await apiGet(`${API}/geocode?q=${encodeURIComponent(q)}`);
+            $("#place").value = g.display;
+            await handleCoords(g.lat, g.lon);
+        } catch (e) {
+            console.error(e);
+            alert("Errore geocoding. Prova con le coordinate.");
+        } finally {
+            showLoad(false);
+        }
     }
     async function handleCoordsStr(){
-      const c=parseCoords($("#coords").value.trim());
-      if(!c){ alert("Coordinate non valide. Esempio: 41.127, 14.782"); return; }
-      showLoad(true);
-      try{ await handleCoords(c.lat, c.lon); }
-      catch(e){ console.error(e); alert("Errore durante il calcolo. Riprova più tardi."); }
-      finally{ showLoad(false); }
-    }
-    async function handleCoords(lat,lon){
-      marker.setLatLng([lat,lon]); map.setView([lat,lon], 11);
-      const s = await score(lat,lon);
-      setForecast(s.forecast);
-      setTables(s.rain_past, s.rain_future);
-      setLists(s.explanation?.reasons, s.tips);
-      setMetrics(s.index, s.harvest_estimate, s.reliability);
-      setInfo(s.info);   // <-- nuovo
+        const c = parseCoords($("#coords").value.trim());
+        if (!c) { alert("Coordinate non valide. Esempio: 41.127, 14.782"); return; }
+        showLoad(true);
+        try { await handleCoords(c.lat, c.lon); }
+        catch(e){ console.error(e); alert("Errore durante il calcolo."); }
+        finally{ showLoad(false); }
     }
 
-    // Bind
-    document.getElementById("btnSearch").addEventListener("click", handlePlace);
-    document.getElementById("btnCoords").addEventListener("click", handleCoordsStr);
-    document.getElementById("place").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handlePlace(); });
-    document.getElementById("coords").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handleCoordsStr(); });
+    $("#btnSearch").addEventListener("click", handlePlace);
+    $("#btnCoords").addEventListener("click", handleCoordsStr);
+    $("#place").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handlePlace(); });
+    $("#coords").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handleCoordsStr(); });
 
-    // Start
     initMap();
   </script>
 </body>
 </html>
-
-
