@@ -1,276 +1,262 @@
 <!doctype html>
 <html lang="it">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>TrovaPorcini vPRO+ 5.1</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<style>
-  :root{
-    --bg:#0f1720; --panel:#17212b; --muted:#8aa0b3; --accent:#51d2a8; --danger:#ff6b6b; --text:#eaf2f9;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;font:15px/1.45 system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
-  header{display:flex;align-items:center;gap:.6rem;padding:14px 18px;border-bottom:1px solid #1e2a36}
-  header .title{font-weight:700;font-size:20px}
-  header .badge{background:#203040;padding:2px 8px;border-radius:8px;font-size:12px}
-  header .by{margin-left:auto;color:var(--muted);font-size:14px}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PorciniCast</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
 
-  .container{max-width:1200px;margin:14px auto;padding:0 14px}
-  .grid{display:grid;grid-template-columns: 1.15fr 1fr; gap:16px}
-  @media (max-width:980px){ .grid{grid-template-columns:1fr} }
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity=""
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity=""
+    crossorigin=""
+    defer
+  ></script>
 
-  .panel{background:var(--panel);border:1px solid #233243;border-radius:12px}
-  .panel.pad{padding:14px}
-  .label{font-weight:600;color:var(--muted);font-size:13px;margin-bottom:6px}
-  .row{display:flex;gap:10px;flex-wrap:wrap}
-  input[type=text]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #253647;background:#0d141c;color:var(--text)}
-  .btn{padding:10px 14px;border-radius:10px;border:1px solid #29485a;background:#103647;color:#eaf2f9;cursor:pointer}
-  .btn.primary{background:#115e49;border-color:#2a7b67}
-  .btn:hover{filter:brightness(1.05)}
-  .stack{display:grid;gap:10px}
-  .metrics{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin-top:12px}
-  .metric{flex:0 0 auto;min-width:120px;background:#0e1922;border:1px solid #223244;border-radius:12px;padding:10px;text-align:center}
-  .metric h2{margin:0;font-size:42px;line-height:1.0}
-  .metric small{color:var(--muted)}
-  .slider{margin:8px 0 2px}
-  input[type=range]{width:100%}
-
-  details{background:#0f1b24;border:1px solid #213243;border-radius:10px; padding:10px;margin:10px 0}
-  details summary{cursor:pointer;font-weight:700}
-  .muted{color:var(--muted)}
-
-  /* destra */
-  #map{height:420px;border-radius:12px;border:1px solid #223244}
-  .weathbar{margin-top:12px;background:#0e1922;border:1px solid #223244;border-radius:12px;padding:10px;overflow:auto}
-  .wrow{display:flex;gap:10px;align-items:center;white-space:nowrap}
-  .witem{min-width:70px;text-align:center}
-  .witem .d{font-size:12px;color:var(--muted)}
-  .witem .mm{font-weight:700}
-</style>
+  <style>
+    :root{
+      --bg:#0b0f13;
+      --card:#121821;
+      --accent:#3fb950;
+      --muted:#9aa7b0;
+      --danger:#e55353;
+      --warn:#e6a700;
+      --text:#e5eef5;
+      --grid-w:1440px;
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
+    }
+    .wrap{
+      max-width:var(--grid-w); margin:0 auto; padding:20px;
+      display:grid; grid-template-columns:1.3fr 1fr; gap:18px;
+    }
+    header{max-width:var(--grid-w); margin:0 auto; padding:18px 20px 4px;}
+    h1{font-size:1.25rem; margin:0 0 6px;}
+    .card{background:var(--card); border-radius:16px; padding:14px; box-shadow:0 6px 24px rgba(0,0,0,.25);}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    input[type=text]{flex:1; min-width:280px; background:#0b0f13; color:var(--text); border:1px solid #223042; border-radius:12px; padding:10px 12px;}
+    button{background:var(--accent); color:#08130a; border:0; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer;}
+    button:disabled{opacity:.6; cursor:not-allowed;}
+    .muted{color:var(--muted); font-size:.9rem;}
+    #map{height:480px; border-radius:14px; overflow:hidden;}
+    .kpi{display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; margin-top:6px;}
+    .kpi .big{font-size:2.1rem; font-weight:800;}
+    .badge{padding:6px 10px; border-radius:999px; font-weight:700; font-size:.9rem;}
+    .badge.ok{background:#13361c; color:#9be495; border:1px solid #1d6d2f;}
+    .badge.med{background:#2b2a00; color:#ffef8b; border:1px solid #6c6500;}
+    .badge.low{background:#3a1111; color:#ffb5b5; border:1px solid #7d1f1f;}
+    .bar{display:grid; grid-template-columns:repeat(10,1fr); gap:6px; margin-top:12px;}
+    .col{background:#0d141d; border:1px solid #223042; border-radius:10px; height:120px; position:relative; overflow:hidden;}
+    .fill{position:absolute; bottom:0; left:0; width:100%; background:linear-gradient(180deg, #56f59d, #1a7f3b); }
+    .label{position:absolute; top:6px; left:6px; right:6px; font-size:.78rem; color:var(--muted); text-align:center;}
+    .scorelbl{position:absolute; bottom:6px; left:0; right:0; text-align:center; font-size:.85rem; font-weight:700;}
+    .hint{margin-top:10px; font-size:.95rem;}
+    @media (max-width: 980px){
+      .wrap{grid-template-columns:1fr; }
+      #map{height:360px;}
+    }
+  </style>
 </head>
 <body>
-<header>
-  <div class="title">🍄 TrovaPorcini</div>
-  <div class="badge">vPRO+ 5.1</div>
-  <div class="by">by <b>Antonio Pio D’Aloia</b></div>
-</header>
+  <header>
+    <h1>PorciniCast — stima potenziale fruttificazioni</h1>
+    <div class="muted">Inserisci una località (es. “Abbadia San Salvatore”) oppure coordinate “lat, lon”.</div>
+  </header>
 
-<main class="container grid">
-
-  <!-- COLONNA SINISTRA -->
-  <section class="panel pad">
-    <div class="stack">
-      <div class="label">Ricerca</div>
-      <div class="row">
-        <input id="q" type="text" placeholder="Località (es. Bocca della Selva)" style="flex:1 1 360px">
-        <input id="coords" type="text" placeholder="Coordinate lat,lon (es. 41,4170010, 14,4707168)" style="flex:1 1 360px">
-        <button id="go" class="btn primary">Calcola</button>
-        <button id="clear" class="btn">Pulisci</button>
+  <div class="wrap">
+    <div class="card">
+      <div class="row" style="margin-bottom:10px;">
+        <input id="q" type="text" placeholder="Es. 'Castel di Sangro' oppure '42.123, 13.987'">
+        <button id="go">Cerca</button>
       </div>
+      <div id="map" class="card"></div>
     </div>
 
-    <div id="place" class="muted" style="margin-top:8px;"></div>
-
-    <div class="metrics">
-      <div class="metric" style="min-width:140px">
-        <small>Indice</small>
-        <h2 id="mIndex">—</h2>
+    <div class="card" id="panel">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <div class="muted">Località</div>
+          <div id="loc" style="font-weight:700;">—</div>
+        </div>
+        <div>
+          <div class="muted">Affidabilità</div>
+          <span id="rel" class="badge low">—</span>
+        </div>
       </div>
-      <div class="metric">
-        <small>Stima 3h</small>
-        <div id="mCaps" style="font-size:22px;margin-top:6px;">— cappelli</div>
+
+      <div class="kpi">
+        <div>
+          <div class="muted">Indice oggi</div>
+          <div id="score" class="big">—</div>
+        </div>
+        <div class="muted" id="models" title="Modelli usati"></div>
       </div>
-      <div class="metric">
-        <small>Pioggia prossima</small>
-        <div id="mRain" style="font-size:16px;margin-top:6px;">—</div>
-      </div>
+
+      <div class="muted" style="margin-top:8px;">Prossimi 10 giorni</div>
+      <div id="bars" class="bar"></div>
+
+      <div id="hint" class="hint"></div>
     </div>
+  </div>
 
-    <div class="panel pad" style="margin-top:12px">
-      <div class="label">Previsione (prossimi 10 giorni) — <span id="daylabel" class="muted">oggi</span></div>
-      <div class="slider"><input id="day" type="range" min="0" max="9" step="1" value="0"></div>
-    </div>
-
-    <details open>
-      <summary>Consigli pratici <span class="muted">(cambiano col giorno)</span></summary>
-      <div id="tips" style="margin-top:6px;">—</div>
-    </details>
-
-    <details open>
-      <summary>Perché questa stima</summary>
-      <div id="why" style="margin-top:6px;">—</div>
-    </details>
-
-    <details>
-      <summary>Specie di porcini probabili</summary>
-      <div id="species" style="margin-top:6px;">Pinus/Abies/Picea (stima orientativa)</div>
-    </details>
-
-    <details>
-      <summary>Dati tecnici</summary>
-      <pre id="tech" style="font-size:12px;white-space:pre-wrap;"></pre>
-    </details>
-  </section>
-
-  <!-- COLONNA DESTRA -->
-  <section class="panel pad">
-    <div id="map"></div>
-    <div class="weathbar">
-      <div class="label">Barra meteo (prossimi 10 giorni)</div>
-      <div id="wstrip" class="wrow"></div>
-    </div>
-  </section>
-
-</main>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-let Lmap, Lmarker, Lcircle;
-let DATA = null;   // risposta backend
-let SEL = 0;       // giorno selezionato
-
-function parseCoordsLocal(text){
-  if(!text) return null;
-  // prendi i primi 2 numeri (accetta virgola italiana)
-  const re=/[-+]?\d{1,3}(?:[.,]\d+)?/g;
-  const nums = text.match(re);
-  if(!nums || nums.length<2) return null;
-  const lat = parseFloat(nums[0].replace(",", "."));
-  const lon = parseFloat(nums[1].replace(",", "."));
-  if(isNaN(lat)||isNaN(lon)) return null;
-  if(lat<-90||lat>90||lon<-180||lon>180) return null;
-  return {lat,lon};
-}
-
-function initMap(){
-  Lmap = L.map('map',{zoomControl:true}).setView([42.0,12.5], 6);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom:18, attribution:'&copy; OpenStreetMap'
-  }).addTo(Lmap);
-}
-
-function setMap(lat, lon, color='#ffb648'){
-  if(!Lmap) initMap();
-  Lmap.setView([lat,lon], 12);
-  if(Lmarker) Lmap.removeLayer(Lmarker);
-  if(Lcircle) Lmap.removeLayer(Lcircle);
-  Lmarker = L.marker([lat,lon]).addTo(Lmap);
-  Lcircle = L.circle([lat,lon], {radius:1500,color:color,fillOpacity:0.1}).addTo(Lmap);
-}
-
-function dayName(iso){
-  const d=new Date(iso+"T12:00:00");
-  return d.toLocaleDateString('it-IT',{weekday:'short', day:'2-digit', month:'2-digit'});
-}
-
-function paintWeatherStrip(dates, rain){
-  const host = document.getElementById('wstrip');
-  host.innerHTML = "";
-  dates.forEach((dt,i)=>{
-    const el = document.createElement('div');
-    el.className = "witem";
-    el.innerHTML = `<div class="d">${dayName(dt)}</div>
-                    <div class="mm">${(rain[i]||0).toFixed(1)} mm</div>`;
-    host.appendChild(el);
-  });
-}
-
-function adviceForDay(d){
-  // discorsivo e più ricco; usa slope/aspect/umidità/piogge future
-  const asp = DATA.aspect_octant;
-  const elev = Math.round(DATA.elevation_m);
-  const next = DATA.next_rain;
-  let s = `Preferisci zone ombreggiate (N–NE–NW) e suoli che trattengono umidità; ` +
-          `evita versanti troppo secchi; esposizione locale ${asp}. ` +
-          `Quota ${elev} m`;
-  if(next && next.days_ahead!==null){
-    s += `; attesa pioggia di ~${next.mm.toFixed(1)} mm tra D+${next.days_ahead} (${next.date}) — finestra 7–10 gg dopo.`;
-  }
-  // piccola modulazione in base allo score del giorno
-  const sc = DATA.scores_next10[SEL] || 0;
-  if(sc>=70) s += " Giornata promettente: muoviti presto e cerca lettiere fresche.";
-  else if(sc>=50) s += " Possibile raccolta: insisti su faggete o castagneti con micro-umidità.";
-  else s += " Nascite limitate: esplora quote/versanti alternativi.";
-  return s;
-}
-
-function whyForDay(){
-  // spiega cosa pesa di più usando tech + day arrays
-  const sc = DATA.scores_next10[SEL] || 0;
-  const r  = DATA.rain_next10_mm[SEL] || 0;
-  const t  = DATA.tmean_next10_c[SEL] || 0;
-  const tech = DATA.tech || {};
-  const asp = DATA.aspect_octant;
-  return `Indice ${sc} per D+${SEL}: ` +
-         `P14_eff ~${(tech.P14_last14_mm||0).toFixed(1)} mm (decadimento 7 gg), ` +
-         `T7 ~${(tech.Tmean7_c||t).toFixed(1)} °C, ` +
-         `ET0_7d ~${(tech.ET0_7d_mm||3).toFixed(1)} mm; ` +
-         `aspetto locale ${asp}; ` +
-         `pioggia giorno selezionato ~${r.toFixed(1)} mm.`;
-}
-
-function setDay(n){
-  SEL = n;
-  const idx = DATA.scores_next10[n] || 0;
-  document.getElementById('mIndex').textContent = idx;
-  document.getElementById('mCaps').textContent  = (idx? `${DATA.caps_3h} (oggi)` : "— cappelli");
-  document.getElementById('daylabel').textContent = (n===0? "oggi" : `D+${n} — ${dayName(DATA.dates[n])}`);
-  document.getElementById('tips').textContent = adviceForDay();
-  document.getElementById('why').textContent  = whyForDay();
-  // colore cerchio in base allo score
-  let color = '#ffb648';
-  if     (idx>=70) color = '#51d2a8';
-  else if(idx<45)  color = '#ff6b6b';
-  if(Lcircle) Lcircle.setStyle({color:color});
-}
-
-async function run(){
-  const q = document.getElementById('q').value.trim();
-  const txt = document.getElementById('coords').value.trim();
-  const coords = parseCoordsLocal(txt);
-  const params = new URLSearchParams();
-  if(coords){ params.set("coords", `${coords.lat},${coords.lon}`); }
-  else if(q){ params.set("q", q); }
-  else { alert("Inserisci località o coordinate"); return; }
-
-  try{
-    const r = await fetch(`/api/score?${params.toString()}`);
-    if(!r.ok){
-      const t = await r.text();
-      throw new Error(`API ${r.status}: ${t || r.statusText}`);
+  <script>
+    // -----------------------------
+    // Mappa
+    // -----------------------------
+    let map, marker;
+    function initMap(){
+      map = L.map('map', {zoomControl: true}).setView([42.5, 12.5], 6);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+      marker = L.marker([42.5,12.5]).addTo(map);
     }
-    DATA = await r.json();
-  }catch(e){
-    alert(e.message.replace(/\"/g,""));
-    return;
-  }
+    document.addEventListener("DOMContentLoaded", initMap);
 
-  // UI fill
-  const p = document.getElementById('place');
-  p.textContent = DATA.display ? DATA.display : `(${DATA.coords.lat.toFixed(5)}, ${DATA.coords.lon.toFixed(5)}) — quota ${Math.round(DATA.elevation_m)} m — esposizione ${DATA.aspect_octant}`;
-  setMap(DATA.coords.lat, DATA.coords.lon);
-  document.getElementById('mIndex').textContent = DATA.score_today ?? "—";
-  document.getElementById('mCaps').textContent  = DATA.caps_3h ? `${DATA.caps_3h} (oggi)` : "—";
-  const nr = DATA.next_rain;
-  document.getElementById('mRain').textContent  = (nr && nr.date) ? `${nr.mm.toFixed(1)} mm (D+${nr.days_ahead} – ${nr.date})` : "—";
-  paintWeatherStrip(DATA.dates, DATA.rain_next10_mm);
-  document.getElementById('tech').textContent = JSON.stringify(DATA.tech, null, 2);
+    // -----------------------------
+    // Helpers
+    // -----------------------------
+    const COORD_RE = /^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/;
 
-  // reset slider e pannelli
-  document.getElementById('day').value = 0;
-  setDay(0);
-}
+    function parseCoords(txt){
+      const m = COORD_RE.exec((txt||"").trim());
+      if(!m) return null;
+      const lat = parseFloat(m[1].replace(",", "."));
+      const lon = parseFloat(m[2].replace(",", "."));
+      if(!(isFinite(lat)&&isFinite(lon))) return null;
+      if(lat<-90||lat>90||lon<-180||lon>180) return null;
+      return {lat, lon};
+    }
 
-document.getElementById('go').addEventListener('click', run);
-document.getElementById('clear').addEventListener('click', ()=>{
-  document.getElementById('q').value="";
-  document.getElementById('coords').value="";
-});
+    function relBadge(r){
+      if(r===null||r===undefined) return ["low","—"];
+      const pct = Math.round(r*100);
+      if(pct>=80) return ["ok", pct+"%"];
+      if(pct>=60) return ["med", pct+"%"];
+      return ["low", pct+"%"];
+    }
 
-document.getElementById('day').addEventListener('input', (e)=> setDay(parseInt(e.target.value,10)));
+    function advice(score){
+      // suggerimento testuale semplice
+      if(score>=75) return "Finestra molto favorevole: controlla i tuoi spot abituali nelle prossime 24–72 h.";
+      if(score>=55) return "Condizioni discrete: utile monitorare dopo eventuale pioggia/umidità notturna.";
+      if(score>=40) return "Potenziale moderato: attendi un impulso piovoso o calo termico.";
+      return "Basso potenziale: serve pioggia utile (e 5–10 giorni di maturazione).";
+    }
 
-window.addEventListener('load', initMap);
-</script>
+    // -----------------------------
+    // Fetch
+    // -----------------------------
+    const goBtn = document.getElementById("go");
+    const qInput = document.getElementById("q");
+    const locEl  = document.getElementById("loc");
+    const relEl  = document.getElementById("rel");
+    const scoreEl= document.getElementById("score");
+    const barsEl = document.getElementById("bars");
+    const hintEl = document.getElementById("hint");
+    const modelsEl = document.getElementById("models");
+
+    async function search(){
+      const q = qInput.value.trim();
+      goBtn.disabled = true;
+      barsEl.innerHTML = "";
+      scoreEl.textContent = "…";
+      relEl.textContent = "…";
+
+      // costruisci URL
+      let url = "/api/score?";
+      const coords = parseCoords(q);
+      if(coords){
+        url += `lat=${coords.lat}&lon=${coords.lon}`;
+      }else if(q){
+        url += `q=${encodeURIComponent(q)}`;
+      }else{
+        goBtn.disabled = false;
+        return;
+      }
+
+      try{
+        const r = await fetch(url, {headers: {"Accept":"application/json"}});
+        if(!r.ok){
+          const t = await r.text();
+          throw new Error("Errore backend: "+t);
+        }
+        const data = await r.json();
+        renderResult(data);
+      }catch(err){
+        alert(err.message || "Errore di rete");
+      }finally{
+        goBtn.disabled = false;
+      }
+    }
+
+    function renderResult(data){
+      const {location, today, forecast, reliability, models_used} = data;
+      locEl.textContent = location?.name || "—";
+      const [cls, lbl] = relBadge(reliability);
+      relEl.className = "badge "+cls;
+      relEl.textContent = lbl;
+
+      const todayScore = Math.round(today?.score ?? 0);
+      scoreEl.textContent = `${todayScore}`;
+
+      // modelli
+      modelsEl.textContent = models_used?.length ? ("Modelli: "+models_used.join(", ")) : "";
+
+      // mappa
+      if(location?.lat && location?.lon){
+        marker.setLatLng([location.lat, location.lon]);
+        map.setView([location.lat, location.lon], 10);
+      }
+
+      // barre 10 giorni
+      barsEl.innerHTML = "";
+      const maxH = 120; // px
+      const maxScore = 100;
+      forecast.forEach(d =>{
+        const col = document.createElement("div");
+        col.className = "col";
+        const h = Math.max(2, Math.round((d.score/maxScore)*maxH));
+        const fill = document.createElement("div");
+        fill.className = "fill";
+        fill.style.height = `${h}px`;
+        const label = document.createElement("div");
+        const dd = new Date(d.date+"T00:00:00");
+        label.className = "label";
+        label.textContent = dd.toLocaleDateString(undefined, {weekday:"short", day:"2-digit"});
+        const scorelbl = document.createElement("div");
+        scorelbl.className = "scorelbl";
+        scorelbl.textContent = Math.round(d.score);
+        col.appendChild(fill);
+        col.appendChild(label);
+        col.appendChild(scorelbl);
+        barsEl.appendChild(col);
+      });
+
+      hintEl.textContent = advice(todayScore);
+    }
+
+    goBtn.addEventListener("click", search);
+    qInput.addEventListener("keydown", (e)=>{ if(e.key==="Enter") search(); });
+
+    // avvio con una località utile
+    window.addEventListener("load", ()=>{
+      qInput.value = "Abbadia San Salvatore";
+      search();
+    });
+  </script>
 </body>
 </html>
+
