@@ -3,50 +3,28 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PorciniCast</title>
+  <title>Trova Porcini</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://tile.openstreetmap.org">
 
   <!-- Leaflet -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity=""
-    crossorigin=""
-  />
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity=""
-    crossorigin=""
-    defer
-  ></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
 
   <style>
     :root{
-      --bg:#0b0f13;
-      --card:#121821;
-      --accent:#3fb950;
-      --muted:#9aa7b0;
-      --danger:#e55353;
-      --warn:#e6a700;
-      --text:#e5eef5;
-      --grid-w:1440px;
+      --bg:#0b0f13; --card:#121821; --accent:#3fb950; --muted:#9aa7b0; --text:#e5eef5; --grid-w:1440px;
     }
     html,body{height:100%;}
-    body{
-      margin:0; background:var(--bg); color:var(--text);
-      font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
-    }
-    .wrap{
-      max-width:var(--grid-w); margin:0 auto; padding:20px;
-      display:grid; grid-template-columns:1.3fr 1fr; gap:18px;
-    }
-    header{max-width:var(--grid-w); margin:0 auto; padding:18px 20px 4px;}
-    h1{font-size:1.25rem; margin:0 0 6px;}
+    body{margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;}
+    header{max-width:var(--grid-w); margin:0 auto; padding:18px 20px 6px;}
+    h1{font-size:1.35rem; margin:0 0 4px;}
+    .byline{color:var(--muted); font-size:.9rem;}
+    .wrap{max-width:var(--grid-w); margin:0 auto; padding:20px; display:grid; grid-template-columns:1.3fr 1fr; gap:18px;}
     .card{background:var(--card); border-radius:16px; padding:14px; box-shadow:0 6px 24px rgba(0,0,0,.25);}
     .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
     input[type=text]{flex:1; min-width:280px; background:#0b0f13; color:var(--text); border:1px solid #223042; border-radius:12px; padding:10px 12px;}
-    button{background:var(--accent); color:#08130a; border:0; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer;}
+    button{background:var(--accent); color:#08130a; border:0; border-radius:12px; padding:10px 14px; font-weight:700; cursor:pointer;}
     button:disabled{opacity:.6; cursor:not-allowed;}
     .muted{color:var(--muted); font-size:.9rem;}
     #map{height:480px; border-radius:14px; overflow:hidden;}
@@ -56,28 +34,28 @@
     .badge.ok{background:#13361c; color:#9be495; border:1px solid #1d6d2f;}
     .badge.med{background:#2b2a00; color:#ffef8b; border:1px solid #6c6500;}
     .badge.low{background:#3a1111; color:#ffb5b5; border:1px solid #7d1f1f;}
-    .bar{display:grid; grid-template-columns:repeat(10,1fr); gap:6px; margin-top:12px;}
+    .section-title{margin-top:12px; font-weight:800;}
+    .bar{display:grid; grid-template-columns:repeat(10,1fr); gap:6px; margin-top:10px;}
     .col{background:#0d141d; border:1px solid #223042; border-radius:10px; height:120px; position:relative; overflow:hidden;}
     .fill{position:absolute; bottom:0; left:0; width:100%; background:linear-gradient(180deg, #56f59d, #1a7f3b); }
     .label{position:absolute; top:6px; left:6px; right:6px; font-size:.78rem; color:var(--muted); text-align:center;}
     .scorelbl{position:absolute; bottom:6px; left:0; right:0; text-align:center; font-size:.85rem; font-weight:700;}
-    .hint{margin-top:10px; font-size:.95rem;}
-    @media (max-width: 980px){
-      .wrap{grid-template-columns:1fr; }
-      #map{height:360px;}
-    }
+    .list{margin:8px 0 0 0; padding:0 0 0 16px; color:var(--muted);}
+    .list li{margin:4px 0;}
+    @media (max-width: 980px){ .wrap{grid-template-columns:1fr;} #map{height:360px;} }
   </style>
 </head>
 <body>
   <header>
-    <h1>PorciniCast — stima potenziale fruttificazioni</h1>
+    <h1>Trova Porcini</h1>
+    <div class="byline">By Antonio Pio D’aloia</div>
     <div class="muted">Inserisci una località (es. “Abbadia San Salvatore”) oppure coordinate “lat, lon”.</div>
   </header>
 
   <div class="wrap">
     <div class="card">
       <div class="row" style="margin-bottom:10px;">
-        <input id="q" type="text" placeholder="Es. 'Castel di Sangro' oppure '42.123, 13.987'">
+        <input id="q" type="text" placeholder="Es. 'Benevento' oppure '41.127, 14.782'">
         <button id="go">Cerca</button>
       </div>
       <div id="map" class="card"></div>
@@ -103,160 +81,25 @@
         <div class="muted" id="models" title="Modelli usati"></div>
       </div>
 
-      <div class="muted" style="margin-top:8px;">Prossimi 10 giorni</div>
+      <div class="section-title">Previsione futura (10 giorni)</div>
       <div id="bars" class="bar"></div>
 
-      <div id="hint" class="hint"></div>
+      <div class="section-title">Ultima pioggia</div>
+      <div id="lastrain" class="muted">—</div>
+
+      <div class="section-title">Fattori analizzati</div>
+      <ul class="list" id="factors"></ul>
+
+      <div id="hint" class="muted" style="margin-top:8px;"></div>
     </div>
   </div>
 
   <script>
-    // -----------------------------
     // Mappa
-    // -----------------------------
     let map, marker;
     function initMap(){
       map = L.map('map', {zoomControl: true}).setView([42.5, 12.5], 6);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-        attribution: '&copy; OpenStreetMap'
-      }).addTo(map);
-      marker = L.marker([42.5,12.5]).addTo(map);
-    }
-    document.addEventListener("DOMContentLoaded", initMap);
+        maxZoom: 18, attribution: '&copy; OpenStreetMap'
 
-    // -----------------------------
-    // Helpers
-    // -----------------------------
-    const COORD_RE = /^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/;
-
-    function parseCoords(txt){
-      const m = COORD_RE.exec((txt||"").trim());
-      if(!m) return null;
-      const lat = parseFloat(m[1].replace(",", "."));
-      const lon = parseFloat(m[2].replace(",", "."));
-      if(!(isFinite(lat)&&isFinite(lon))) return null;
-      if(lat<-90||lat>90||lon<-180||lon>180) return null;
-      return {lat, lon};
-    }
-
-    function relBadge(r){
-      if(r===null||r===undefined) return ["low","—"];
-      const pct = Math.round(r*100);
-      if(pct>=80) return ["ok", pct+"%"];
-      if(pct>=60) return ["med", pct+"%"];
-      return ["low", pct+"%"];
-    }
-
-    function advice(score){
-      // suggerimento testuale semplice
-      if(score>=75) return "Finestra molto favorevole: controlla i tuoi spot abituali nelle prossime 24–72 h.";
-      if(score>=55) return "Condizioni discrete: utile monitorare dopo eventuale pioggia/umidità notturna.";
-      if(score>=40) return "Potenziale moderato: attendi un impulso piovoso o calo termico.";
-      return "Basso potenziale: serve pioggia utile (e 5–10 giorni di maturazione).";
-    }
-
-    // -----------------------------
-    // Fetch
-    // -----------------------------
-    const goBtn = document.getElementById("go");
-    const qInput = document.getElementById("q");
-    const locEl  = document.getElementById("loc");
-    const relEl  = document.getElementById("rel");
-    const scoreEl= document.getElementById("score");
-    const barsEl = document.getElementById("bars");
-    const hintEl = document.getElementById("hint");
-    const modelsEl = document.getElementById("models");
-
-    async function search(){
-      const q = qInput.value.trim();
-      goBtn.disabled = true;
-      barsEl.innerHTML = "";
-      scoreEl.textContent = "…";
-      relEl.textContent = "…";
-
-      // costruisci URL
-      let url = "/api/score?";
-      const coords = parseCoords(q);
-      if(coords){
-        url += `lat=${coords.lat}&lon=${coords.lon}`;
-      }else if(q){
-        url += `q=${encodeURIComponent(q)}`;
-      }else{
-        goBtn.disabled = false;
-        return;
-      }
-
-      try{
-        const r = await fetch(url, {headers: {"Accept":"application/json"}});
-        if(!r.ok){
-          const t = await r.text();
-          throw new Error("Errore backend: "+t);
-        }
-        const data = await r.json();
-        renderResult(data);
-      }catch(err){
-        alert(err.message || "Errore di rete");
-      }finally{
-        goBtn.disabled = false;
-      }
-    }
-
-    function renderResult(data){
-      const {location, today, forecast, reliability, models_used} = data;
-      locEl.textContent = location?.name || "—";
-      const [cls, lbl] = relBadge(reliability);
-      relEl.className = "badge "+cls;
-      relEl.textContent = lbl;
-
-      const todayScore = Math.round(today?.score ?? 0);
-      scoreEl.textContent = `${todayScore}`;
-
-      // modelli
-      modelsEl.textContent = models_used?.length ? ("Modelli: "+models_used.join(", ")) : "";
-
-      // mappa
-      if(location?.lat && location?.lon){
-        marker.setLatLng([location.lat, location.lon]);
-        map.setView([location.lat, location.lon], 10);
-      }
-
-      // barre 10 giorni
-      barsEl.innerHTML = "";
-      const maxH = 120; // px
-      const maxScore = 100;
-      forecast.forEach(d =>{
-        const col = document.createElement("div");
-        col.className = "col";
-        const h = Math.max(2, Math.round((d.score/maxScore)*maxH));
-        const fill = document.createElement("div");
-        fill.className = "fill";
-        fill.style.height = `${h}px`;
-        const label = document.createElement("div");
-        const dd = new Date(d.date+"T00:00:00");
-        label.className = "label";
-        label.textContent = dd.toLocaleDateString(undefined, {weekday:"short", day:"2-digit"});
-        const scorelbl = document.createElement("div");
-        scorelbl.className = "scorelbl";
-        scorelbl.textContent = Math.round(d.score);
-        col.appendChild(fill);
-        col.appendChild(label);
-        col.appendChild(scorelbl);
-        barsEl.appendChild(col);
-      });
-
-      hintEl.textContent = advice(todayScore);
-    }
-
-    goBtn.addEventListener("click", search);
-    qInput.addEventListener("keydown", (e)=>{ if(e.key==="Enter") search(); });
-
-    // avvio con una località utile
-    window.addEventListener("load", ()=>{
-      qInput.value = "Abbadia San Salvatore";
-      search();
-    });
-  </script>
-</body>
-</html>
 
