@@ -1,237 +1,287 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Trova Porcini</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://tile.openstreetmap.org">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <style>
-    :root{--bg:#0b0f13;--card:#121821;--accent:#3fb950;--muted:#9aa7b0;--text:#e5eef5;--grid:1440px;}
-    html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
-    header{max-width:var(--grid);margin:0 auto;padding:18px 20px 6px}
-    h1{margin:0 0 4px;font-size:1.35rem}
-    .byline{color:var(--muted);font-size:.9rem}
-    .wrap{max-width:var(--grid);margin:0 auto;padding:20px;display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
-    .card{background:var(--card);border-radius:16px;padding:14px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    input[type=text]{flex:1;min-width:240px;background:#0b0f13;color:var(--text);border:1px solid #223042;border-radius:12px;padding:10px 12px}
-    button{background:var(--accent);color:#08130a;border:0;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}
-    button:disabled{opacity:.6;cursor:not-allowed}
-    .muted{color:var(--muted);font-size:.9rem}
-    #map{height:520px;border-radius:14px;overflow:hidden}
-    .kpi{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-top:6px}
-    .kpi .big{font-size:2.1rem;font-weight:800}
-    .badge{padding:6px 10px;border-radius:999px;font-weight:700;font-size:.9rem}
-    .badge.ok{background:#13361c;color:#9be495;border:1px solid #1d6d2f}
-    .badge.med{background:#2b2a00;color:#ffef8b;border:1px solid #6c6500}
-    .badge.low{background:#3a1111;color:#ffb5b5;border:1px solid #7d1f1f}
-    .section-title{margin-top:12px;font-weight:800}
-    .bar{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-top:10px}
-    .col{background:#0d141d;border:1px solid #223042;border-radius:10px;height:120px;position:relative;overflow:hidden}
-    .fill{position:absolute;bottom:0;left:0;width:100%;background:linear-gradient(180deg,#56f59d,#1a7f3b)}
-    .label{position:absolute;top:6px;left:6px;right:6px;font-size:.78rem;color:var(--muted);text-align:center}
-    .scorelbl{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:.85rem;font-weight:700}
-    .list{margin:8px 0 0 0;padding:0 0 0 16px;color:var(--muted)}
-    .list li{margin:4px 0}
-    .status{position:fixed;right:14px;top:10px;background:#1a222e;border:1px solid #2c3a4c;color:#cde1f7;padding:6px 10px;border-radius:10px;font-size:.82rem}
+    :root{--bg:#0c1222;--panel:#0f172a;--text:#e5e7eb;--muted:#94a3b8;--accent:#10b981;--accent2:#22d3ee;--danger:#ef4444;}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0b1020,#0f172a);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    header{display:flex;align-items:center;gap:.7rem;padding:14px 16px;border-bottom:1px solid #1f2937;background:rgba(15,23,42,.6);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
+    .logo{display:flex;align-items:center;gap:.5rem}
+    .logo svg{width:26px;height:26px}
+    .brand{font-weight:800;letter-spacing:.3px}
+    main{max-width:1180px;margin:22px auto;padding:0 16px}
+    .card{background:linear-gradient(180deg,#0b1220,#0f172a);border:1px solid #1f2937;border-radius:14px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:14px}
+    input,button{border-radius:10px;border:1px solid #334155;background:#0b1324;color:var(--text);padding:12px 14px;font-size:15px}
+    button{background:linear-gradient(90deg,var(--accent2),var(--accent));border:none;cursor:pointer;color:#062f2a;font-weight:700}
+    button:disabled{opacity:.5;cursor:default}
+    .muted{color:var(--muted);font-size:13px}
+    .score{font-size:40px;font-weight:800}
+    .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;border:1px solid #1f2937;background:#0b1324}
+    .ok{background:rgba(16,185,129,.15);color:#22c55e;border-color:#064e3b}
+    .warn{background:rgba(245,158,11,.12);color:#f59e0b;border-color:#7c2d12}
+    .bad{background:rgba(239,68,68,.12);color:#ef4444;border-color:#7f1d1d}
+    .calendar{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-top:8px}
+    .day{height:12px;border-radius:4px;background:#1f2937}
+    .day[data-v="low"]{background:#ef4444}
+    .day[data-v="mid"]{background:#f59e0b}
+    .day[data-v="hi"]{background:#10b981}
+    .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px}
+    details{background:#0b1324;border:1px solid #1f2937;border-radius:10px;padding:10px}
+    summary{cursor:pointer;color:#a5b4fc}
+    footer{margin:18px auto 36px;max-width:1180px;padding:0 16px;color:#9ca3af}
+    .attribution{font-size:12px}
+    .list{margin:6px 0 0 18px;line-height:1.6}
+    .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+    .chip{font-size:12px;padding:4px 8px;border-radius:999px;background:#0b1324;border:1px solid #243244}
+    #map{height:420px;border-radius:12px;overflow:hidden}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .status{position:fixed;right:12px;top:10px;background:#1a2334;border:1px solid #2b3950;padding:6px 10px;border-radius:10px;font-size:12px}
     .status.err{background:#3a1111;border-color:#7d1f1f;color:#ffdede}
-    @media(max-width:980px){.wrap{grid-template-columns:1fr}#map{height:380px}}
+    @media(max-width:980px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-  <div id="status" class="status">Diagnostica: in attesa…</div>
+  <div id="status" class="status">Diagnostica: avvio…</div>
   <header>
-    <h1>Trova Porcini</h1>
-    <div class="byline">By Antonio Pio D’aloia</div>
-    <div class="muted">Inserisci una località (es. “Abbadia San Salvatore”) oppure coordinate “lat, lon”.</div>
+    <div class="logo">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#22d3ee"/><stop offset="1" stop-color="#10b981"/></linearGradient></defs>
+        <path d="M12 26c0-9 10-16 20-16s20 7 20 16c0 3-6 6-16 7v7h6a2 2 0 110 4H22a2 2 0 110-4h6v-7c-10-1-16-4-16-7z" fill="url(#g)"/>
+        <circle cx="32" cy="48" r="5" fill="#22d3ee"/>
+      </svg>
+      <div class="brand">Trova Porcini</div>
+    </div>
   </header>
 
-  <div class="wrap">
+  <main>
     <div class="card">
-      <div class="row" style="margin-bottom:10px;">
-        <input id="q" type="text" placeholder="Es. 'Benevento' oppure '41.127, 14.782'">
-        <button id="go">Cerca</button>
+      <div class="row">
+        <input id="q" placeholder="Cerca una località (es. Benevento) o clicca sulla mappa">
+        <button id="btn">Calcola idoneità</button>
         <button id="geo" title="Usa la mia posizione">📍</button>
       </div>
-      <div id="map" class="card"></div>
-      <div id="paneMsg" class="muted" style="margin-top:6px;"></div>
+      <div class="muted" style="margin-top:6px">
+        Indice basato su pioggia antecedente a decadimento (emivita ~8 gg), bilancio idrico (ET0), finestra termica, fattori topografici
+        e contesto forestale. Include spiegazione e consigli.
+      </div>
     </div>
 
-    <div class="card" id="panel">
-      <div class="row" style="justify-content:space-between;">
-        <div>
-          <div class="muted">Località</div>
-          <div id="loc" style="font-weight:700;">—</div>
+    <div class="grid">
+      <div>
+        <div class="card" id="map"></div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div class="muted">Indice oggi (0–100)</div>
+              <div class="score" id="score">—</div>
+            </div>
+            <div id="advice" class="pill">—</div>
+          </div>
+          <div id="calendar" class="calendar" title="Prossimi 10 giorni"></div>
+          <div id="best" class="muted" style="margin-top:8px">Finestra migliore: —</div>
         </div>
-        <div>
-          <div class="muted">Affidabilità</div>
-          <span id="rel" class="badge low">—</span>
+
+        <div class="card" id="whyCard" style="display:none">
+          <div style="font-weight:700">Perché questo giudizio?</div>
+          <ul id="whyList" class="list"></ul>
+        </div>
+
+        <div class="card" id="adviceCard" style="display:none">
+          <div style="font-weight:700">Consigli sul campo</div>
+          <div id="adviceToday" style="margin-top:6px"></div>
+          <div id="adviceNext" class="muted" style="margin-top:4px"></div>
+          <ul id="adviceTips" class="list"></ul>
         </div>
       </div>
 
-      <div class="kpi">
-        <div>
-          <div class="muted">Indice oggi</div>
-          <div id="score" class="big">—</div>
+      <div>
+        <div class="card">
+          <div class="kv" id="kv"></div>
         </div>
-        <div class="muted" id="models" title="Modelli usati"></div>
+
+        <div class="card" id="otherCard" style="display:none">
+          <div style="font-weight:700">Altri funghi possibili</div>
+          <div id="otherList" class="chips"></div>
+          <div class="muted" style="margin-top:6px;font-size:12px">Nota sicurezza: raccogli solo specie che riconosci con certezza.</div>
+        </div>
+
+        <div class="card">
+          <details>
+            <summary>Metodi & note (clicca per aprire)</summary>
+            <div style="font-size:14px;line-height:1.6;margin-top:6px">
+              Modello v0.6: <b>API*</b> (precipitazione con decadimento, emivita ~8 giorni) corretta con <b>ET0 FAO</b> (7g),
+              <b>finestra termica</b> 10–18 °C, modulatori topografici (quota, pendenza, esposizione), contesto forestale OSM.
+              Simulazione dei prossimi 10 giorni con aggiornamento dell’API* e finestra migliore 3gg. 
+              Dati: Open-Meteo, Open-Elevation, Overpass/OSM e (facoltativo) OpenWeather.
+            </div>
+          </details>
+        </div>
       </div>
-
-      <div class="section-title">Previsione futura (10 giorni)</div>
-      <div id="bars" class="bar"></div>
-
-      <div class="section-title">Ultima pioggia</div>
-      <div id="lastrain" class="muted">—</div>
-
-      <div class="section-title">Fattori analizzati</div>
-      <ul class="list" id="factors"></ul>
-
-      <div class="section-title">Consigli pratici</div>
-      <ul class="list" id="tips"></ul>
-
-      <div id="hint" class="muted" style="margin-top:8px;"></div>
     </div>
-  </div>
+
+    <footer>
+      <div class="attribution">By Antonio Pio D’aloia — Dati di terze parti con licenze proprie.</div>
+    </footer>
+  </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
-    // ==== CONFIG: backend (Render) =====
-    const BACKEND = "https://porcinicast-2.onrender.com";
-
-    // ---- diagnostica ----
-    const statusBox = document.getElementById("status");
-    function setStatus(msg, isErr=false){ statusBox.textContent = "Diagnostica: " + msg; statusBox.className = "status" + (isErr?" err":""); }
+    // Usa il proxy Netlify: /api → backend Render
+    const API_BASE = window.location.origin + "/api";
+    const $ = (s)=>document.querySelector(s);
+    function cls(score){ if(score>=70) return "ok"; if(score>=60) return "warn"; return "bad"; }
+    function dayClass(v){ if(v>=70) return "hi"; if(v>=55) return "mid"; return "low"; }
+    function setStatus(t,err=false){ const el=$("#status"); el.textContent="Diagnostica: "+t; el.className="status"+(err?" err":""); }
 
     // ---- mappa ----
     let map, marker;
     function initMap(){
-      map = L.map('map', {zoomControl: true}).setView([42.5, 12.5], 6);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '&copy; OpenStreetMap'}).addTo(map);
+      map = L.map('map', {zoomControl:true}).setView([42.5,12.5], 6);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18, attribution:'&copy; OpenStreetMap'}).addTo(map);
       marker = L.marker([42.5,12.5]).addTo(map);
-      setTimeout(()=> map.invalidateSize(), 200);
-      map.on('click', (e)=> { runSearch({lat:e.latlng.lat, lon:e.latlng.lng}); });
-    }
-    document.addEventListener("DOMContentLoaded", ()=>{
-      if(window.L){ initMap(); setStatus("mappa inizializzata ✔"); }
-      else setStatus("Leaflet non caricato", true);
-    });
-
-    // ---- helpers ----
-    const COORD_RE=/^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/;
-    function parseCoords(txt){
-      const m=COORD_RE.exec((txt||"").trim());
-      if(!m) return null; const lat=parseFloat(m[1].replace(",", ".")); const lon=parseFloat(m[2].replace(",", "."));
-      if(!(isFinite(lat)&&isFinite(lon))) return null; if(lat<-90||lat>90||lon<-180||lon>180) return null; return {lat,lon};
-    }
-    function relBadge(r){ if(r==null) return ["low","—"]; const p=Math.round(r*100); if(p>=80) return ["ok",p+"%"]; if(p>=60) return ["med",p+"%"]; return ["low",p+"%"]; }
-    function advice(score){
-      if(score>=75) return "Finestra molto favorevole: controlla i tuoi spot abituali nelle prossime 24–72 h.";
-      if(score>=55) return "Condizioni discrete: utile monitorare dopo eventuale pioggia/umidità notturna.";
-      if(score>=40) return "Potenziale moderato: attendi un impulso piovoso o calo termico.";
-      return "Basso potenziale: serve pioggia utile (e 5–10 giorni di maturazione).";
-    }
-    function showError(msg){ document.getElementById("paneMsg").innerHTML = "<span style='color:#ffb5b5'>"+msg+"</span>"; setStatus(msg, true); }
-
-    // ---- UI refs ----
-    const goBtn=document.getElementById("go"), qInput=document.getElementById("q"), geoBtn=document.getElementById("geo");
-    const locEl=document.getElementById("loc"), relEl=document.getElementById("rel"), scoreEl=document.getElementById("score");
-    const barsEl=document.getElementById("bars"), hintEl=document.getElementById("hint"), modelsEl=document.getElementById("models");
-    const lastRainEl=document.getElementById("lastrain"), factorsEl=document.getElementById("factors"), tipsEl=document.getElementById("tips");
-
-    // ---- fetch API ----
-    async function runSearch(arg){
-      try{
-        goBtn.disabled=true; document.getElementById("paneMsg").textContent="";
-        barsEl.innerHTML=""; scoreEl.textContent="…"; relEl.textContent="…"; lastRainEl.textContent="—"; factorsEl.innerHTML=""; tipsEl.innerHTML="";
-        let url = BACKEND + "/api/score?";
-        if(arg && arg.lat && arg.lon){ url+=`lat=${arg.lat}&lon=${arg.lon}`; }
-        else{
-          const q=qInput.value.trim();
-          const c=parseCoords(q); if(c) url+=`lat=${c.lat}&lon=${c.lon}`; else if(q) url+=`q=${encodeURIComponent(q)}`; else return;
-        }
-        setStatus("chiamo backend…");
-        const r=await fetch(url,{headers:{"Accept":"application/json"}});
-        if(!r.ok){ const t=await r.text(); showError("Backend: "+t); return; }
-        const data=await r.json(); render(data); setStatus("OK ✔");
-      }catch(e){ showError(e.message||"Errore di rete"); }
-      finally{ goBtn.disabled=false; }
-    }
-
-    function render(data){
-      const {location, today, forecast, reliability, last_rain, factors, tips} = data;
-      // località
-      locEl.textContent = location?.name || "—";
-      if(location?.lat && location?.lon){ marker.setLatLng([location.lat, location.lon]); map.setView([location.lat, location.lon], 11); setTimeout(()=>map.invalidateSize(), 100); }
-
-      // affidabilità e indice
-      const [cls,lbl]=relBadge(reliability); relEl.className="badge "+cls; relEl.textContent=lbl;
-      const todayScore=Math.round(today?.score??0); scoreEl.textContent = `${todayScore}`;
-      modelsEl.textContent = factors?.models_used?.length ? ("Modelli: "+factors.models_used.join(", ")) : "";
-
-      // previsione 10 gg
-      const maxH=120, maxScore=100; barsEl.innerHTML="";
-      forecast.forEach(d=>{
-        const col=document.createElement("div"); col.className="col";
-        const h=Math.max(2, Math.round((d.score/maxScore)*maxH));
-        const fill=document.createElement("div"); fill.className="fill"; fill.style.height=`${h}px`;
-        const label=document.createElement("div"); label.className="label"; const dd=new Date(d.date+"T00:00:00"); label.textContent=dd.toLocaleDateString(undefined,{weekday:"short",day:"2-digit"});
-        const sc=document.createElement("div"); sc.className="scorelbl"; sc.textContent=Math.round(d.score);
-        col.appendChild(fill); col.appendChild(label); col.appendChild(sc); barsEl.appendChild(col);
+      setTimeout(()=>map.invalidateSize(),150);
+      map.on("click", async (e)=>{
+        await runWithCoords(e.latlng.lat, e.latlng.lng, "Punto sulla mappa");
       });
-
-      // ultima pioggia
-      if(last_rain && last_rain.date){ const dd=new Date(last_rain.date+"T00:00:00"); lastRainEl.textContent = `${dd.toLocaleDateString()} — ${last_rain.amount_mm} mm`; }
-      else{ lastRainEl.textContent="Nessuna pioggia significativa negli ultimi 30 giorni."; }
-
-      // fattori
-      const f=factors||{};
-      const items=[
-        ["Latitudine", f.latitude?.toFixed?.(5)],["Longitudine", f.longitude?.toFixed?.(5)],
-        ["Quota", f.elevation_m!=null?`${f.elevation_m} m`:"—"],
-        ["Pioggia 14gg (P14)", f.P14_mm!=null?`${f.P14_mm} mm`:"—"],
-        ["ET0 14gg", f.ET0_14_mm!=null?`${f.ET0_14_mm} mm`:"—"],
-        ["Temperatura media 7gg", f.T7_mean_C!=null?`${f.T7_mean_C} °C`:"—"],
-        ["Umidità relativa 7gg", f.RH7_mean_%!=null?`${f.RH7_mean_%} %`:"—"],
-        ["Radiazione solare 7gg", f.SWrad7_MJm2!=null?`${f.SWrad7_MJm2} MJ/m²`:"—"],
-        ["T min 7gg", f.Tmin7_C!=null?`${f.Tmin7_C} °C`:"—"],
-        ["Vento max 7gg", f.WindMax7_ms!=null?`${f.WindMax7_ms} m/s`:"—"]
-      ];
-      factorsEl.innerHTML = items.map(([k,v])=>`<li><b>${k}:</b> ${v??"—"}</li>`).join("");
-
-      // consigli pratici
-      tipsEl.innerHTML = (tips||[]).map(t=>`<li>${t}</li>`).join("");
-
-      // suggerimento sintetico
-      hintEl.textContent = advice(Math.round(today?.score??0));
     }
 
-    // eventi UI
-    document.getElementById("go").addEventListener("click", ()=>runSearch());
-    document.getElementById("q").addEventListener("keydown",(e)=>{ if(e.key==="Enter") runSearch(); });
-    document.getElementById("geo").addEventListener("click", ()=>{
-      if(!navigator.geolocation){ showError("Geolocalizzazione non supportata"); return; }
+    async function ping(){
+      try{
+        const r = await fetch(API_BASE + "/health");
+        if(r.ok){ setStatus("backend OK ✔"); } else { setStatus("backend non risponde", true); }
+      }catch{ setStatus("errore rete verso backend", true); }
+    }
+
+    async function geocode(q){
+      const r = await fetch(`${API_BASE}/geocode?q=${encodeURIComponent(q)}`);
+      if(!r.ok) throw new Error("geocode"); return r.json();
+    }
+    async function score(lat,lon,half=8){
+      const r = await fetch(`${API_BASE}/score?lat=${lat}&lon=${lon}&half=${half}`);
+      if(!r.ok) throw new Error("score"); return r.json();
+    }
+
+    function narrative(s){
+      const msgs = { today:"", next:"", tips:[] };
+      const sc = s.score_today||0;
+      if (sc>=70) msgs.today = "Oggi è favorevole: buone probabilità di ritrovamento.";
+      else if (sc>=60) msgs.today = "Oggi discreto: prova zone conosciute o esposizioni fresche.";
+      else if (sc>=50) msgs.today = "Oggi incerto: meglio attendere 1–2 giorni o nuove piogge.";
+      else msgs.today = "Oggi sconsigliato: condizioni poco favorevoli.";
+      if (s.best_window && s.best_window.mean>=60){
+        msgs.next = `Periodo migliore: D+${s.best_window.start} → D+${s.best_window.end} (media ${s.best_window.mean}).`;
+      } else {
+        const mx = Math.max(...(s.scores_next10||[0]));
+        if (mx>=60){
+          const i = (s.scores_next10||[]).indexOf(mx);
+          msgs.next = `Giorno più promettente: D+${i} (indice ${mx}).`;
+        } else {
+          msgs.next = "Nei prossimi 10 giorni non emergono finestre davvero favorevoli.";
+        }
+      }
+      if (s.humidity_now!=null && s.humidity_now<45) msgs.tips.push("Umidità bassa: privilegia conche ombreggiate e suoli profondi.");
+      if ((s.rain24h_forecast_mm||0) > 5) msgs.tips.push("Pioggia in arrivo: spesso conviene andare 1–2 giorni dopo l’evento.");
+      if (s.elevation_m){
+        if (s.elevation_m<500) msgs.tips.push("Quota bassa: con caldo prolungato cerca esposizioni N/NE o sali di quota.");
+        if (s.elevation_m>1400) msgs.tips.push("Quota alta: stagione più tardiva; osserva finestre più avanti.");
+      }
+      if (s.forest && /Castanea|Quercus/i.test(s.forest)) msgs.tips.push("In castagno/quercia controlla margini e radure dopo piogge regolari.");
+      if (msgs.tips.length===0) msgs.tips.push("Controlla i margini di bosco e i versanti freschi; evita suoli compattati e troppo secchi.");
+      return msgs;
+    }
+
+    function fillKV(container, rows){
+      container.innerHTML="";
+      rows.forEach(([k,v])=>{
+        const div=document.createElement("div");
+        div.innerHTML=`<div class="muted">${k}</div><div>${v??"—"}</div>`;
+        container.appendChild(div);
+      });
+    }
+
+    async function run(){
+      const q = $("#q").value.trim(); if(!q){$("#q").focus();return;}
+      $("#btn").disabled=true;
+      try{
+        const g = await geocode(q);
+        await runWithCoords(g.lat, g.lon, g.display);
+      }catch(e){ alert("Errore durante il calcolo. Riprova tra poco."); console.error(e); }
+      finally{ $("#btn").disabled=false; }
+    }
+
+    async function runWithCoords(lat, lon, displayName){
+      try{
+        $("#btn").disabled=true;
+        marker.setLatLng([lat,lon]); map.setView([lat,lon], 11);
+        const s = await score(lat, lon, 8);
+
+        $("#score").textContent = s.score_today;
+        const pill = $("#advice"); pill.textContent = s.advice || "—"; pill.className = `pill ${cls(s.score_today)}`;
+
+        const cal=$("#calendar"); cal.innerHTML="";
+        (s.scores_next10||[]).forEach(v=>{
+          const d=document.createElement("div"); d.className="day"; d.dataset.v=(v>=70?'hi':(v>=55?'mid':'low')); d.title=v; cal.appendChild(d);
+        });
+        $("#best").textContent = s.best_window? `Finestra migliore (3 giorni): D+${s.best_window.start} → D+${s.best_window.end} (media ${s.best_window.mean})` : "—";
+
+        $("#whyCard").style.display="block";
+        const ul=$("#whyList"); ul.innerHTML="";
+        (s.explanation?.reasons||[]).forEach(t=>{const li=document.createElement("li");li.textContent=t;ul.appendChild(li);});
+
+        const adv = narrative(s);
+        $("#adviceCard").style.display = "block";
+        $("#adviceToday").textContent = adv.today;
+        $("#adviceNext").textContent  = adv.next;
+        const ul2 = $("#adviceTips"); ul2.innerHTML = "";
+        adv.tips.forEach(t => { const li = document.createElement("li"); li.textContent = t; ul2.appendChild(li); });
+
+        const other = $("#otherList"); other.innerHTML="";
+        if (s.other_species && s.other_species.length){
+          $("#otherCard").style.display="block";
+          s.other_species.forEach(name => {
+            const span=document.createElement("div"); span.className="chip"; span.textContent=name; other.appendChild(span);
+          });
+        } else { $("#otherCard").style.display="none"; }
+
+        fillKV($("#kv"), [
+          ["Località", displayName],
+          ["Quota", `${Math.round(s.elevation_m)} m`],
+          ["Pendenza", `${s.slope_deg.toFixed(1)}°`],
+          ["Esposizione", `${s.aspect_octant} (${s.aspect_deg.toFixed(0)}°)`],
+          ["Bosco (indic.)", s.forest],
+          ["API* (30g, half=8)", `${s.API_star_mm} mm`],
+          ["P7 / P14", `${s.P7_mm} / ${s.P14_mm} mm`],
+          ["ET0 7g", `${s.ET0_7d_mm} mm`],
+          ["Ultima pioggia utile", s.last_rain_days>=0 ? `${s.last_rain_days} giorni fa` : "n/d"],
+          ["Prob. pioggia 72h (OM)", s.prob_rain_next3d!=null ? `${s.prob_rain_next3d}%` : "—"],
+          ["Tmed 7g (Tmin–Tmax)", `${s.Tmean7_c.toFixed(1)} °C (${s.Tmin7_c.toFixed(1)}–${s.Tmax7_c.toFixed(1)})`],
+          ["Umidità (ora, OWM)", s.humidity_now!=null? `${s.humidity_now}%` : "—"],
+          ["Pioggia prossime 24h (OWM)", s.rain24h_forecast_mm!=null? `${s.rain24h_forecast_mm} mm` : "—"],
+          ["Affidabilità stimata", s.confidence!=null ? s.confidence : "—"]
+        ]);
+      }catch(e){ alert("Errore durante il calcolo. Riprova tra poco."); console.error(e); }
+      finally{ $("#btn").disabled=false; }
+    }
+
+    document.addEventListener("keydown", e=>{ if(e.key==="Enter") run(); });
+    $("#btn").addEventListener("click", run);
+    $("#geo").addEventListener("click", ()=>{
+      if(!navigator.geolocation){ alert("Geolocalizzazione non supportata"); return; }
       navigator.geolocation.getCurrentPosition(
-        (pos)=> runSearch({lat:pos.coords.latitude, lon:pos.coords.longitude}),
-        ()=> showError("Impossibile ottenere la posizione")
+        (pos)=> runWithCoords(pos.coords.latitude, pos.coords.longitude, "La mia posizione"),
+        ()=> alert("Impossibile ottenere la posizione")
       );
     });
 
-    // diagnostica backend
-    (async ()=>{
-      try{
-        const r = await fetch(BACKEND + "/api/health");
-        if(!r.ok){ setStatus("backend non raggiungibile", true); return; }
-        const j = await r.json();
-        if(j && j.ok) setStatus("backend raggiungibile ✔");
-        else setStatus("backend non risponde correttamente", true);
-      }catch(e){ setStatus("errore rete verso backend", true); }
-    })();
-
-    // avvio
-    window.addEventListener("load", ()=>{ document.getElementById("q").value = "Benevento"; });
+    initMap(); ping();
   </script>
 </body>
 </html>
