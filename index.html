@@ -1,51 +1,48 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Trova Porcini</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://tile.openstreetmap.org">
-
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
-
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <style>
-    :root{
-      --bg:#0b0f13; --card:#121821; --accent:#3fb950; --muted:#9aa7b0; --text:#e5eef5; --grid-w:1440px;
-    }
-    html,body{height:100%;}
-    body{margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;}
-    header{max-width:var(--grid-w); margin:0 auto; padding:18px 20px 6px;}
-    h1{font-size:1.35rem; margin:0 0 4px;}
-    .byline{color:var(--muted); font-size:.9rem;}
-    .wrap{max-width:var(--grid-w); margin:0 auto; padding:20px; display:grid; grid-template-columns:1.3fr 1fr; gap:18px;}
-    .card{background:var(--card); border-radius:16px; padding:14px; box-shadow:0 6px 24px rgba(0,0,0,.25);}
-    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
-    input[type=text]{flex:1; min-width:280px; background:#0b0f13; color:var(--text); border:1px solid #223042; border-radius:12px; padding:10px 12px;}
-    button{background:var(--accent); color:#08130a; border:0; border-radius:12px; padding:10px 14px; font-weight:700; cursor:pointer;}
-    button:disabled{opacity:.6; cursor:not-allowed;}
-    .muted{color:var(--muted); font-size:.9rem;}
-    #map{height:480px; border-radius:14px; overflow:hidden;}
-    .kpi{display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; margin-top:6px;}
-    .kpi .big{font-size:2.1rem; font-weight:800;}
-    .badge{padding:6px 10px; border-radius:999px; font-weight:700; font-size:.9rem;}
-    .badge.ok{background:#13361c; color:#9be495; border:1px solid #1d6d2f;}
-    .badge.med{background:#2b2a00; color:#ffef8b; border:1px solid #6c6500;}
-    .badge.low{background:#3a1111; color:#ffb5b5; border:1px solid #7d1f1f;}
-    .section-title{margin-top:12px; font-weight:800;}
-    .bar{display:grid; grid-template-columns:repeat(10,1fr); gap:6px; margin-top:10px;}
-    .col{background:#0d141d; border:1px solid #223042; border-radius:10px; height:120px; position:relative; overflow:hidden;}
-    .fill{position:absolute; bottom:0; left:0; width:100%; background:linear-gradient(180deg, #56f59d, #1a7f3b); }
-    .label{position:absolute; top:6px; left:6px; right:6px; font-size:.78rem; color:var(--muted); text-align:center;}
-    .scorelbl{position:absolute; bottom:6px; left:0; right:0; text-align:center; font-size:.85rem; font-weight:700;}
-    .list{margin:8px 0 0 0; padding:0 0 0 16px; color:var(--muted);}
-    .list li{margin:4px 0;}
-    @media (max-width: 980px){ .wrap{grid-template-columns:1fr;} #map{height:360px;} }
+    :root{--bg:#0b0f13;--card:#121821;--accent:#3fb950;--muted:#9aa7b0;--text:#e5eef5;--grid:1440px;}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+    header{max-width:var(--grid);margin:0 auto;padding:18px 20px 6px}
+    h1{margin:0 0 4px;font-size:1.35rem}
+    .byline{color:var(--muted);font-size:.9rem}
+    .wrap{max-width:var(--grid);margin:0 auto;padding:20px;display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
+    .card{background:var(--card);border-radius:16px;padding:14px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    input[type=text]{flex:1;min-width:240px;background:#0b0f13;color:var(--text);border:1px solid #223042;border-radius:12px;padding:10px 12px}
+    button{background:var(--accent);color:#08130a;border:0;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    .muted{color:var(--muted);font-size:.9rem}
+    #map{height:520px;border-radius:14px;overflow:hidden}
+    .kpi{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-top:6px}
+    .kpi .big{font-size:2.1rem;font-weight:800}
+    .badge{padding:6px 10px;border-radius:999px;font-weight:700;font-size:.9rem}
+    .badge.ok{background:#13361c;color:#9be495;border:1px solid #1d6d2f}
+    .badge.med{background:#2b2a00;color:#ffef8b;border:1px solid #6c6500}
+    .badge.low{background:#3a1111;color:#ffb5b5;border:1px solid #7d1f1f}
+    .section-title{margin-top:12px;font-weight:800}
+    .bar{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-top:10px}
+    .col{background:#0d141d;border:1px solid #223042;border-radius:10px;height:120px;position:relative;overflow:hidden}
+    .fill{position:absolute;bottom:0;left:0;width:100%;background:linear-gradient(180deg,#56f59d,#1a7f3b)}
+    .label{position:absolute;top:6px;left:6px;right:6px;font-size:.78rem;color:var(--muted);text-align:center}
+    .scorelbl{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:.85rem;font-weight:700}
+    .list{margin:8px 0 0 0;padding:0 0 0 16px;color:var(--muted)}
+    .list li{margin:4px 0}
+    .status{position:fixed;right:14px;top:10px;background:#1a222e;border:1px solid #2c3a4c;color:#cde1f7;padding:6px 10px;border-radius:10px;font-size:.82rem}
+    .status.err{background:#3a1111;border-color:#7d1f1f;color:#ffdede}
+    @media(max-width:980px){.wrap{grid-template-columns:1fr}#map{height:380px}}
   </style>
 </head>
 <body>
+  <div id="status" class="status">Diagnostica: in attesa…</div>
   <header>
     <h1>Trova Porcini</h1>
     <div class="byline">By Antonio Pio D’aloia</div>
@@ -55,10 +52,12 @@
   <div class="wrap">
     <div class="card">
       <div class="row" style="margin-bottom:10px;">
-        <input id="q" type="text" placeholder="Es. 'Benevento' oppure '41.127, 14.782'">
+        <input id="q" type="text" placeholder="Es. 'Campitello Matese' oppure '41.458, 14.374'">
         <button id="go">Cerca</button>
+        <button id="geo" title="Usa la mia posizione">📍</button>
       </div>
       <div id="map" class="card"></div>
+      <div id="paneMsg" class="muted" style="margin-top:6px;"></div>
     </div>
 
     <div class="card" id="panel">
@@ -90,168 +89,153 @@
       <div class="section-title">Fattori analizzati</div>
       <ul class="list" id="factors"></ul>
 
+      <div class="section-title">Consigli pratici</div>
+      <ul class="list" id="tips"></ul>
+
       <div id="hint" class="muted" style="margin-top:8px;"></div>
     </div>
   </div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
-    // Mappa
+    // ---- diagnostica base ----
+    const statusBox = document.getElementById("status");
+    function setStatus(msg, isErr=false){ statusBox.textContent = "Diagnostica: " + msg; statusBox.className = "status" + (isErr?" err":""); }
+
+    // ---- mappa ----
     let map, marker;
     function initMap(){
       map = L.map('map', {zoomControl: true}).setView([42.5, 12.5], 6);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18, attribution: '&copy; OpenStreetMap'
-      }).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '&copy; OpenStreetMap'}).addTo(map);
       marker = L.marker([42.5,12.5]).addTo(map);
+      // evita "mappa nera"
+      setTimeout(()=> map.invalidateSize(), 200);
+      // click sulla mappa => cerca per coordinate
+      map.on('click', (e)=> { runSearch({lat:e.latlng.lat, lon:e.latlng.lng}); });
     }
-    document.addEventListener("DOMContentLoaded", initMap);
+    document.addEventListener("DOMContentLoaded", ()=>{
+      if(window.L){ initMap(); setStatus("mappa inizializzata ✔"); }
+      else setStatus("Leaflet non caricato", true);
+    });
 
-    // Helpers
-    const COORD_RE = /^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/;
+    // ---- helpers ----
+    const COORD_RE=/^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/;
     function parseCoords(txt){
-      const m = COORD_RE.exec((txt||"").trim());
-      if(!m) return null;
-      const lat = parseFloat(m[1].replace(",", "."));
-      const lon = parseFloat(m[2].replace(",", "."));
-      if(!(isFinite(lat)&&isFinite(lon))) return null;
-      if(lat<-90||lat>90||lon<-180||lon>180) return null;
-      return {lat, lon};
+      const m=COORD_RE.exec((txt||"").trim());
+      if(!m) return null; const lat=parseFloat(m[1].replace(",", ".")); const lon=parseFloat(m[2].replace(",", "."));
+      if(!(isFinite(lat)&&isFinite(lon))) return null; if(lat<-90||lat>90||lon<-180||lon>180) return null; return {lat,lon};
     }
-    function relBadge(r){
-      if(r===null||r===undefined) return ["low","—"];
-      const pct = Math.round(r*100);
-      if(pct>=80) return ["ok", pct+"%"];
-      if(pct>=60) return ["med", pct+"%"];
-      return ["low", pct+"%"];
-    }
+    function relBadge(r){ if(r==null) return ["low","—"]; const p=Math.round(r*100); if(p>=80) return ["ok",p+"%"]; if(p>=60) return ["med",p+"%"]; return ["low",p+"%"]; }
     function advice(score){
       if(score>=75) return "Finestra molto favorevole: controlla i tuoi spot abituali nelle prossime 24–72 h.";
       if(score>=55) return "Condizioni discrete: utile monitorare dopo eventuale pioggia/umidità notturna.";
       if(score>=40) return "Potenziale moderato: attendi un impulso piovoso o calo termico.";
       return "Basso potenziale: serve pioggia utile (e 5–10 giorni di maturazione).";
     }
+    function showError(msg){ document.getElementById("paneMsg").innerHTML = "<span style='color:#ffb5b5'>"+msg+"</span>"; setStatus(msg, true); }
 
-    // UI nodes
-    const goBtn = document.getElementById("go");
-    const qInput = document.getElementById("q");
-    const locEl  = document.getElementById("loc");
-    const relEl  = document.getElementById("rel");
-    const scoreEl= document.getElementById("score");
-    const barsEl = document.getElementById("bars");
-    const hintEl = document.getElementById("hint");
-    const modelsEl = document.getElementById("models");
-    const lastRainEl = document.getElementById("lastrain");
-    const factorsEl = document.getElementById("factors");
+    // ---- UI refs ----
+    const goBtn=document.getElementById("go"), qInput=document.getElementById("q"), geoBtn=document.getElementById("geo");
+    const locEl=document.getElementById("loc"), relEl=document.getElementById("rel"), scoreEl=document.getElementById("score");
+    const barsEl=document.getElementById("bars"), hintEl=document.getElementById("hint"), modelsEl=document.getElementById("models");
+    const lastRainEl=document.getElementById("lastrain"), factorsEl=document.getElementById("factors"), tipsEl=document.getElementById("tips");
 
-    async function search(){
-      const q = qInput.value.trim();
-      goBtn.disabled = true;
-      barsEl.innerHTML = "";
-      scoreEl.textContent = "…";
-      relEl.textContent = "…";
-      lastRainEl.textContent = "—";
-      factorsEl.innerHTML = "";
-
-      let url = "/api/score?";
-      const coords = parseCoords(q);
-      if(coords){
-        url += `lat=${coords.lat}&lon=${coords.lon}`;
-      }else if(q){
-        url += `q=${encodeURIComponent(q)}`;
-      }else{
-        goBtn.disabled = false;
-        return;
-      }
-
+    // ---- fetch API ----
+    async function runSearch(arg){
       try{
-        const r = await fetch(url, {headers: {"Accept":"application/json"}});
-        if(!r.ok){
-          const t = await r.text();
-          throw new Error("Errore backend: "+t);
+        goBtn.disabled=true; document.getElementById("paneMsg").textContent="";
+        barsEl.innerHTML=""; scoreEl.textContent="…"; relEl.textContent="…"; lastRainEl.textContent="—"; factorsEl.innerHTML=""; tipsEl.innerHTML="";
+        let url="/api/score?";
+        if(arg && arg.lat && arg.lon){ url+=`lat=${arg.lat}&lon=${arg.lon}`; }
+        else{
+          const q=qInput.value.trim();
+          const c=parseCoords(q); if(c) url+=`lat=${c.lat}&lon=${c.lon}`; else if(q) url+=`q=${encodeURIComponent(q)}`; else return;
         }
-        const data = await r.json();
-        renderResult(data);
-      }catch(err){
-        alert(err.message || "Errore di rete");
-      }finally{
-        goBtn.disabled = false;
-      }
+        setStatus("chiamo backend…");
+        const r=await fetch(url,{headers:{"Accept":"application/json"}});
+        if(!r.ok){ const t=await r.text(); showError("Backend: "+t); return; }
+        const data=await r.json(); render(data); setStatus("OK ✔");
+      }catch(e){ showError(e.message||"Errore di rete"); }
+      finally{ goBtn.disabled=false; }
     }
 
-    function renderResult(data){
-      const {location, today, forecast, reliability, last_rain, factors} = data;
+    function render(data){
+      const {location, today, forecast, reliability, last_rain, factors, tips} = data;
+      // località
       locEl.textContent = location?.name || "—";
-      const [cls, lbl] = relBadge(reliability);
-      relEl.className = "badge "+cls;
-      relEl.textContent = lbl;
+      if(location?.lat && location?.lon){ marker.setLatLng([location.lat, location.lon]); map.setView([location.lat, location.lon], 11); setTimeout(()=>map.invalidateSize(), 100); }
 
-      const todayScore = Math.round(today?.score ?? 0);
-      scoreEl.textContent = `${todayScore}`;
+      // affidabilità e indice
+      const [cls,lbl]=relBadge(reliability); relEl.className="badge "+cls; relEl.textContent=lbl;
+      const todayScore=Math.round(today?.score??0); scoreEl.textContent = `${todayScore}`;
+      modelsEl.textContent = factors?.models_used?.length ? ("Modelli: "+factors.models_used.join(", ")) : "";
 
-      // mappa
-      if(location?.lat && location?.lon){
-        marker.setLatLng([location.lat, location.lon]);
-        map.setView([location.lat, location.lon], 10);
-      }
-
-      // barre previsione 10 gg
-      barsEl.innerHTML = "";
-      const maxH = 120, maxScore = 100;
-      forecast.forEach(d =>{
-        const col = document.createElement("div");
-        col.className = "col";
-        const h = Math.max(2, Math.round((d.score/maxScore)*maxH));
-        const fill = document.createElement("div");
-        fill.className = "fill";
-        fill.style.height = `${h}px`;
-        const label = document.createElement("div");
-        const dd = new Date(d.date+"T00:00:00");
-        label.className = "label";
-        label.textContent = dd.toLocaleDateString(undefined, {weekday:"short", day:"2-digit"});
-        const scorelbl = document.createElement("div");
-        scorelbl.className = "scorelbl";
-        scorelbl.textContent = Math.round(d.score);
-        col.appendChild(fill); col.appendChild(label); col.appendChild(scorelbl);
-        barsEl.appendChild(col);
+      // previsione 10 gg
+      const maxH=120, maxScore=100; barsEl.innerHTML="";
+      forecast.forEach(d=>{
+        const col=document.createElement("div"); col.className="col";
+        const h=Math.max(2, Math.round((d.score/maxScore)*maxH));
+        const fill=document.createElement("div"); fill.className="fill"; fill.style.height=`${h}px`;
+        const label=document.createElement("div"); label.className="label"; const dd=new Date(d.date+"T00:00:00"); label.textContent=dd.toLocaleDateString(undefined,{weekday:"short",day:"2-digit"});
+        const sc=document.createElement("div"); sc.className="scorelbl"; sc.textContent=Math.round(d.score);
+        col.appendChild(fill); col.appendChild(label); col.appendChild(sc); barsEl.appendChild(col);
       });
 
       // ultima pioggia
-      if(last_rain && last_rain.date){
-        const dd = new Date(last_rain.date+"T00:00:00");
-        lastRainEl.textContent = `${dd.toLocaleDateString()} — ${last_rain.amount_mm} mm`;
-      }else{
-        lastRainEl.textContent = "Nessuna pioggia significativa negli ultimi 30 giorni.";
-      }
+      if(last_rain && last_rain.date){ const dd=new Date(last_rain.date+"T00:00:00"); lastRainEl.textContent = `${dd.toLocaleDateString()} — ${last_rain.amount_mm} mm`; }
+      else{ lastRainEl.textContent="Nessuna pioggia significativa negli ultimi 30 giorni."; }
 
-      // fattori analizzati
-      const f = factors || {};
-      const items = [
-        ["Latitudine", f.latitude?.toFixed?.(5)],
-        ["Longitudine", f.longitude?.toFixed?.(5)],
-        ["Quota", f.elevation_m!=null ? `${f.elevation_m} m` : "—"],
-        ["Pioggia 14gg (P14)", f.P14_mm!=null ? `${f.P14_mm} mm` : "—"],
-        ["ET0 14gg", f.ET0_14_mm!=null ? `${f.ET0_14_mm} mm` : "—"],
-        ["Temperatura media 7gg", f.T7_mean_C!=null ? `${f.T7_mean_C} °C` : "—"],
-        ["Umidità relativa 7gg", f.RH7_mean_%!=null ? `${f.RH7_mean_%} %` : "—"],
-        ["Radiazione solare 7gg", f.SWrad7_MJm2!=null ? `${f.SWrad7_MJm2} MJ/m²` : "—"],
-        ["Modelli", Array.isArray(f.models_used)? f.models_used.join(", ") : "—"],
+      // fattori
+      const f=factors||{};
+      const items=[
+        ["Latitudine", f.latitude?.toFixed?.(5)],["Longitudine", f.longitude?.toFixed?.(5)],
+        ["Quota", f.elevation_m!=null?`${f.elevation_m} m`:"—"],
+        ["Pioggia 14gg (P14)", f.P14_mm!=null?`${f.P14_mm} mm`:"—"],
+        ["ET0 14gg", f.ET0_14_mm!=null?`${f.ET0_14_mm} mm`:"—"],
+        ["Temperatura media 7gg", f.T7_mean_C!=null?`${f.T7_mean_C} °C`:"—"],
+        ["Umidità relativa 7gg", f.RH7_mean_%!=null?`${f.RH7_mean_%} %`:"—"],
+        ["Radiazione solare 7gg", f.SWrad7_MJm2!=null?`${f.SWrad7_MJm2} MJ/m²`:"—"],
+        ["T min 7gg", f.Tmin7_C!=null?`${f.Tmin7_C} °C`:"—"],
+        ["Vento max 7gg", f.WindMax7_ms!=null?`${f.WindMax7_ms} m/s`:"—"]
       ];
       factorsEl.innerHTML = items.map(([k,v])=>`<li><b>${k}:</b> ${v??"—"}</li>`).join("");
 
-      // consiglio
+      // consigli pratici
+      tipsEl.innerHTML = (tips||[]).map(t=>`<li>${t}</li>`).join("");
+
+      // suggerimento sintetico
       hintEl.textContent = advice(todayScore);
     }
 
-    document.getElementById("go").addEventListener("click", search);
-    document.getElementById("q").addEventListener("keydown", (e)=>{ if(e.key==="Enter") search(); });
+    // eventi UI
+    document.getElementById("go").addEventListener("click", ()=>runSearch());
+    document.getElementById("q").addEventListener("keydown",(e)=>{ if(e.key==="Enter") runSearch(); });
+    document.getElementById("geo").addEventListener("click", ()=>{
+      if(!navigator.geolocation){ showError("Geolocalizzazione non supportata"); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos)=> runSearch({lat:pos.coords.latitude, lon:pos.coords.longitude}),
+        ()=> showError("Impossibile ottenere la posizione")
+      );
+    });
 
-    // avvio
+    // prova API health per proxy
+    (async ()=>{
+      try{
+        const r = await fetch("/api/health");
+        if(!r.ok){ setStatus("Proxy /api non configurato", true); return; }
+        const j = await r.json();
+        if(j && j.ok) setStatus("backend raggiungibile ✔");
+        else setStatus("backend non risponde correttamente", true);
+      }catch(e){ setStatus("errore rete verso /api", true); }
+    })();
+
+    // avvio con una query utile
     window.addEventListener("load", ()=>{
-      document.getElementById("q").value = "Benevento";
-      search();
+      qInput.value = "Benevento";
     });
   </script>
 </body>
 </html>
+
 
 
