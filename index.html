@@ -17,7 +17,8 @@
     button{cursor:pointer;font-weight:700}
     button.ok{background:linear-gradient(90deg,#22d3ee,#1ee59a);border:none;color:#062f2a}
     button.warn{background:linear-gradient(90deg,#ffd166,#22d3ee);border:none;color:#062f2a}
-    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+    .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+    @media(max-width:680px){.metrics{grid-template-columns:repeat(2,1fr)}}
     .metric{background:#0b1526;padding:10px;border-radius:12px;text-align:center;border:1px solid #223249}
     .metric .val{font-size:1.6rem;font-weight:800}
     .right-panel{display:flex;flex-direction:column;gap:16px}
@@ -32,7 +33,7 @@
     .tr:last-child{border-bottom:none}
     details summary{cursor:pointer;font-weight:700;margin-top:10px;color:#b9c7ff}
     .muted{color:var(--muted);font-size:.9rem}
-    #explanationPanel h3{margin-top:0;color:#b9c7ff} #explanationPanel p, #explanationPanel li{line-height:1.6;color:var(--muted)}
+    #explanationPanel h3{margin-top:0;color:#b9c7ff} #explanationPanel p, #explanationPanel li{line-height:1.6;color:#9fb0c2}
     #loading{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.35);z-index:999}
     #loading .ball{width:12px;height:12px;border-radius:50%;margin:6px;background:#22d3ee;display:inline-block;animation:bounce 0.8s infinite alternate}
     #loading .ball:nth-child(2){animation-delay:.15s;background:#1ee59a}
@@ -47,7 +48,10 @@
 <body>
   <header>
     <h1 style="margin:0;font-size:1.4rem;">Trova Porcini — by Antonio Pio D’Aloia</h1>
-    <div class="muted" style="font-size:.85rem;">Le barre ora mostrano la <strong>previsione di uscita dei porcini</strong> (flush) nei prossimi 10 giorni: eventi di pioggia → lag biologico 5–15 gg → probabilità.</div>
+    <div class="muted" style="font-size:.85rem;">
+      Le barre mostrano la <strong>previsione di uscita dei porcini</strong> (flush) nei prossimi 10 giorni: eventi di pioggia → lag biologico 5–15 gg → probabilità.
+      L'<strong>Indice (oggi)</strong> ora coincide con la probabilità/forza di uscita odierna.
+    </div>
   </header>
 
   <div id="loading"><div><span class="ball"></span><span class="ball"></span><span class="ball"></span></div></div>
@@ -70,7 +74,7 @@
           <label class="switch" title="Se attivo, uso l'habitat automatico da OSM">
             <input id="autoHab" type="checkbox" checked/> Auto
           </label>
-          <select id="hours">
+          <select id="hours" title="Durata uscita">
             <option value="2">Durata uscita: 2 h</option>
             <option value="4">Durata uscita: 4 h</option>
           </select>
@@ -80,6 +84,7 @@
         <div class="metrics">
           <div class="metric"><div class="muted">Indice (oggi)</div><div id="metricIndex" class="val">—</div></div>
           <div class="metric"><div class="muted">Raccolto atteso</div><div id="metricHarvest" class="val">—</div></div>
+          <div class="metric"><div class="muted">Taglia (oggi)</div><div id="metricSize" class="val">—</div></div>
           <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
         </div>
         <div id="metricSite" class="muted" style="text-align:center; margin-top:8px;"></div>
@@ -145,6 +150,8 @@
     function renderUI(s){
         $("#metricIndex").textContent = s.index ?? "—";
         $("#metricHarvest").textContent = s.harvest_estimate ?? "—";
+        const sizeText = (s.size_cm && s.size_class) ? (s.size_cm + " cm") : "—";
+        $("#metricSize").textContent = (s.size_class && s.size_class !== "—") ? (sizeText) : "—";
         $("#metricReliability").textContent = s.reliability != null ? Math.round(s.reliability * 100) + "%" : "—";
         const a = s.aspect_octant && s.aspect_octant !== "NA" ? s.aspect_octant : "NA";
         const habUsed = (s.habitat_used || "").charAt(0).toUpperCase() + (s.habitat_used || "").slice(1);
