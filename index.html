@@ -12,7 +12,8 @@
     .wrap{max-width:1280px;margin:0 auto;padding:20px;display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
     @media(max-width:960px){.wrap{grid-template-columns:1fr}}
     .card{background:linear-gradient(180deg,#0e1728,#0f192c);padding:16px;border-radius:14px;border:1px solid var(--border);box-shadow:0 12px 28px rgba(0,0,0,.35);margin-bottom:16px}
-    input,button,select{padding:10px;border-radius:10px;border:1px solid #2b3b52;font-size:15px;color:var(--text);background:#0b1526}
+    input,button,select,label{color:var(--text)}
+    input,button,select{padding:10px;border-radius:10px;border:1px solid #2b3b52;font-size:15px;background:#0b1526}
     button{cursor:pointer;font-weight:700}
     button.ok{background:linear-gradient(90deg,#22d3ee,#1ee59a);border:none;color:#062f2a}
     button.warn{background:linear-gradient(90deg,#ffd166,#22d3ee);border:none;color:#062f2a}
@@ -31,7 +32,7 @@
     .tr:last-child{border-bottom:none}
     details summary{cursor:pointer;font-weight:700;margin-top:10px;color:#b9c7ff}
     .muted{color:var(--muted);font-size:.9rem}
-    #explanationPanel h3{margin-top:0;color:#b9c7ff} #explanationPanel p{line-height:1.6;color:var(--muted)}
+    #explanationPanel h3{margin-top:0;color:#b9c7ff} #explanationPanel p, #explanationPanel li{line-height:1.6;color:var(--muted)}
     #loading{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.35);z-index:999}
     #loading .ball{width:12px;height:12px;border-radius:50%;margin:6px;background:#22d3ee;display:inline-block;animation:bounce 0.8s infinite alternate}
     #loading .ball:nth-child(2){animation-delay:.15s;background:#1ee59a}
@@ -39,12 +40,14 @@
     @keyframes bounce{to{transform:translateY(-10px)}}
     .row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
     .badge{display:inline-block;padding:4px 8px;border:1px solid #223249;border-radius:999px;font-size:.8rem; margin-right:6px}
+    .switch{display:flex;align-items:center;gap:8px}
+    .switch input{transform:scale(1.1)}
   </style>
 </head>
 <body>
   <header>
     <h1 style="margin:0;font-size:1.4rem;">Trova Porcini — by Antonio Pio D’Aloia</h1>
-    <div class="muted" style="font-size:.85rem;">Modello avanzato: storico 15 gg + forecast 10 gg (OW 60% • OM 40%). Microclima da esposizione, UR%, radiazione, habitat.</div>
+    <div class="muted" style="font-size:.85rem;">Modello: storico 15 gg + forecast 10 gg (OW 60% • OM 40%). DEM multi-scala, microclima da esposizione, UR% e radiazione. Habitat auto con override manuale.</div>
   </header>
 
   <div id="loading"><div><span class="ball"></span><span class="ball"></span><span class="ball"></span></div></div>
@@ -60,20 +63,23 @@
           <input id="coords" type="text" placeholder="lat, lon (Google)" style="flex:1;min-width:220px"/>
           <button id="btnCoords" class="warn">Usa coordinate</button>
           <select id="habitat" title="Habitat">
-            <option value="">Habitat: Altro/Non specificato</option>
+            <option value="">Habitat: auto (OSM)</option>
             <option>Castagno</option><option>Faggio</option><option>Quercia</option>
-            <option>Conifere</option><option>Misto</option>
+            <option>Conifere</option><option>Misto</option><option>Altro</option>
           </select>
+          <label class="switch" title="Se attivo, uso l'habitat automatico da OSM">
+            <input id="autoHab" type="checkbox" checked/> Auto
+          </label>
           <select id="hours">
             <option value="2">Durata uscita: 2 h</option>
             <option value="4">Durata uscita: 4 h</option>
           </select>
         </div>
-        <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Suggerimento: incolla le coordinate da Google Maps o clicca sulla mappa. Specifica l’habitat per una stima leggermente più mirata.</div>
+        <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Tip: lascia “Auto” per usare l’habitat rilevato (OSM). Se non ti convince, disattiva “Auto” e seleziona tu l’habitat.</div>
 
         <div class="metrics">
           <div class="metric"><div class="muted">Indice</div><div id="metricIndex" class="val">—</div></div>
-          <div class="metric"><div class="muted">Stima Raccolto</div><div id="metricHarvest" class="val">—</div></div>
+          <div class="metric"><div class="muted">Raccolto</div><div id="metricHarvest" class="val">—</div></div>
           <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
         </div>
         <div id="metricSite" class="muted" style="text-align:center; margin-top:8px;"></div>
@@ -102,7 +108,7 @@
       <div class="card"><div id="map"></div></div>
       <div class="card" id="explanationPanel" style="display:none;">
           <h3>Analisi del Modello</h3>
-          <p id="explanationText"></p>
+          <div id="explanationText"></div>
       </div>
     </div>
   </div>
@@ -136,18 +142,20 @@
     }
 
     function renderUI(s){
-        // Metriche e sito
         $("#metricIndex").textContent = s.index ?? "—";
         $("#metricHarvest").textContent = s.harvest_estimate ?? "—";
         $("#metricReliability").textContent = s.reliability != null ? Math.round(s.reliability * 100) + "%" : "—";
         const a = s.aspect_octant && s.aspect_octant !== "NA" ? s.aspect_octant : "NA";
+        const habUsed = (s.habitat_used || "").charAt(0).toUpperCase() + (s.habitat_used || "").slice(1);
+        const source = s.habitat_source || "—";
+        let autoConf = s.auto_habitat_confidence!=null ? ` (auto conf ${Math.round(s.auto_habitat_confidence*100)}%)` : "";
         $("#metricSite").innerHTML = `
           <span class="badge">Quota: ${s.elevation_m ?? "—"} m</span>
           <span class="badge">Pendenza: ${s.slope_deg ?? "—"}°</span>
           <span class="badge">Esposizione: ${a}</span>
+          <span class="badge">Habitat: ${habUsed} — ${source}${autoConf}</span>
         `;
 
-        // Previsione a barre (affidabilità già inclusa dall'API)
         const forecastCont = $("#forecast"); forecastCont.innerHTML="";
         (s.forecast || []).forEach((v, i) => {
             const box = document.createElement("div"); box.className="bar";
@@ -159,7 +167,6 @@
             box.appendChild(fill); box.appendChild(lab); forecastCont.appendChild(box);
         });
 
-        // Tabelle piogge con ordinamento corretto
         const fillTable = (el, d) => {
             el.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
             const keys = Object.keys(d || {});
@@ -178,11 +185,11 @@
         fillTable($("#rainPast"), s.rain_past || {});
         fillTable($("#rainFuture"), s.rain_future || {});
 
-        // Spiegazione dinamica
+        // Analisi estesa (già HTML dall'API)
         const expPanel = $("#explanationPanel");
         const expText = $("#explanationText");
         if (s.dynamic_explanation) {
-            expText.innerHTML = s.dynamic_explanation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            expText.innerHTML = s.dynamic_explanation;
             expPanel.style.display = "block";
         } else {
             expPanel.style.display = "none";
@@ -190,9 +197,13 @@
     }
 
     async function fetchScore(lat, lon){
-        const habitat = $("#habitat").value || "";
         const hours = parseInt($("#hours").value, 10) || 2;
-        const params = new URLSearchParams({lat,lon,habitat,hours});
+        const autoHab = $("#autoHab").checked ? 1 : 0;
+        let habitat = $("#habitat").value || "";
+        // se Auto è attivo, ignora selezione manuale (server userà OSM)
+        if (autoHab === 1) habitat = "";
+        const params = new URLSearchParams({lat,lon,hours,autohabitat:String(autoHab)});
+        if (habitat) params.append("habitat", habitat);
         return apiGet(`${API}/score?${params.toString()}`);
     }
 
@@ -203,7 +214,12 @@
             map.setView([lat, lon], 11);
             const s = await fetchScore(lat, lon);
             renderUI(s);
-            localStorage.setItem("lastQuery", JSON.stringify({lat,lon,habitat:$("#habitat").value,hours:$("#hours").value}));
+            localStorage.setItem("lastQuery", JSON.stringify({
+              lat,lon,
+              habitat:$("#habitat").value,
+              autoHab:$("#autoHab").checked,
+              hours:$("#hours").value
+            }));
         } catch(e) {
             console.error(e);
             alert("Errore durante il calcolo. Dettagli in console.");
@@ -240,12 +256,21 @@
     $("#place").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handlePlace(); });
     $("#coords").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handleCoordsStr(); });
     $("#habitat").addEventListener("change", ()=>{
-      const last = localStorage.getItem("lastQuery");
-      if(last){ const j=JSON.parse(last); if(j.lat && j.lon){ handleCoords(j.lat,j.lon); } }
+      if(!$("#autoHab").checked){
+        const last = localStorage.getItem("lastQuery");
+        const j = last ? JSON.parse(last) : {};
+        if(j.lat && j.lon){ handleCoords(j.lat,j.lon); }
+      }
     });
     $("#hours").addEventListener("change", ()=>{
       const last = localStorage.getItem("lastQuery");
-      if(last){ const j=JSON.parse(last); if(j.lat && j.lon){ handleCoords(j.lat,j.lon); } }
+      const j = last ? JSON.parse(last) : {};
+      if(j.lat && j.lon){ handleCoords(j.lat,j.lon); }
+    });
+    $("#autoHab").addEventListener("change", ()=>{
+      const last = localStorage.getItem("lastQuery");
+      const j = last ? JSON.parse(last) : {};
+      if(j.lat && j.lon){ handleCoords(j.lat,j.lon); }
     });
 
     // ripristina ultima query
@@ -254,16 +279,13 @@
       if(last){
         try{ const j=JSON.parse(last);
           if(j.habitat) $("#habitat").value=j.habitat;
+          if(typeof j.autoHab==="boolean") $("#autoHab").checked=j.autoHab;
           if(j.hours) $("#hours").value=j.hours;
-          if(j.lat && j.lon){ handleCoords(j.lat,j.lon); return; }
+          if(j.lat && j.lon){ initMap(); handleCoords(j.lat,j.lon); return; }
         }catch{}
       }
-      // default
       initMap();
     })();
-
-    // se restore non ha chiamato initMap
-    if(!map) initMap();
   </script>
 </body>
 </html>
