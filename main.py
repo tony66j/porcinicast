@@ -454,8 +454,7 @@ def build_analysis_text(payload: Dict[str,Any]) -> str:
 
     notes = safety_notes_short()
     out.append("<details><summary>Note rapide di sicurezza</summary><ul>" + "".join(f"<li>{n}</li>" for n in notes) + "</ul></details>")
-    return "
-".join(out)
+    return "\n".join(out)
 
 # --------------- Affidabilità ----------------
 
@@ -648,3 +647,4 @@ async def api_score(
 # ----
 # index.html: nessuna modifica necessaria rispetto alla tua versione (v1.8.2). Mantieni quello che hai caricato.
 # ----
+
