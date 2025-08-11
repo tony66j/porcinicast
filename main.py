@@ -99,6 +99,48 @@ async def fetch_openweather(lat: float, lon: float) -> Dict[str, Any]:
 
     return {"ok": True, "now": now, "forecast": fc}
 
+def daily_from_openweather(ow: Dict[str, Any]) -> Dict[datetime, Dict[str, float]]:
+    """Aggrega il forecast 3h di OpenWeather in metriche giornaliere (UTC)."""
+    out: Dict[datetime, Dict[str, float]] = {}
+    if not (isinstance(ow, dict) and ow.get("ok")):
+        return out
+    lst = ow.get("forecast", {}).get("list", []) or []
+    buckets: Dict[datetime, Dict[str, List[float]]] = {}
+    for it in lst:
+        # dt è in secondi UTC
+        ts = it.get("dt")
+        if ts is None:
+            continue
+        dt = datetime.utcfromtimestamp(int(ts)).replace(tzinfo=UTC)
+        day = datetime(dt.year, dt.month, dt.day, tzinfo=UTC)
+        b = buckets.setdefault(day, {"T": [], "RH": [], "PR": []})
+        t = float(it.get("main", {}).get("temp", float("nan")))
+        rh = float(it.get("main", {}).get("humidity", float("nan")))
+        rain = float(it.get("rain", {}).get("3h", 0.0))
+        snow = float(it.get("snow", {}).get("3h", 0.0))
+        b["T"].append(t)
+        b["RH"].append(rh)
+        b["PR"].append(rain + snow)
+    for day, vals in buckets.items():
+        Ts = np.array(vals["T"]) if vals["T"] else np.array([np.nan])
+        RHs = np.array(vals["RH"]) if vals["RH"] else np.array([np.nan])
+        PRs = np.array(vals["PR"]) if vals["PR"] else np.array([0.0])
+        # vpd calcolato sui passi 3h e poi massimo
+        vpds = []
+        min_len = min(len(Ts), len(RHs))
+        for i in range(min_len):
+            if not (math.isnan(Ts[i]) or math.isnan(RHs[i])):
+                vpds.append(vpd_hpa(float(Ts[i]), float(RHs[i])))
+        out[day] = {
+            "tmin": float(np.nanmin(Ts)),
+            "tmax": float(np.nanmax(Ts)),
+            "tmean": float(np.nanmean(Ts)),
+            "urmin": float(np.nanmin(RHs)) if np.any(~np.isnan(RHs)) else 60.0,
+            "vpdmax": float(np.nanmax(vpds)) if len(vpds) else 6.0,
+            "prsum": float(np.nansum(PRs)),
+        }
+    return out
+
 # —— Geocoding (per compatibilità con UI) ——
 async def geocode_nominatim(q: str) -> List[Dict[str, Any]]:
     ua = {
@@ -112,6 +154,27 @@ async def geocode_nominatim(q: str) -> List[Dict[str, Any]]:
         )
         r.raise_for_status()
         return r.json()
+
+async def geocode_openmeteo(q: str) -> List[Dict[str, Any]]:
+    """Fallback geocoder (free, no key)."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r = await client.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={"name": q, "count": 5, "language": "it", "format": "json"},
+        )
+        r.raise_for_status()
+        js = r.json()
+        results = js.get("results", []) or []
+        # adatta al formato Nominatim (minimo indispensabile)
+        out = []
+        for it in results:
+            out.append({
+                "display_name": f"{it.get('name')} ({it.get('country_code','').upper()})",
+                "lat": it.get("latitude"),
+                "lon": it.get("longitude"),
+                "address": {"country_code": it.get("country_code")},
+            })
+        return out
 
 async def reverse_nominatim(lat: float, lon: float) -> Dict[str, Any]:
     ua = {
@@ -355,8 +418,15 @@ async def health():
 
 @app.get("/geocode")
 async def geocode(q: str = Query(..., min_length=2)):
-    res = await geocode_nominatim(q)
-    return res
+    try:
+        res = await geocode_nominatim(q)
+        if isinstance(res, list) and len(res) > 0:
+            return res
+    except Exception:
+        pass
+    # fallback Open‑Meteo geocoder
+    res2 = await geocode_openmeteo(q)
+    return res2
 
 @app.get("/reverse")
 async def reverse(lat: float, lon: float):
@@ -376,6 +446,7 @@ async def predict(
     ow = await ow_task
     grid, dx, dy = await elev_task
 
+    # Costruzione serie OM (base)
     hourly = om.get("hourly", {})
     htimes = [datetime.fromisoformat(t.replace("Z","+00:00")) for t in hourly.get("time", [])]
     T = hourly.get("temperature_2m", [])
@@ -411,13 +482,42 @@ async def predict(
                 vpds.append(vpd_hpa(float(Ts[i]), float(RHs[i])))
         vpdmax.append(float(np.nanmax(vpds)) if len(vpds) else 6.0)
 
+    # 2bis) Se abbiamo OW, calcola le metriche giornaliere OW e costruisci serie BLEND per i giorni coperti da OW
+    ow_daily = daily_from_openweather(ow)
+    # copie di default = OM
+    tmin_b = tmin[:]
+    tmax_b = tmax[:]
+    tmean_b = tmean[:]
+    urmin_b = urmin[:]
+    vpdmax_b = vpdmax[:]
+    prsum_b = prsum[:]
+
+    # giorno corrente UTC
+    today_dt = datetime(TODAY().year, TODAY().month, TODAY().day, tzinfo=UTC)
+    for idx, d in enumerate(days_sorted):
+        if d in ow_daily:
+            k = (d - today_dt).days
+            w_ow = 0.6 if 0 <= k <= 2 else 0.5  # più peso a OW nelle prime 72h
+            w_om = 1.0 - w_ow
+            owv = ow_daily[d]
+            # blend temperature (media pesata)
+            tmin_b[idx] = w_om * tmin[idx] + w_ow * owv["tmin"]
+            tmax_b[idx] = w_om * tmax[idx] + w_ow * owv["tmax"]
+            tmean_b[idx] = w_om * tmean[idx] + w_ow * owv["tmean"]
+            # ur/vpd: scelta prudenziale (secchezza più severa)
+            urmin_b[idx] = min(urmin[idx], owv["urmin"])  # più secco → valore minore
+            vpdmax_b[idx] = max(vpdmax[idx], owv["vpdmax"])  # penalità maggiore
+            # precipitazione: prudenziale verso l'innesco → prendi il MAX
+            prsum_b[idx] = max(prsum[idx], owv["prsum"])  
+
     slope_deg, aspect_deg = slope_aspect_from_grid(grid, dx, dy)
     concav = concavity_proxy(grid)
     twi_px = twi_proxy_from_slope_concavity(slope_deg, concav)
     month_now = (TODAY()).month
     energy_idx = aspect_energy_index(aspect_deg, slope_deg, month_now)
 
-    smi = compute_smi_series(days_sorted, prsum, tmin, tmax, tmean, lat)
+    # 3) SMI con serie BLEND (OM nel passato, OM+OW nel futuro quando disponibile)
+    smi = compute_smi_series(days_sorted, prsum_b, tmin_b, tmax_b, tmean_b, lat)
     shock = cold_shock_score(tmin)
 
     today_dt = datetime(TODAY().year, TODAY().month, TODAY().day, tzinfo=UTC)
@@ -431,10 +531,10 @@ async def predict(
     idx_10d = build_daily_index(
         days_sorted[i0:i1],
         smi[i0:i1],
-        tmin[i0:i1],
-        tmax[i0:i1],
-        tmean[i0:i1],
-        vpdmax[i0:i1],
+        tmin_b[i0:i1],
+        tmax_b[i0:i1],
+        tmean_b[i0:i1],
+        vpdmax_b[i0:i1],
         energy_idx,
         shock,
     )
@@ -501,12 +601,20 @@ async def predict(
         "drivers": {
             "smi_today": round(smi[i0], 2) if i0 < len(smi) else None,
             "cold_shock": round(shock, 2),
-            "vpd_max_today_hPa": round(vpdmax[i0], 1) if i0 < len(vpdmax) else None,
-            "urmin_today_%": round(urmin[i0], 1) if i0 < len(urmin) else None,
+            "vpd_max_today_hPa": round(vpdmax_b[i0], 1) if i0 < len(vpdmax_b) else None,
+            "urmin_today_%": round(urmin_b[i0], 1) if i0 < len(urmin_b) else None,
         },
         "sources": {
             "open_meteo": True,
             "open_weather": bool(isinstance(ow, dict) and ow.get("ok")),
+            "blend": {
+                "enabled": bool(len(ow_daily)>0),
+                "strategy": {
+                    "temp": "weighted_mean (OW 0.6 first 72h, else 0.5)",
+                    "humidity_vpd": "urmin=min(OM,OW); vpdmax=max(OM,OW)",
+                    "precip": "max(OM,OW)",
+                },
+            },
             "nominatim_email": NOMINATIM_EMAIL,
         }
     }
@@ -521,6 +629,3 @@ async def predict(
         reliability=round(reliab, 2),
     )
     return resp
-
-
-       
