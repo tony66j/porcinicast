@@ -1,16 +1,11 @@
-# main_advanced.py
-# Backend FastAPI per previsione uscita/abbondanza porcini (Boletus edulis s.l.)
-# —— Nuovo modello basato su: Soil Moisture Index (SMI) + VPD/UR + cold-shock + microtopografia (TWI proxy)
-# —— Blend meteo: Open‑Meteo (gratuito) + OpenWeather (gratuito con chiave)
-# —— Output compatibile con UI esistente (stesse chiavi principali), con campi extra in "analysis"
+# main.py (advanced) — Backend FastAPI per previsione porcini
+# — Fix Render: rimossa dipendenza da `python-dateutil` (ModuleNotFoundError)
+# — Modello: SMI (bilancio P-PET) + VPD/UR + cold-shock + microtopografia (TWI proxy)
+# — Blend: Open‑Meteo (free) + OpenWeather (free con chiave)
+# — Output compatibile con la tua UI (stesse chiavi principali)
 #
-# NOTE CHIAVI (facoltative ma raccomandate):
-#   - OPENWEATHER_API_KEY  → per dati orari 5 gg e current; gratis (free tier) su openweathermap.org
-#   - NOMINATIM_EMAIL      → email per User-Agent Nominatim (geocoding) per rispettare la policy
-# Tutto il resto usa sorgenti free senza chiave (Open‑Meteo, Open‑Elevation, Overpass). 
-#
-# Dipendenze: fastapi, uvicorn, httpx, numpy, scipy (solo stats), pydantic, python-dateutil
-# Avvio: uvicorn main_advanced:app --reload --port 8000
+# Dipendenze: fastapi, uvicorn, httpx, numpy, pydantic
+# Avvio locale: uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 from __future__ import annotations
 import os
@@ -25,7 +20,6 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import numpy as np
-from dateutil import tz
 
 # —— Config base ——
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
@@ -48,13 +42,10 @@ TODAY = lambda: datetime.now(tz=UTC).date()
 async def fetch_open_meteo(lat: float, lon: float) -> Dict[str, Any]:
     """
     Scarica dati orari/daily Open‑Meteo per finestra: 21 giorni passati + 10 giorni futuri.
-    Variabili: T2m, UR, precipitazione, shortwave_rad, Tmin/Tmax, soil moisture (se disponibile).
+    Variabili: T2m, UR, precipitazione, shortwave_rad, Tmin/Tmax.
     """
     client_timeout = httpx.Timeout(20.0)
     async with httpx.AsyncClient(timeout=client_timeout) as client:
-        start_past = TODAY() - timedelta(days=21)
-        end_future = TODAY() + timedelta(days=10)
-
         base = "https://api.open-meteo.com/v1/forecast"
         params = {
             "latitude": lat,
@@ -63,15 +54,13 @@ async def fetch_open_meteo(lat: float, lon: float) -> Dict[str, Any]:
                 "temperature_2m",
                 "relative_humidity_2m",
                 "precipitation",
-                "surface_pressure",
                 "shortwave_radiation",
-                # "soil_moisture_0_to_7cm",  # non sempre disponibile su endpoint forecast
+                "surface_pressure",
             ],
             "daily": [
                 "temperature_2m_max",
                 "temperature_2m_min",
                 "precipitation_sum",
-                # "soil_moisture_0_7cm_mean",  # disponibile su alcuni backend OM (era5/land) — fallback gestito a parte
             ],
             "past_days": 21,
             "forecast_days": 10,
@@ -90,7 +79,6 @@ async def fetch_openweather(lat: float, lon: float) -> Dict[str, Any]:
     client_timeout = httpx.Timeout(20.0)
     async with httpx.AsyncClient(timeout=client_timeout) as client:
         try:
-            # Current conditions
             r_now = await client.get(
                 "https://api.openweathermap.org/data/2.5/weather",
                 params={"lat": lat, "lon": lon, "appid": OPENWEATHER_API_KEY, "units": "metric"},
@@ -100,7 +88,6 @@ async def fetch_openweather(lat: float, lon: float) -> Dict[str, Any]:
         except Exception as e:
             return {"ok": False, "reason": f"current_failed: {e}"}
         try:
-            # 5-day / 3-hour forecast
             r_fc = await client.get(
                 "https://api.openweathermap.org/data/2.5/forecast",
                 params={"lat": lat, "lon": lon, "appid": OPENWEATHER_API_KEY, "units": "metric"},
@@ -142,10 +129,9 @@ async def reverse_nominatim(lat: float, lon: float) -> Dict[str, Any]:
 # —— Elevation & TWI proxy ——
 async def fetch_elevation_patch(lat: float, lon: float, ddeg: float = 0.0009) -> Tuple[np.ndarray, float, float]:
     """
-    Chiede un 3x3 (o 5x5 se vuoi) a Open‑Elevation attorno al punto, ritorna griglia elevazioni e risoluzione approssimata (m/px).
+    Chiede un 3x3 a Open‑Elevation attorno al punto, ritorna griglia elevazioni e risoluzione approssimata (m/px).
     ddeg ~ 0.0009 ~ 100 m circa (dipende dalla latitudine).
     """
-    # Costruisci 3x3 punti
     lats = [lat - ddeg, lat, lat + ddeg]
     lons = [lon - ddeg, lon, lon + ddeg]
     coords = [{"latitude": la, "longitude": lo} for la in lats for lo in lons]
@@ -153,7 +139,6 @@ async def fetch_elevation_patch(lat: float, lon: float, ddeg: float = 0.0009) ->
     async with httpx.AsyncClient(timeout=15.0) as client:
         r = await client.post("https://api.open-elevation.com/api/v1/lookup", json=payload)
         if r.status_code != 200:
-            # fallback: griglia piatta
             arr = np.zeros((3, 3), dtype=float)
             return arr, 0.0, 0.0
         js = r.json().get("results", [])
@@ -162,13 +147,10 @@ async def fetch_elevation_patch(lat: float, lon: float, ddeg: float = 0.0009) ->
             return arr, 0.0, 0.0
         zs = [it["elevation"] for it in js]
         grid = np.array(zs, dtype=float).reshape(3, 3)
-        # stima risoluzione in metri
-        # 1 deg lat = 111320 m; 1 deg lon = 111320*cos(lat)
         m_per_deg_lat = 111320.0
         m_per_deg_lon = 111320.0 * math.cos(math.radians(lat))
         dx = ddeg * m_per_deg_lon
         dy = ddeg * m_per_deg_lat
-        res = (dx + dy) / 2
         return grid, dx, dy
 
 def slope_aspect_from_grid(grid: np.ndarray, dx: float, dy: float) -> Tuple[float, float]:
@@ -187,38 +169,30 @@ def slope_aspect_from_grid(grid: np.ndarray, dx: float, dy: float) -> Tuple[floa
     return slope_deg, aspect_deg
 
 def concavity_proxy(grid: np.ndarray) -> float:
-    """Proxy semplice di convergenza (concavità): mean(neighbors) - center; normalizzato ~ [-1, +1]."""
     if grid.shape != (3, 3):
         return 0.0
     center = grid[1, 1]
     neigh = np.delete(grid.flatten(), 4)
     val = float(np.mean(neigh) - center)
-    # normalizza su 10 m come riferimento (grezzo)
     return max(-1.0, min(1.0, val / 10.0))
 
 def twi_proxy_from_slope_concavity(slope_deg: float, concav: float) -> float:
-    """Costruisce un proxy di TWI (non idraulico), mappando concavità e tan(beta)."""
     beta = math.radians(max(0.1, slope_deg))
     tanb = math.tan(beta)
-    # concav >0 → convergenza 
-    c = max(0.0, concav + 0.2)  # shift leggero
-    # proxy TWI ~ ln( a / tanb ), qui a ~ f(concav)
+    c = max(0.0, concav + 0.2)
     twi = math.log(1.0 + 4.0 * c) - math.log(max(0.05, tanb))
-    # normalizza ~ [0..1]
     return max(0.0, min(1.0, (twi + 2.0) / 4.0))
 
 # —— Fisica semplificata ——
 def saturation_vapor_pressure_hpa(Tc: float) -> float:
-    # Magnus-Tetens (Buck)
     return 6.112 * math.exp((17.67 * Tc) / (Tc + 243.5))
 
 def vpd_hpa(Tc: float, RH: float) -> float:
     es = saturation_vapor_pressure_hpa(Tc)
     return es * (1.0 - max(0.0, min(100.0, RH)) / 100.0)
 
-# —— PET (Hargreaves-Samani semplificato) ——
+# —— PET (Hargreaves-Samani) ——
 def extraterrestrial_radiation_MJm2d(lat_deg: float, doy: int) -> float:
-    # stima grezza Ra (MJ m^-2 d^-1)
     phi = math.radians(lat_deg)
     dr = 1 + 0.033 * math.cos(2 * math.pi * doy / 365)
     delta = 0.409 * math.sin(2 * math.pi * doy / 365 - 1.39)
@@ -230,86 +204,67 @@ def extraterrestrial_radiation_MJm2d(lat_deg: float, doy: int) -> float:
     return max(0.0, Ra)
 
 def pet_hargreaves(Tmin: float, Tmax: float, Tmean: float, lat_deg: float, doy: int) -> float:
-    # FAO-56 Hargreaves (mm/day) ~ 0.0023 * Ra * (Tmean+17.8) * (Tmax - Tmin)^0.5
     Ra = extraterrestrial_radiation_MJm2d(lat_deg, doy)
     return max(0.0, 0.0023 * Ra * max(0.0, Tmean + 17.8) * math.sqrt(max(0.0, Tmax - Tmin)))
 
 # —— SMI (Soil Moisture Index) ——
 def compute_smi_series(dates: List[datetime], precip_mm: List[float], tmin: List[float], tmax: List[float], tmean: List[float], lat: float) -> List[float]:
-    """
-    Indice di umidità del suolo via bilancio semplice: S_{t} = (1-α) S_{t-1} + α * (P - PET)
-    con normalizzazione a [0,1] tramite percentile rolling.
-    α controlla memoria idrica (τ ~ 10 giorni → α ~ 0.18 se dt=1g).
-    """
-    alpha = 0.18
+    alpha = 0.18  # memoria idrica ~10 gg
     S = 0.0
     smi_raw = []
     for i, d in enumerate(dates):
         doy = d.timetuple().tm_yday
-        pet = pet_hargreaves(tmin[i], tmax[i], tmean[i], lat, doy)  # mm/g
+        pet = pet_hargreaves(tmin[i], tmax[i], tmean[i], lat, doy)
         forcing = precip_mm[i] - pet
         S = (1 - alpha) * S + alpha * forcing
         smi_raw.append(S)
-    # normalizza su [0,1] via percentili (5..95)
     arr = np.array(smi_raw)
-    p5, p95 = np.percentile(arr, [5, 95]) if len(arr) >= 20 else (arr.min(), arr.max() if arr.max()!=arr.min() else arr.min()+1)
+    if len(arr) >= 20:
+        p5, p95 = np.percentile(arr, [5, 95])
+    else:
+        p5, p95 = float(arr.min()), float(arr.max() if arr.max()!=arr.min() else arr.min()+1)
     norm = (arr - p5) / max(1e-6, (p95 - p5))
     norm = np.clip(norm, 0.0, 1.0)
     return norm.tolist()
 
 # —— Cold-shock ——
 def cold_shock_score(tmin_series: List[float]) -> float:
-    """ΔTmin = mean(last 3d) - mean(prev 3d); shock se drop marcato (< -2..-4 °C)"""
     if len(tmin_series) < 7:
         return 0.0
-    last3 = np.mean(tmin_series[-3:])
-    prev3 = np.mean(tmin_series[-6:-3])
+    last3 = float(np.nanmean(tmin_series[-3:]))
+    prev3 = float(np.nanmean(tmin_series[-6:-3]))
     drop = last3 - prev3
-    # score 0..1 per drop <= -4°C → 1
     if drop >= -1.0:
         return 0.0
     return max(0.0, min(1.0, (-drop - 1.0) / 3.0))
 
 # —— VPD penalty/gating ——
 def vpd_penalty(vpd_hpa_daily_max: float) -> float:
-    """Riduce ampiezza/ persistenza se aria troppo secca: VPD>12 hPa → forte penalità."""
-    # ~12 hPa ~ UR ~ 40% a T ~ 20°C (ordine di grandezza)
     if vpd_hpa_daily_max <= 6.0:
         return 1.0
     if vpd_hpa_daily_max >= 12.0:
         return 0.4
-    # lineare in mezzo
     return 1.0 - 0.6 * (vpd_hpa_daily_max - 6.0) / 6.0
 
 # —— Lag stocastico dipendente da SMI & cold-shock ——
 def stochastic_lag_days(smi: float, shock: float) -> float:
-    # Parametri gamma dipendenti da umidità e shock (più umido / più shock → lag più corto)
-    # lag medio 7..16 gg
     base_mean = 12.0 - 5.0 * smi - 2.0 * shock
     base_mean = min(16.0, max(7.0, base_mean))
-    k = 3.0
-    theta = base_mean / k
-    # usa il mean; volendo si può campionare; per determinismo teniamo mean
     return base_mean
 
 # —— Energy index da aspect/pendenza e stagione ——
 def aspect_energy_index(aspect_deg: float, slope_deg: float, month: int) -> float:
-    """Proxy di energia netta: penalizza S-SW in estate/primi autunni, favorisce N-NE con aria secca."""
     if math.isnan(aspect_deg) or slope_deg < 0.8:
         return 0.5
-    # stagionalità semplice
     summer_bias = 1.0 if month in (7,8,9) else 0.5
-    # distanza dall'asse N (0°) e dall'asse S (180°)
     def angdiff(a,b):
         d = abs(a-b) % 360.0
         return d if d<=180 else 360-d
     dN = angdiff(aspect_deg, 0.0)
     dS = angdiff(aspect_deg, 180.0)
-    # più vicino a N → bonus; più vicino a S in estate → malus
     bonusN = max(0.0, 1.0 - dN/180.0)
     malusS = max(0.0, 1.0 - dS/180.0) * summer_bias
     e = 0.5 + 0.3*bonusN - 0.3*malusS
-    # pendenze forti accentuano l'effetto
     e *= 1.0 + min(0.2, slope_deg/90.0)
     return float(np.clip(e, 0.2, 0.9))
 
@@ -321,34 +276,28 @@ def build_daily_index(dates: List[datetime], smi: List[float], tmin: List[float]
                       vpd_max: List[float], energy_idx: float, shock_score: float) -> List[float]:
     n = len(dates)
     idx = np.zeros(n, dtype=float)
-    # Evento = SMI sopra soglia mobile (percentile 60) → crea bump con lag adattivo
     thr = float(np.percentile(smi, 60)) if n>=10 else 0.6
     sigma = 2.5
-    for i, d in enumerate(dates):
+    for i, _ in enumerate(dates):
         if smi[i] >= thr:
             lag = stochastic_lag_days(smi[i], shock_score)
             peak_day = i + int(round(lag))
             for j in range(i, min(n, peak_day+8)):
-                amp = 0.6 + 0.7*smi[i] + 0.3*shock_score  # ampiezza base 0.6..1.6
+                amp = 0.6 + 0.7*smi[i] + 0.3*shock_score
                 pen = vpd_penalty(vpd_max[j])
                 idx[j] += amp * gaussian(j, peak_day, sigma) * pen
-    # scala per energia microclimatica
     idx *= energy_idx
-    # normalizza su 0..100
     if idx.max() > 0:
         idx = 100.0 * idx / idx.max()
     return idx.tolist()
 
 # —— Taglia attesa (diametro cappello) ——
 def cap_growth_rate_cm_per_day(Tmean: float) -> float:
-    # curva a campana grezza: 5..22 °C con ottimo ~15 °C
     mu, sig = 15.0, 4.5
     base = math.exp(-0.5*((Tmean-mu)/sig)**2)
-    # scala a 1.8 cm/d max
     return 1.8 * base
 
 def estimate_cap_size_today(recent_T: List[float], recent_URmin: List[float]) -> Dict[str, float]:
-    # integrazione 4 giorni post-emersione con gate URmin >= 40%
     days = min(4, len(recent_T))
     size = 0.0
     halted = False
@@ -357,7 +306,6 @@ def estimate_cap_size_today(recent_T: List[float], recent_URmin: List[float]) ->
             halted = True
             continue
         size += cap_growth_rate_cm_per_day(recent_T[i])
-    # fornisci range plausibile
     return {
         "mean_cm": round(size, 1),
         "range_cm": [round(max(1.0, 0.7*size),1), round(max(1.5, 1.3*size),1)],
@@ -366,8 +314,6 @@ def estimate_cap_size_today(recent_T: List[float], recent_URmin: List[float]) ->
 
 # —— Mapping indice → raccolto atteso ——
 def expected_harvest_from_index(index_today: float, hours: int, ndvi_scaler: float = 1.0) -> Dict[str, Any]:
-    """Mappa euristica coerente con UI precedente; scala per durata e NDVI (se disponibile)."""
-    # base per 2h, poi scala linearmente con ore
     if index_today >= 85:
         base = (8, 14)
     elif index_today >= 70:
@@ -386,14 +332,14 @@ def expected_harvest_from_index(index_today: float, hours: int, ndvi_scaler: flo
 # —— Affidabilità ——
 def reliability_score(source_agreement: float, coverage_ok: bool, had_keys: bool) -> float:
     base = 0.55
-    base += 0.25*source_agreement  # 0..0.25
+    base += 0.25*source_agreement
     if coverage_ok:
         base += 0.1
     if had_keys:
         base += 0.05
     return float(np.clip(base, 0.2, 0.95))
 
-# —— Endpoint principali ——
+# —— Schemi risposta ——
 class PredictResponse(BaseModel):
     index_today: float
     expected_harvest: Dict[str, Any]
@@ -422,7 +368,6 @@ async def predict(
     lon: float,
     hours: int = 2,
 ):
-    # 1) Fetch meteo (Open‑Meteo + OpenWeather)
     om_task = asyncio.create_task(fetch_open_meteo(lat, lon))
     ow_task = asyncio.create_task(fetch_openweather(lat, lon))
     elev_task = asyncio.create_task(fetch_elevation_patch(lat, lon))
@@ -431,17 +376,13 @@ async def predict(
     ow = await ow_task
     grid, dx, dy = await elev_task
 
-    # 2) Costruisci serie daily per finestra (21 d passati + 10 futuri)
     hourly = om.get("hourly", {})
-    daily = om.get("daily", {})
     htimes = [datetime.fromisoformat(t.replace("Z","+00:00")) for t in hourly.get("time", [])]
     T = hourly.get("temperature_2m", [])
     RH = hourly.get("relative_humidity_2m", [])
     PR = hourly.get("precipitation", [])
     SW = hourly.get("shortwave_radiation", [])
 
-    # ricampiona a daily: mean/min/max e URmin, VPDmax
-    # costruisci mappa giorno → valori
     from collections import defaultdict
     by_day = defaultdict(lambda: {"T":[], "RH":[], "PR":[], "SW":[]})
     for t, tt, rh, pr, sw in zip(htimes, T, RH, PR, SW):
@@ -452,12 +393,7 @@ async def predict(
         by_day[d]["SW"].append(sw)
 
     days_sorted = sorted(by_day.keys())
-    tmin = []
-    tmax = []
-    tmean = []
-    prsum = []
-    urmin = []
-    vpdmax = []
+    tmin, tmax, tmean, prsum, urmin, vpdmax = [], [], [], [], [], []
     for d in days_sorted:
         Ts = np.array(by_day[d]["T"]) if by_day[d]["T"] else np.array([np.nan])
         RHs = np.array(by_day[d]["RH"]) if by_day[d]["RH"] else np.array([np.nan])
@@ -466,36 +402,28 @@ async def predict(
         tmax.append(float(np.nanmax(Ts)))
         tmean.append(float(np.nanmean(Ts)))
         prsum.append(float(np.nansum(PRs)))
-        # URmin e VPDmax
-        urvals = RHs[~np.isnan(RHs)]
-        if len(urvals)==0:
-            urmin.append(60.0)
-            vpdmax.append(6.0)
-        else:
-            urmin.append(float(np.nanmin(urvals)))
-            vpdh = [vpd_hpa(float(Ts[i]), float(urvals[i])) for i in range(min(len(Ts), len(urvals)))]
-            vpdmax.append(float(np.nanmax(vpdh)))
+        # URmin e VPDmax (calcolo robusto; coppie T/RH valide)
+        urmin.append(float(np.nanmin(RHs)) if np.any(~np.isnan(RHs)) else 60.0)
+        vpds = []
+        min_len = min(len(Ts), len(RHs))
+        for i in range(min_len):
+            if not (math.isnan(Ts[i]) or math.isnan(RHs[i])):
+                vpds.append(vpd_hpa(float(Ts[i]), float(RHs[i])))
+        vpdmax.append(float(np.nanmax(vpds)) if len(vpds) else 6.0)
 
-    # 3) Microtopografia e energy index
     slope_deg, aspect_deg = slope_aspect_from_grid(grid, dx, dy)
     concav = concavity_proxy(grid)
     twi_px = twi_proxy_from_slope_concavity(slope_deg, concav)
     month_now = (TODAY()).month
     energy_idx = aspect_energy_index(aspect_deg, slope_deg, month_now)
 
-    # 4) SMI via bilancio P-PET
     smi = compute_smi_series(days_sorted, prsum, tmin, tmax, tmean, lat)
-
-    # 5) Cold‑shock score
     shock = cold_shock_score(tmin)
 
-    # 6) Costruisci indice giornaliero 10gg (ultimi N disponibili già inclusi; la lista days_sorted copre passato+futuro)
-    # Trova l'indice del giorno corrente e prendi la fetta successiva di 10 giorni
     today_dt = datetime(TODAY().year, TODAY().month, TODAY().day, tzinfo=UTC)
     try:
         i0 = days_sorted.index(today_dt)
     except ValueError:
-        # Se non presente, aggiusta al più vicino
         diffs = [abs((d - today_dt).days) for d in days_sorted]
         i0 = int(np.argmin(diffs))
     i1 = min(len(days_sorted), i0 + 10)
@@ -513,59 +441,42 @@ async def predict(
 
     index_today = float(idx_10d[0]) if idx_10d else 0.0
 
-    # 7) Stima taglia oggi
-    recent_T = list(reversed(tmean[max(0, i0-3):i0+1]))  # ultimi 4 giorni ~ esperienza
+    recent_T = list(reversed(tmean[max(0, i0-3):i0+1]))
     recent_URmin = list(reversed(urmin[max(0, i0-3):i0+1]))
     size_today = estimate_cap_size_today(recent_T, recent_URmin)
 
-    # 8) Raccolto atteso (coerente con UI esistente)
     expected = expected_harvest_from_index(index_today, hours, ndvi_scaler=1.0)
 
-    # 9) Tabella pioggia (ultimi 10 giorni + prossimi 10)
     rain_table = []
     i2 = min(len(days_sorted), i0 + 10)
-    for d, pr in zip(days_sorted[i0-10 if i0-10>=0 else 0:i2], prsum[i0-10 if i0-10>=0 else 0:i2]):
+    start_rain = max(0, i0-10)
+    for d, pr in zip(days_sorted[start_rain:i2], prsum[start_rain:i2]):
         rain_table.append({"date": d.date().isoformat(), "precip_mm": round(pr, 1)})
 
-    # 10) Blend OM vs OW → agreement
     had_keys = bool(OPENWEATHER_API_KEY)
     agreement = 0.5
-    ow_info: Optional[Dict[str, Any]] = None
-    if ow.get("ok"):
-        ow_info = ow
-        # costruisci media di T e PR prossimi 3 giorni e confronta con OM
+    if isinstance(ow, dict) and ow.get("ok"):
         try:
-            # OM: usa i prossimi 72 h
             future_hours = [t for t in htimes if t >= today_dt and t < today_dt + timedelta(days=3)]
             if future_hours:
                 idxs = [htimes.index(t) for t in future_hours]
-                om_T = np.mean([T[i] for i in idxs])
-                om_PR = np.sum([PR[i] for i in idxs])
+                om_T = float(np.nanmean([T[i] for i in idxs]))
+                om_PR = float(np.nansum([PR[i] for i in idxs]))
             else:
-                om_T, om_PR = np.nan, np.nan
-            # OW: 5 giorni ogni 3h
-            fcl = ow["forecast"]["list"]
-            ow_T = np.mean([it["main"]["temp"] for it in fcl[:24]]) if fcl else np.nan
-            # Precipitazioni OW: somma di rain["3h"] se presente
-            rain_vals = []
-            for it in fcl[:24]:
-                rain_vals.append(it.get("rain", {}).get("3h", 0.0))
-            ow_PR = float(np.nansum(rain_vals))
-            # Agreement semplice (0..1)
-            if not (math.isnan(om_T) or math.isnan(ow_T)):
-                aT = max(0.0, 1.0 - abs(om_T - ow_T)/6.0)  # entro 6°C → 0
-            else:
-                aT = 0.5
-            aP = max(0.0, 1.0 - abs(om_PR - ow_PR)/20.0)  # entro 20 mm → 0
+                om_T, om_PR = float("nan"), float("nan")
+            fcl = ow["forecast"].get("list", [])
+            ow_T = float(np.nanmean([it["main"]["temp"] for it in fcl[:24]])) if fcl else float("nan")
+            rain_vals = [it.get("rain", {}).get("3h", 0.0) for it in fcl[:24]] if fcl else []
+            ow_PR = float(np.nansum(rain_vals)) if rain_vals else float("nan")
+            aT = 0.5 if math.isnan(om_T) or math.isnan(ow_T) else max(0.0, 1.0 - abs(om_T - ow_T)/6.0)
+            aP = 0.5 if math.isnan(om_PR) or math.isnan(ow_PR) else max(0.0, 1.0 - abs(om_PR - ow_PR)/20.0)
             agreement = 0.5 * (aT + aP)
         except Exception:
             agreement = 0.5
 
-    # 11) Affidabilità
     coverage_ok = (len(days_sorted) >= 25)
     reliab = reliability_score(agreement, coverage_ok, had_keys)
 
-    # 12) Forecast array
     forecast_10d = []
     for j, d in enumerate(days_sorted[i0:i1]):
         forecast_10d.append({
@@ -573,10 +484,8 @@ async def predict(
             "index": round(idx_10d[j], 1),
         })
 
-    # 13) Analisi (spiegazione per pannello UI esistente)
     aspect_str = None
     if not math.isnan(aspect_deg):
-        # ottanti
         dirs = ["N","NE","E","SE","S","SW","W","NW"]
         k = int(((aspect_deg + 22.5) % 360) / 45)
         aspect_str = dirs[k]
@@ -597,7 +506,7 @@ async def predict(
         },
         "sources": {
             "open_meteo": True,
-            "open_weather": bool(ow.get("ok")),
+            "open_weather": bool(isinstance(ow, dict) and ow.get("ok")),
             "nominatim_email": NOMINATIM_EMAIL,
         }
     }
@@ -612,3 +521,6 @@ async def predict(
         reliability=round(reliab, 2),
     )
     return resp
+
+
+       
