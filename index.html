@@ -150,9 +150,15 @@
     function renderUI(s){
         $("#metricIndex").textContent = s.index ?? "—";
         $("#metricHarvest").textContent = s.harvest_estimate ?? "—";
-        const sizeText = (s.size_cm && s.size_class) ? (s.size_cm + " cm") : "—";
-        $("#metricSize").textContent = (s.size_class && s.size_class !== "—") ? (sizeText) : "—";
+        let sizeText = "—";
+        if (s.size_cm && s.size_class) {
+          const r = (s.size_range_cm && s.size_range_cm.length === 2)
+            ? ` (${Number(s.size_range_cm[0]).toFixed(1)}–${Number(s.size_range_cm[1]).toFixed(1)} cm)` : "";
+          sizeText = `${Number(s.size_cm).toFixed(1)} cm${r}`;
+        }
+        $("#metricSize").textContent = sizeText;
         $("#metricReliability").textContent = s.reliability != null ? Math.round(s.reliability * 100) + "%" : "—";
+
         const a = s.aspect_octant && s.aspect_octant !== "NA" ? s.aspect_octant : "NA";
         const habUsed = (s.habitat_used || "").charAt(0).toUpperCase() + (s.habitat_used || "").slice(1);
         const source = s.habitat_source || "—";
