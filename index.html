@@ -49,7 +49,8 @@
   <header>
     <h1 style="margin:0;font-size:1.4rem;">Trova Porcini — by Antonio Pio D’Aloia</h1>
     <div class="muted" style="font-size:.85rem;">
-      Barre = <strong>probabilità/forza di uscita</strong> (flush) nei prossimi 10 gg: eventi di pioggia → lag biologico 5–15 gg → probabilità, con <em>filtro areale/ecologico</em>.
+      Le barre mostrano la <strong>previsione di uscita dei porcini</strong> (flush) nei prossimi 10 giorni: eventi di pioggia → lag biologico 5–15 gg → probabilità.
+      L'<strong>Indice (oggi)</strong> ora coincide con la probabilità/forza di uscita odierna.
     </div>
   </header>
 
@@ -92,7 +93,7 @@
       <div class="card">
         <div class="muted" style="margin-bottom:6px;">Previsione uscita porcini (10 giorni)</div>
         <div id="forecast" class="calendar"></div>
-        <div class="muted" style="margin-top:6px;font-size:.8rem;">Le barre sono modulate anche da <em>idoneità ecologica/areale</em> e condizioni climatiche di fondo: pioggia da sola ≠ porcini garantiti.</div>
+        <div class="muted" style="margin-top:6px;font-size:.8rem;">Le barre rappresentano la <em>probabilità/forza</em> del flush. Il calcolo usa gli eventi di pioggia (passati+previsti) e un lag biologico dinamico.</div>
       </div>
 
       <div class="card">
@@ -158,19 +159,15 @@
         $("#metricSize").textContent = sizeText;
         $("#metricReliability").textContent = s.reliability != null ? Math.round(s.reliability * 100) + "%" : "—";
 
-        const a = s.aspect_octant ? s.aspect_octant : "pianeggiante";
+        const a = s.aspect_octant && s.aspect_octant !== "NA" ? s.aspect_octant : "NA";
         const habUsed = (s.habitat_used || "").charAt(0).toUpperCase() + (s.habitat_used || "").slice(1);
         const source = s.habitat_source || "—";
         let autoConf = s.auto_habitat_confidence!=null ? ` (auto conf ${Math.round(s.auto_habitat_confidence*100)}%)` : "";
-        const confAsp = s.aspect_confidence != null ? ` (conf ${Math.round(s.aspect_confidence*100)}%)` : "";
-        const northness = (s.northness!=null) ? `, northness ${Number(s.northness).toFixed(2)}` : "";
-        const suit = (s.suitability_score!=null) ? `Idoneità ecologica: ${Math.round(s.suitability_score*100)}%` : "";
         $("#metricSite").innerHTML = `
           <span class="badge">Quota: ${s.elevation_m ?? "—"} m</span>
           <span class="badge">Pendenza: ${s.slope_deg ?? "—"}°</span>
-          <span class="badge">Esposizione: ${a}${confAsp}${northness}</span>
+          <span class="badge">Esposizione: ${a}</span>
           <span class="badge">Habitat: ${habUsed} — ${source}${autoConf}</span>
-          <span class="badge">${suit}</span>
         `;
 
         const forecastCont = $("#forecast"); forecastCont.innerHTML="";
@@ -303,4 +300,3 @@
   </script>
 </body>
 </html>
-
