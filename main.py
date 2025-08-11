@@ -1,4 +1,4 @@
-# main.py — Trova Porcini API (v1.7.0 — flush forecast)
+# main.py — Trova Porcini API (v1.7.1 — aspect fix + dynamic harvest)
 # Requisiti: Python 3.10+, FastAPI, httpx, uvicorn
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,7 +6,7 @@ import os, httpx, math, asyncio
 from typing import Dict, List, Tuple, Any, Optional
 from datetime import datetime, timezone, date
 
-app = FastAPI(title="Trova Porcini API (v1.7.0)", version="1.7.0")
+app = FastAPI(title="Trova Porcini API (v1.7.1)", version="1.7.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
@@ -32,7 +32,7 @@ def api_index(precip: List[float], half_life: float=8.0) -> float:
 
 def temperature_fit(tmin: float, tmax: float, tmean: float) -> float:
     """Fitness termica morbida (0–1) per Boletus spp."""
-    if tmin < -2 or tmax > 33: 
+    if tmin < -2 or tmax > 33:
         return 0.0
     if tmean<=6: base=max(0.0,(tmean)/6.0*0.35)
     elif tmean<=10: base=0.35+0.25*((tmean-6)/4.0)
@@ -60,7 +60,7 @@ _elev_cache: Dict[str, Any] = {}
 def _grid_key(lat:float,lon:float,step:float)->str: return f"{round(lat,5)},{round(lon,5)}@{int(step)}"
 async def _fetch_elev_block(lat:float,lon:float,step_m:float)->Optional[List[List[float]]]:
     key=_grid_key(lat,lon,step_m)
-    if key in _elev_cache: 
+    if key in _elev_cache:
         return _elev_cache[key]
     try:
         deg_lat=1/111320.0; deg_lon=1/(111320.0*max(0.2,math.cos(math.radians(lat))))
@@ -72,20 +72,27 @@ async def _fetch_elev_block(lat:float,lon:float,step_m:float)->Optional[List[Lis
         vals=[p["elevation"] for p in j["results"]]
         grid=[vals[0:3],vals[3:6],vals[6:9]]
         _elev_cache[key]=grid
-        if len(_elev_cache)>800:  # trim semplice
+        if len(_elev_cache)>800:
             for k in list(_elev_cache.keys())[:200]: _elev_cache.pop(k,None)
         return grid
     except Exception:
         return None
 
 def slope_aspect_from_grid(z:List[List[float]],cell_size_m:float=30.0)->Tuple[float,float,Optional[str]]:
+    """
+    Calcolo Horn 3×3. Convenzione aspect corretta:
+    0° = N, 90° = E, 180° = S, 270° = W.
+    """
+    # derivata verso EST (x) e verso NORD (y)
     dzdx=((z[0][2]+2*z[1][2]+z[2][2])-(z[0][0]+2*z[1][0]+z[2][0]))/(8*cell_size_m)
     dzdy=((z[2][0]+2*z[2][1]+z[2][2])-(z[0][0]+2*z[0][1]+z[0][2]))/(8*cell_size_m)
     slope=math.degrees(math.atan(math.hypot(dzdx,dzdy)))
-    aspect=(math.degrees(math.atan2(dzdx, dzdy))+360.0)%360.0  # 0=N
-    octs=["N","NE","E","SE","S","SW","W","NW","N"]
-    octant=octs[int(((aspect%360)+22.5)//45)]
-    return round(slope,1),round(aspect,0),octant
+    # aspetta: flusso massimo di pendenza verso l'angolo azimutale
+    # formula standard per 0=N: atan2(dzdy, -dzdx)
+    aspect=(math.degrees(math.atan2(dzdy, -dzdx))+360.0)%360.0
+    octs=["N","NE","E","SE","S","SW","W","NW"]
+    octant = octs[int(((aspect+22.5)//45) % 8)]
+    return round(slope,1), round(aspect,0), octant
 
 def concavity_from_grid(z:List[List[float]])->float:
     center=z[1][1]; neigh=[z[r][c] for r in (0,1,2) for c in (0,1,2) if not (r==1 and c==1)]
@@ -101,11 +108,13 @@ async def fetch_elevation_grid_multiscale(lat:float,lon:float)->Tuple[float,floa
         slope,aspect,octant = slope_aspect_from_grid(z,cell_size_m=step)
         cand = {"z":z,"step":step,"flat":flatness,"slope":slope,"aspect":aspect,"oct":octant,"elev":z[1][1]}
         if best is None: best=cand; best_grid=z
+        # preferisci patch con pendenza non nulla e maggiore struttura
         if slope>1.0 and (best["slope"]<=1.0 or flatness>best["flat"]):
             best=cand; best_grid=z
     if not best:
         return 800.0, 5.0, 0.0, None, 0.0
-    aspect_oct = best["oct"] if (best["slope"]>=0.8 and best["flat"]>=0.5) else None
+    # fornisci ottante solo se la pendenza è significativa e la patch non è "piatta"
+    aspect_oct = best["oct"] if (best["slope"]>=1.0 and best["flat"]>=0.3) else None
     conc = concavity_from_grid(best_grid)
     return float(best["elev"]), round(best["slope"],1), round(best["aspect"],0), aspect_oct, conc
 
@@ -212,7 +221,7 @@ async def fetch_open_meteo(lat:float,lon:float,past:int=15,future:int=10)->Dict[
         "past_days":past,"forecast_days":future
     }
     async with httpx.AsyncClient(timeout=35,headers=HEADERS) as c:
-        r=await c.get(url,params=params); r.raise_for_status(); 
+        r=await c.get(url,params=params); r.raise_for_status();
         return r.json()
 
 async def fetch_openweather(lat:float,lon:float)->Dict[str,Any]:
@@ -221,7 +230,7 @@ async def fetch_openweather(lat:float,lon:float)->Dict[str,Any]:
     params={"lat":lat,"lon":lon,"exclude":"minutely,hourly,current,alerts","units":"metric","lang":"it","appid":OWM_KEY}
     try:
         async with httpx.AsyncClient(timeout=35,headers=HEADERS) as c:
-            r=await c.get(url,params=params); r.raise_for_status(); 
+            r=await c.get(url,params=params); r.raise_for_status();
             return r.json()
     except Exception:
         return {}
@@ -313,11 +322,9 @@ def build_flush_forecast(
     # 1) Eventi passati (ultimi 15 gg)
     ev_past = rain_events(timev[:pastN], P_past)
     # 2) Eventi futuri (prossimi 10 gg)
-    #    costruiamo un "times" per il futuro come +Nd per robustezza (ma usiamo index)
     ev_fut = []
     for i in range(futN):
         if P_fut_blend[i] >= 8.0 or (i+1<futN and (P_fut_blend[i]+P_fut_blend[i+1])>=12.0):
-            # picco sul giorno più piovoso tra i due
             if i+1<futN and P_fut_blend[i+1] >= P_fut_blend[i]:
                 ev_fut.append((pastN+i+1, P_fut_blend[i]+(P_fut_blend[i+1] if P_fut_blend[i+1]>0 else 0)))
             else:
@@ -326,8 +333,7 @@ def build_flush_forecast(
     events = []
     seen = set()
     for e in ev_past + ev_fut:
-        if e[0] in seen: 
-            # se due eventi cadono sullo stesso index, somma mm
+        if e[0] in seen:
             idx = [k for k,(i,_) in enumerate(events) if i==e[0]]
             if idx:
                 i0 = idx[0]
@@ -341,22 +347,16 @@ def build_flush_forecast(
     details=[]
     # 5) Per ogni evento, calcola il lag e una gaussiana centrata al giorno del flush
     for (ev_idx, mm_tot) in events:
-        # media termica usata per il lag: usiamo tmean7 recente (proxy)
         lag = dynamic_lag_days(tmean7, elev, rh7, sw7, concavity, past_api, habitat)
         peak_idx = ev_idx + lag  # indice assoluto sulla sequenza totale
-        # spread base 2.5 giorni, più largo se mm grandi (flush più lungo)
         sigma = 2.5 if mm_tot < 25 else 3.0
         amp = event_strength(mm_tot)  # 0..1
-        # microclima/habitat modulano ampiezza (±15%)
         amp *= clamp(0.85 + 0.3*(micro-0.5), 0.75, 1.15)
-        # affidabilità: per eventi futuri riduce/accresce (passati → 1.0)
         if ev_idx >= pastN:
             amp *= (0.5 + 0.5*reliability)
-        # contribuisci ai soli 10 giorni futuri (indici relativi 0..9)
         for j in range(futN):
             abs_j = pastN + j
             forecast[j] += 100.0 * amp * gaussian_kernel(abs_j, peak_idx, sigma)
-        # salva dettagli
         when = timev[ev_idx] if ev_idx < len(timev) else f"+{ev_idx-pastN}d"
         details.append({
             "event_day_index": ev_idx,
@@ -365,9 +365,8 @@ def build_flush_forecast(
             "lag_days": lag,
             "predicted_peak_abs_index": peak_idx,
         })
-    # cap a 100 e smussa un filo
     out = [int(round(clamp(v,0.0,100.0))) for v in forecast]
-    # lieve smoothing (1-2-1)
+    # smoothing 1-2-1
     smoothed=[]
     for i in range(len(out)):
         w = out[i]
@@ -385,7 +384,49 @@ def best_window(values: List[int]) -> Tuple[int,int,int]:
         if m>best_m: best_s,best_e,best_m=i,i+2,m
     return best_s,best_e,best_m
 
-# =============== Spiegazione dinamica (ora centrata sul flush) ===============
+# =============== Harvest dinamico (nuovo) ===============
+def harvest_expected_string(forecast: List[int], idx_today: int, micro_today: float,
+                            habitat_used: str, reliability: float, hours: int) -> Tuple[str, float]:
+    """
+    Converte lo stato (forecast 10 gg) in un numero atteso per la sessione (2–8h) e in una stringa compatibile UI.
+    """
+    if not forecast:
+        return "0–1 porcini", 0.4
+
+    peak = max(forecast)
+    s,e,m = best_window(forecast)
+    mean3 = m or 0
+    # score di raccolta 0..100 (peso su picco e media finestra)
+    score = 0.6*mean3 + 0.4*peak
+
+    # moltiplicatori lievi
+    hab = (habitat_used or "").lower()
+    hab_k = 1.0
+    if "fagg" in hab: hab_k *= 1.05
+    elif "castag" in hab: hab_k *= 1.05
+    elif "conifer" in hab or "abete" in hab or "pino" in hab: hab_k *= 1.03
+
+    micro_k = clamp(0.85 + 0.3*(micro_today-0.5), 0.75, 1.15)
+    rel_k   = clamp(0.85 + 0.15*reliability/0.95, 0.85, 1.0)  # previsioni più affidabili → meno incertezza verso l'alto
+
+    # base: curva convessa in modo che salga davvero con score
+    base_2h = (clamp(score,0,100)/25.0)**1.4  # 0.. ~ (4)**1.4 ≈ 6.96
+    exp_count = base_2h * (hours/2.0) * hab_k * micro_k * rel_k
+
+    # mappo in classi leggibili
+    if exp_count < 0.6:
+        s = "0–1 porcini"
+    elif exp_count < 1.5:
+        s = "1–2 porcini"
+    elif exp_count < 3.5:
+        s = "2–5 porcini"
+    elif exp_count < 6.5:
+        s = "4–8 porcini"
+    else:
+        s = "6–12+ porcini"
+    return s, float(round(exp_count,2))
+
+# =============== Spiegazione dinamica (centrata sul flush) ===============
 def build_analysis_text(payload: Dict[str,Any]) -> str:
     idx = payload["index"]
     best = payload["best_window"]
@@ -404,13 +445,11 @@ def build_analysis_text(payload: Dict[str,Any]) -> str:
     out.append(f"<p><strong>Indice attuale: {idx}/100</strong> • Habitat: <strong>{habitat_used}</strong> ({habitat_source}). "
                f"Quota <strong>{elev} m</strong>, pendenza <strong>{slope}°</strong>, esposizione <strong>{aspect or 'NA'}</strong>.</p>")
 
-    # Perché le uscite sono previste in certi giorni
     out.append("<h4>Come stimiamo i giorni di uscita</h4>")
     out.append("<p>Il modello individua gli <strong>eventi di pioggia</strong> (passati e previsti) e applica un "
                "<strong>ritardo biologico</strong> dipendente da temperatura media, quota, umidità/irraggiamento, "
                "concavità del versante e habitat. Il picco di probabilità di flush viene quindi proiettato nei prossimi 10 giorni.</p>")
 
-    # Eventi e lag
     evs = payload.get("flush_events", [])
     if evs:
         out.append("<h4>Eventi di pioggia e finestre stimate</h4><ul>")
@@ -422,14 +461,11 @@ def build_analysis_text(payload: Dict[str,Any]) -> str:
                        f"flush atteso ~<strong>{lag} giorni</strong> dopo (condizionato a T, quota, microclima).</li>")
         out.append("</ul>")
 
-    # Best window
     if best and best.get("mean",0)>0:
         s,e,m = best["start"], best["end"], best["mean"]
         out.append(f"<p>Nei prossimi 10 giorni la finestra con <strong>maggiore probabilità di uscita</strong> è tra "
-                   f"<strong>giorno {s+1}</strong> e <strong>giorno {e+1}</strong> (media ≈ <strong>{m}</strong>). "
-                   "Se sono attese piogge aggiuntive, potrebbero aprirsi finestre successive oltre l’orizzonte di 10 giorni.</p>")
+                   f"<strong>giorno {s+1}</strong> e <strong>giorno {e+1}</strong> (media ≈ <strong>{m}</strong>).</p>")
 
-    # Condizioni di contorno
     cause=[]
     cause.append(f"Antecedente: 15 gg = <strong>{p15:.0f} mm</strong> (7 gg: {p7:.0f} mm).")
     cause.append(f"Termica media 7 gg: <strong>{tm7:.1f}°C</strong> (ritardo biologico variabile 5–15 gg).")
@@ -442,7 +478,6 @@ def build_analysis_text(payload: Dict[str,Any]) -> str:
         elif rh7 >= 70 and sw7 < 15000: cause.append("UR% alta e radiazione moderata: ritardo minore e flush più ampio.")
     out.append("<h4>Contesto meteo-microclimatico</h4><ul>" + "".join(f"<li>{c}</li>" for c in cause) + "</ul>")
 
-    # Specie probabili e note
     spp = species_for_habitat(habitat_used)
     out.append("<h4>Specie di porcini probabili (in base all’habitat)</h4><ul>" + "".join(
         f"<li><em>{s['latin']}</em> — {s['common']}</li>" for s in spp
@@ -525,7 +560,7 @@ async def api_score(
             Tm_f_ow.append(float(t.get("day",(t.get("min",0.0)+t.get("max",0.0))/2.0)))
     ow_len=min(len(P_fut_ow),futN)
     w_ow,w_om=0.60,0.40
-    def blend(arr_ow,arr_om,i): 
+    def blend(arr_ow,arr_om,i):
         return w_ow*arr_ow[i]+w_om*arr_om[i] if i<ow_len else arr_om[i]
 
     P_fut_blend,Tmin_f_blend,Tmax_f_blend,Tm_f_blend=[],[],[],[]
@@ -535,29 +570,27 @@ async def api_score(
         Tmax_f_blend.append(blend(Tmax_f_ow,Tmax_f_om,i) if ow_len else Tmax_f_om[i])
         Tm_f_blend.append(blend(Tm_f_ow,Tm_f_om,i) if ow_len else Tm_om[i+pastN])
 
-    # Indicatori “ambientali” attuali (per contesto e tips)
+    # Indicatori attuali (contesto)
     API_val=api_index(P_past_om,half_life=half); ET7=sum(ET0_p_om[-7:]) if ET0_p_om else 0.0
     RH7=sum(RH_p_om[-7:])/max(1,len(RH_p_om[-7:])) if RH_p_om else 60.0
     SW7=sum(SW_p_om[-7:])/max(1,len(SW_p_om[-7:])) if SW_p_om else 15000.0
     Tfit_today=temperature_fit(float(Tmin_p_om[-1]),float(Tmax_p_om[-1]),float(Tm_p_om[-1]))
     micro_today = microclimate_from_aspect(aspect_oct or None, float(slope_deg), float(RH7), float(SW7), float(sum(map(float,Tm_p_om[-7:]))/7.0))
-    # indice "ambientale" odierno (lo manteniamo per contesto, non è la barra)
     moisture=max(0.0,min(1.0,(API_val-0.6*ET7)/40.0+0.6))
     dryness_penalty = 0.0
     if SW7>18000 and RH7<55: dryness_penalty = min(0.25, (SW7-18000)/12000 * (55-RH7)/55)
     idx_today = int(round(100.0*(0.54*moisture + 0.36*Tfit_today + 0.10*micro_today) * (1.0 - dryness_penalty)))
-    # habitat factor leggero
     h_factor = habitat_factor(habitat_used, elev_m, datetime.utcnow().date())
     idx_today = int(round(max(0, min(100, idx_today*h_factor))))
 
-    # Affidabilità delle previsioni (useremo per eventi futuri)
+    # Affidabilità delle previsioni
     reliability = reliability_from_sources(P_fut_ow[:ow_len],P_fut_om[:ow_len]) if ow_len else 0.6
 
     # Tabelle pioggia
     rain_past={d["time"][i] if isinstance(d,dict) else om["daily"]["time"][i]: round(P_past_om[i],1) for i,d in [(i,om["daily"]) for i in range(min(pastN,len(om["daily"]["time"])))]}
     rain_future={om["daily"]["time"][pastN+i] if pastN+i<len(om["daily"]["time"]) else f"+{i+1}d":round(P_fut_blend[i],1) for i in range(futN)}
 
-    # Flush forecast (NUOVO)
+    # Flush forecast
     Tm7=sum(map(float,Tm_p_om[-7:]))/max(1,len(Tm_p_om[-7:]))
     flush_forecast, events_details = build_flush_forecast(
         past_api=API_val, tmean7=Tm7, elev=elev_m, rh7=RH7, sw7=SW7,
@@ -567,6 +600,12 @@ async def api_score(
         reliability=reliability
     )
     s,e,m=best_window(flush_forecast)
+
+    # Harvest atteso (nuovo, dipende da hours)
+    harvest_str, harvest_mean = harvest_expected_string(
+        forecast=flush_forecast, idx_today=idx_today, micro_today=micro_today,
+        habitat_used=habitat_used, reliability=reliability, hours=hours
+    )
 
     # Response
     P7=sum(P_past_om[-7:])
@@ -582,10 +621,11 @@ async def api_score(
         "RH7_pct": round(RH7,1),
         "SW7_kj": round(SW7,0),
         "Tmean7_c": round(Tm7,1),
-        "index": idx_today,  # indice ambientale attuale (per contesto)
-        "forecast": [int(x) for x in flush_forecast],  # ORA: previsione di USCITA (non idoneità)
+        "index": idx_today,
+        "forecast": [int(x) for x in flush_forecast],
         "best_window": {"start": s, "end": e, "mean": m},
-        "harvest_estimate": ("0–1 porcini" if m<40 else "1–2 porcini" if m<55 else "2–5 porcini" if m<75 else "6–10+ porcini"),
+        "harvest_estimate": harvest_str,
+        "harvest_detail": {"expected_mean": harvest_mean, "hours": hours},
         "reliability": round(reliability,3),
         "rain_past": rain_past,
         "rain_future": rain_future,
@@ -593,7 +633,7 @@ async def api_score(
         "habitat_source": habitat_source,
         "auto_habitat_scores": auto_scores,
         "auto_habitat_confidence": round(auto_conf,3),
-        "flush_events": events_details,  # per spiegazione
+        "flush_events": events_details,
     }
     response_data["dynamic_explanation"] = build_analysis_text(response_data)
     return response_data
