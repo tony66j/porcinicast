@@ -1,17 +1,27 @@
-# main.py — Trova Porcini API (v1.8.1 — flush-aligned index, size model + range, aspect fix)
+# main.py — Trova Porcini API (v2.0.0)
 # Requisiti: Python 3.10+, FastAPI, httpx, uvicorn
 #
-# Modifiche principali v1.8.1
-# - Indice "oggi" = probabilità/forza di uscita (flush_today, 0–100) → coerente con "Raccolto atteso".
-# - Lag biologico DINAMICO (5–15 gg) in funzione di T, quota, UR/radiazione, concavità e stato antecedente.
-# - Modello dimensionale: diametro medio cappello + NUOVO range (coesistenza coorti).
-# - Corretto calcolo dell’aspect (esposizione): evita inversioni NW↔SE osservate.
-# - Analisi testuale discorsiva con nota sulla variabilità delle dimensioni.
+# Novità v2.0.0
+# - Esposizione del versante rigorosa (8 settori: N, NE, E, SE, S, SW, W, NW):
+#   media circolare multi-scala (30–90–150 m) pesata per pendenza; output:
+#   aspect_octant, aspect_confidence (0–1), northness = sin(slope)*cos(aspect).
+#   Se pendenza < 1° → "pianeggiante (nessuna esposizione)".
+# - Filtro biogeografico/ecologico (areale porcini):
+#   penalizza fortemente fascia equatoriale di bassa quota e habitat senza
+#   potenziali ospiti ECM; considera anche finestra climatica T/UR.
+#   => impedisce falsi positivi (es. Amazzonia).
+# - Analisi del Modello molto più estesa, con spiegazione di:
+#   perché la sola pioggia non basta, ruolo di ospiti ECM, stagione, suolo,
+#   siccità antecedente, microclima, incertezze e riferimenti sintetici.
+# - Resta invariato: indice = flush odierno (0–100), lag dinamico 5–15 gg,
+#   modello dimensionale (diametro medio + range coorti), concavità/impluvi.
 #
-# NOTE sintetiche di letteratura per i parametri:
-# - Crescita cappello ~21 mm/giorno a UR elevata; crescita ≈0 per UR < ~40%.
-# - Finestra post-pioggia tipica su evento 5–15 gg (dipende da T/UR/suolo/habitat).
-# - Topografia/microclima modulano bilancio idrico-termico del suolo.
+# NOTE scientifiche (richiamate nel testo esplicativo):
+# - I porcini (complesso Boletus edulis s.l.) sono ECM di conifere e latifoglie
+#   temperate; distribuiti nell'emisfero nord (introdotti localmente altrove).
+# - "Northness" = sin(slope)*cos(aspect); l'aspect è 0°=N, senso orario.
+# - La fruttificazione dipende da pioggia + termica/UR + suolo + ospiti + stagione;
+#   la pioggia da sola spesso non produce flush.
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,13 +29,13 @@ import os, httpx, math, asyncio
 from typing import Dict, List, Tuple, Any, Optional
 from datetime import datetime, timezone, date
 
-app = FastAPI(title="Trova Porcini API (v1.8.1)", version="1.8.1")
+app = FastAPI(title="Trova Porcini API (v2.0.0)", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
-HEADERS = {"User-Agent":"Trovaporcini/1.8.1 (+site)", "Accept-Language":"it"}
+HEADERS = {"User-Agent":"Trovaporcini/2.0.0 (+site)", "Accept-Language":"it"}
 OWM_KEY = os.environ.get("OPENWEATHER_API_KEY")
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -33,9 +43,11 @@ OVERPASS_URLS = [
     "https://overpass.openstreetmap.ru/api/interpreter"
 ]
 
-# =============== UTIL ===============
+# ----------------------------- UTIL -----------------------------
 def clamp(v,a,b): return a if v<a else b if v>b else v
 def half_life_coeff(days: float) -> float: return 0.5**(1.0/max(1.0,days))
+def deg2rad(d: float) -> float: return d*math.pi/180.0
+def rad2deg(r: float) -> float: return r*180.0/math.pi
 
 def api_index(precip: List[float], half_life: float=8.0) -> float:
     k=half_life_coeff(half_life); api=0.0
@@ -43,6 +55,7 @@ def api_index(precip: List[float], half_life: float=8.0) -> float:
     return api
 
 def temperature_fit(tmin: float, tmax: float, tmean: float) -> float:
+    # idoneità termica 0..1 (finestra temperata)
     if tmin < -2 or tmax > 33:
         return 0.0
     if tmean<=6: base=max(0.0,(tmean)/6.0*0.35)
@@ -66,15 +79,17 @@ def stddev(xs: List[float]) -> float:
     m=sum(xs)/len(xs)
     return (sum((x-m)**2 for x in xs)/len(xs))**0.5
 
-# =============== DEM multi-scala + concavità (open-elevation) ===============
+# ---------------- DEM multi-scala, aspect e concavità ----------------
 _elev_cache: Dict[str, Any] = {}
 def _grid_key(lat:float,lon:float,step:float)->str: return f"{round(lat,5)},{round(lon,5)}@{int(step)}"
+
 async def _fetch_elev_block(lat:float,lon:float,step_m:float)->Optional[List[List[float]]]:
     key=_grid_key(lat,lon,step_m)
     if key in _elev_cache:
         return _elev_cache[key]
     try:
-        deg_lat=1/111320.0; deg_lon=1/(111320.0*max(0.2,math.cos(math.radians(lat))))
+        deg_lat=1/111320.0
+        deg_lon=1/(111320.0*max(0.2,math.cos(math.radians(lat))))
         dlat,dlon=step_m*deg_lat,step_m*deg_lon
         coords=[{"latitude":lat+dr*dlat,"longitude":lon+dc*dlon} for dr in(-1,0,1) for dc in(-1,0,1)]
         async with httpx.AsyncClient(timeout=20,headers=HEADERS) as c:
@@ -90,14 +105,11 @@ async def _fetch_elev_block(lat:float,lon:float,step_m:float)->Optional[List[Lis
         return None
 
 def slope_aspect_from_grid(z:List[List[float]],cell_size_m:float=30.0)->Tuple[float,float,Optional[str]]:
-    # Horn kernel
-    dzdx=((z[0][2]+2*z[1][2]+z[2][2])-(z[0][0]+2*z[1][0]+z[2][0]))/(8*cell_size_m)  # +x verso EST
-    dzdy=((z[2][0]+2[z for z in [z[2][1]]][0]+z[2][2])-(z[0][0]+2[z for z in [z[0][1]]][0]+z[0][2]))/(8*cell_size_m)  # +y verso SUD
-    # ↑ riga sopra è solo per chiarezza che usiamo i medesimi indici; sostanzialmente è:
-    # dzdy = ((z[2][0]+2*z[2][1]+z[2][2])-(z[0][0]+2*z[0][1]+z[0][2]))/(8*cell_size_m)
-    dzdy = ((z[2][0]+2*z[2][1]+z[2][2])-(z[0][0]+2*z[0][1]+z[0][2]))/(8*cell_size_m)
+    # Horn kernel, +x=E, +y=S
+    dzdx=((z[0][2]+2*z[1][2]+z[2][2])-(z[0][0]+2*z[1][0]+z[2][0]))/(8*cell_size_m)
+    dzdy=((z[2][0]+2*z[2][1]+z[2][2])-(z[0][0]+2*z[0][1]+z[0][2]))/(8*cell_size_m)
     slope=math.degrees(math.atan(math.hypot(dzdx,dzdy)))
-    # FIX esposizione: 0°=N, CW; downhill dir. => atan2(-dzdx, dzdy)
+    # 0°=N (CW), direzione di massima pendenza in discesa:
     aspect=(math.degrees(math.atan2(-dzdx, dzdy))+360.0)%360.0
     octs=["N","NE","E","SE","S","SW","W","NW","N"]
     octant=octs[int(((aspect%360)+22.5)//45)]
@@ -105,41 +117,85 @@ def slope_aspect_from_grid(z:List[List[float]],cell_size_m:float=30.0)->Tuple[fl
 
 def concavity_from_grid(z:List[List[float]])->float:
     center=z[1][1]; neigh=[z[r][c] for r in (0,1,2) for c in (0,1,2) if not (r==1 and c==1)]
-    delta=(sum(neigh)/8.0 - center)
-    return clamp(delta/6.0, -0.1, +0.1)  # concavo positivo (accumulo)
+    delta=(sum(neigh)/8.0 - center)  # m; positivo = concavo (accumulo)
+    return clamp(delta/6.0, -0.1, +0.1)
 
-async def fetch_elevation_grid_multiscale(lat:float,lon:float)->Tuple[float,float,float,Optional[str],float]:
-    best=None; best_grid=None
-    for step in (30.0, 90.0, 150.0):
-        z = await _fetch_elev_block(lat,lon,step)
+async def fetch_elevation_multiscale_metrics(lat:float,lon:float)->Tuple[float,float,float,Optional[str],float,float,float]:
+    """
+    Ritorna: elev_m, slope_mean_deg, aspect_mean_deg, aspect_octant, concavity, aspect_confidence (0..1), northness
+    """
+    steps=(30.0,90.0,150.0)
+    records=[]
+    elev_center=None
+    best_grid=None; best_flat=0.0
+    for s in steps:
+        z = await _fetch_elev_block(lat,lon,s)
         if not z: continue
+        if elev_center is None: elev_center=z[1][1]
+        slope,aspect,octant = slope_aspect_from_grid(z,cell_size_m=s)
         flatness = stddev([*z[0],*z[1],*z[2]])
-        slope,aspect,octant = slope_aspect_from_grid(z,cell_size_m=step)
-        cand = {"z":z,"step":step,"flat":flatness,"slope":slope,"aspect":aspect,"oct":octant,"elev":z[1][1]}
-        if best is None: best=cand; best_grid=z
-        if slope>1.0 and (best["slope"]<=1.0 or flatness>best["flat"]):
-            best=cand; best_grid=z
-    if not best:
-        return 800.0, 5.0, 0.0, None, 0.0
-    aspect_oct = best["oct"] if (best["slope"]>=0.8 and best["flat"]>=0.5) else None
-    conc = concavity_from_grid(best_grid)
-    return float(best["elev"]), round(best["slope"],1), round(best["aspect"],0), aspect_oct, conc
+        records.append({"step":s,"slope":slope,"aspect":aspect,"oct":octant,"flat":flatness,"z":z})
+        # scegli griglia "best" per concavità: più strutturata e/o più ripida
+        if best_grid is None or slope>1.5 and (flatness>best_flat or records[-2]["slope"]<=1.5 if len(records)>1 else True):
+            best_grid=z; best_flat=flatness
+    if not records:
+        return 800.0, 0.0, 0.0, None, 0.0, 0.0, 0.0
 
-# =============== Habitat auto da OSM ===============
+    # media circolare pesata per pendenza e scala
+    scale_w = {30.0:0.5, 90.0:0.3, 150.0:0.2}
+    X=Y=0.0; wsum=0.0; slope_wsum=0.0
+    for r in records:
+        slope_rad=deg2rad(r["slope"])
+        w = math.sin(slope_rad) * scale_w.get(r["step"],0.2)
+        a_rad=deg2rad(r["aspect"])
+        # componenti: x = sin(a), y = cos(a) con a=0° N, CW
+        X += w*math.sin(a_rad)
+        Y += w*math.cos(a_rad)
+        wsum += w
+        slope_wsum += r["slope"]*w
+    if wsum <= 1e-6:
+        # pianeggiante
+        conc = concavity_from_grid(best_grid) if best_grid else 0.0
+        return float(elev_center), 0.0, 0.0, None, conc, 0.0, 0.0
+
+    aspect_mean_rad = math.atan2(X, Y)  # rad, 0=N
+    aspect_mean_deg = (rad2deg(aspect_mean_rad)+360.0)%360.0
+    slope_mean_deg = clamp(slope_wsum/wsum,0.0,90.0)
+    conc = concavity_from_grid(best_grid) if best_grid else 0.0
+
+    # confidenza: forza del vettore * fattore pendenza
+    R = math.hypot(X,Y)/wsum  # 0..1
+    slope_factor = slope_mean_deg / (slope_mean_deg + 5.0)  # saturazione dolce
+    aspect_conf = clamp(R * slope_factor, 0.0, 1.0)
+
+    # northness
+    northness = math.sin(deg2rad(slope_mean_deg)) * math.cos(aspect_mean_rad)
+
+    # etichetta 8 settori, o pianeggiante
+    if slope_mean_deg < 1.0:
+        octant = None
+    else:
+        octs=["N","NE","E","SE","S","SW","W","NW","N"]
+        octant=octs[int(((aspect_mean_deg%360)+22.5)//45)]
+
+    return float(elev_center), round(slope_mean_deg,1), round(aspect_mean_deg,0), octant, conc, round(aspect_conf,3), round(northness,3)
+
+# ---------------- Habitat auto da OSM ----------------
 def _score_tags(tags: Dict[str,str])->Dict[str,float]:
     t = {k.lower(): (v.lower() if isinstance(v,str) else v) for k,v in (tags or {}).items()}
-    s = {"castagno":0.0,"faggio":0.0,"quercia":0.0,"conifere":0.0,"misto":0.0}
+    s = {"castagno":0.0,"faggio":0.0,"quercia":0.0,"conifere":0.0,"misto":0.0,"altro":0.0}
     genus = t.get("genus",""); species = t.get("species","")
     leaf_type = t.get("leaf_type",""); landuse = t.get("landuse",""); natural=t.get("natural",""); wood=t.get("wood","")
     if "castanea" in genus or "castagna" in species: s["castagno"] += 3.0
     if "quercus" in genus or "querce" in species:  s["quercia"]  += 3.0
     if "fagus" in genus or "faggio" in species:    s["faggio"]   += 3.0
-    if any(g in genus for g in ("pinus","abies","picea","larix")): s["conifere"] += 2.5
+    if any(g in genus for g in ("pinus","abies","picea","larix","cedrus")): s["conifere"] += 2.5
     if "needleleaved" in leaf_type: s["conifere"] += 1.5
-    if wood in ("conifer","pine","spruce","fir"): s["conifere"] += 1.2
+    if wood in ("conifer","pine","spruce","fir","larch","cedar"): s["conifere"] += 1.2
     if wood in ("broadleaved","deciduous"): s["misto"] += 0.6
     if landuse=="forest" or natural in ("wood","forest"):
         for k in s: s[k] += 0.1
+    if not any(s.values()): s["altro"] = 1.0
     return s
 
 def _choose_habitat(scores: Dict[str,float])->Tuple[str,float]:
@@ -166,7 +222,7 @@ async def fetch_osm_habitat(lat: float, lon: float, radius_m: int = 400) -> Tupl
                 r = await c.post(url, data={"data": q})
                 r.raise_for_status()
                 j = r.json()
-            scores = {"castagno":0.0,"faggio":0.0,"quercia":0.0,"conifere":0.0,"misto":0.0}
+            scores = {"castagno":0.0,"faggio":0.0,"quercia":0.0,"conifere":0.0,"misto":0.0,"altro":0.0}
             for el in j.get("elements", []):
                 local = _score_tags(el.get("tags", {}))
                 for k,v in local.items(): scores[k]+=v
@@ -174,11 +230,11 @@ async def fetch_osm_habitat(lat: float, lon: float, radius_m: int = 400) -> Tupl
             return hab, conf, scores
         except Exception:
             continue
-    return "misto", 0.15, {"castagno":0,"faggio":0,"quercia":0,"conifere":0,"misto":1}
+    return "altro", 0.10, {"castagno":0,"faggio":0,"quercia":0,"conifere":0,"misto":0,"altro":1}
 
-# =============== Microclima/esposizione ===============
+# ---------------- Microclima / esposizione ----------------
 def microclimate_from_aspect(aspect_oct: Optional[str], slope_deg: float, rh7: float, sw7: float, tmean7: float) -> float:
-    if not aspect_oct or slope_deg < 0.8:
+    if not aspect_oct or slope_deg < 1.0:
         return 0.5
     bonus = 0.0
     if aspect_oct in ("N","NE","NW"):
@@ -190,7 +246,7 @@ def microclimate_from_aspect(aspect_oct: Optional[str], slope_deg: float, rh7: f
     bonus *= k
     return clamp(0.5 + bonus,0.0,1.0)
 
-# =============== Specie & tips ===============
+# ---------------- Specie & consigli ----------------
 def species_for_habitat(hab: str) -> List[Dict[str,str]]:
     h = (hab or "").lower()
     if "querc" in h or "oak" in h:
@@ -215,7 +271,7 @@ def safety_notes_short()->List[str]:
         "Raccogli solo specie che riconosci con certezza e rispetta le normative locali."
     ]
 
-# =============== Meteo (Open-Meteo + OpenWeather) ===============
+# ---------------- Meteo (Open-Meteo + OpenWeather) ----------------
 async def fetch_open_meteo(lat:float,lon:float,past:int=15,future:int=10)->Dict[str,Any]:
     url="https://api.open-meteo.com/v1/forecast"
     daily_vars=[
@@ -242,56 +298,27 @@ async def fetch_openweather(lat:float,lon:float)->Dict[str,Any]:
     except Exception:
         return {}
 
-# =============== Lag biologico & flush forecast ===============
-def habitat_factor(habitat: str, elev_m: float, today: date) -> float:
-    hab = (habitat or "").lower()
-    m = today.month
-    is_autumn = m in (8,9,10,11)
-    is_summer = m in (6,7,8)
-    f = 1.0
-    if "castag" in hab:
-        if is_autumn: f *= 1.08
-    elif "fagg" in hab:
-        if is_autumn and elev_m>=700: f *= 1.08
-    elif "querc" in hab:
-        if is_autumn: f *= 1.05
-    elif any(k in hab for k in ("conifer","abete","pino")):
-        if (is_autumn and elev_m>=800) or (is_summer and elev_m>=1200): f *= 1.07
-    elif "misto" in hab:
-        if is_autumn: f *= 1.05
-    return f
-
+# ---------------- Lag, eventi pioggia e previsione flush ----------------
 def dynamic_lag_days(tmean: float, elev: float, rh: float, sw: float, concavity: float, antecedent_api: float, habitat: str) -> int:
     lag = 9
-    # termica
     if 16 <= tmean <= 20: lag -= 2
     elif tmean < 12: lag += 2
     elif tmean > 22: lag += 1
-    # quota
     if elev >= 1200: lag += 1
     elif elev <= 400 and tmean >= 18: lag -= 1
-    # umidità/irraggiamento
     if rh >= 70 and sw < 15000: lag -= 1
     if rh < 50 and sw > 19000: lag += 1
-    # concavità (impluvi accelerano)
     if concavity > 0.05: lag -= 1
     if concavity < -0.05: lag += 1
-    # antecedente secco
     if antecedent_api < 8: lag += 1
-    lag = int(clamp(lag, 5, 15))
-    return lag
+    return int(clamp(lag, 5, 15))
 
 def rain_events(times: List[str], rains: List[float]) -> List[Tuple[int,float]]:
-    events=[]
-    n=min(len(times),len(rains))
-    i=0
+    events=[]; n=min(len(times),len(rains)); i=0
     while i<n:
-        if rains[i] >= 8.0:
-            events.append((i, rains[i])); i += 1
-        elif i+1<n and (rains[i]+rains[i+1]) >= 12.0:
-            events.append((i+1, rains[i]+rains[i+1])); i += 2
-        else:
-            i += 1
+        if rains[i] >= 8.0: events.append((i, rains[i])); i += 1
+        elif i+1<n and (rains[i]+rains[i+1]) >= 12.0: events.append((i+1, rains[i]+rains[i+1])); i += 2
+        else: i += 1
     return events
 
 def gaussian_kernel(x: float, mu: float, sigma: float) -> float:
@@ -300,13 +327,48 @@ def gaussian_kernel(x: float, mu: float, sigma: float) -> float:
 def event_strength(mm: float) -> float:
     return 1.0 - math.exp(-mm/20.0)
 
+def climate_suitability_factor(tmin: float, tmax: float, tmean7: float, rh7: float) -> float:
+    # riduce il flush quando fuori finestra termica/igrometrica
+    tf = temperature_fit(tmin, tmax, tmean7)  # 0..1
+    rh_pen = 1.0
+    if rh7 < 40: rh_pen = 0.5
+    elif rh7 < 55: rh_pen = 0.8
+    elif rh7 > 95: rh_pen = 0.8
+    return clamp(tf * rh_pen, 0.0, 1.0)
+
+def biogeographic_suitability(lat: float, elev: float, habitat_used: str, auto_scores: Dict[str,float], tmean7: float, rh7: float) -> Tuple[float,str]:
+    """
+    Idoneità 0..1 vs areale/ospiti/clima di fondo. Penalizza fascia equatoriale di bassa quota e habitat senza ospiti ECM.
+    """
+    score = 1.0
+    reason = []
+    abslat = abs(lat)
+    # Fascia equatoriale bassa quota: quasi zero
+    if abslat < 12.0 and elev < 900:
+        score *= 0.05; reason.append("fascia equatoriale di bassa quota (fuori areale tipico)")
+    elif abslat < 12.0 and elev >= 900:
+        score *= 0.4; reason.append("fascia tropicale montana: possibile solo con boschi ECM idonei")
+    else:
+        reason.append("fascia temperata/subtrop. idonea")
+    # Ospiti ECM: conifere, faggio, quercia, castagno, misto → ok; altro → penalità
+    h = (habitat_used or "").lower()
+    if any(k in h for k in ("conifer","abete","pino","fagg","querc","castag","misto")):
+        reason.append("presenza potenziale di ospiti ECM")
+    else:
+        score *= 0.7; reason.append("ospiti ECM incerti/assenti")
+    # Clima di fondo (temperatura/UR medie 7 gg)
+    clim = climate_suitability_factor(tmin=10, tmax=24, tmean7=tmean7, rh7=rh7)  # grossolana: usiamo Tmean7
+    score *= (0.6 + 0.4*clim)
+    return clamp(score,0.0,1.0), "; ".join(reason)
+
 def build_flush_forecast(
     past_api: float,
-    tmean7: float, elev: float, rh7: float, sw7: float,
+    tmin7: float, tmax7: float, tmean7: float, elev: float, rh7: float, sw7: float,
     concavity: float, micro: float, habitat: str,
     timev: List[str], pastN: int, futN: int,
     P_past: List[float], P_fut_blend: List[float],
-    reliability: float
+    reliability: float,
+    suitability: float, host_factor: float
 ) -> Tuple[List[int], List[Dict[str,Any]]]:
     ev_past = rain_events(timev[:pastN], P_past)
     ev_fut = []
@@ -316,29 +378,28 @@ def build_flush_forecast(
                 ev_fut.append((pastN+i+1, P_fut_blend[i]+(P_fut_blend[i+1] if P_fut_blend[i+1]>0 else 0)))
             else:
                 ev_fut.append((pastN+i, P_fut_blend[i]))
-    events = []
-    seen = set()
+    # Unisci, evitando duplicati
+    events=[]; seen=set()
     for e in ev_past + ev_fut:
         if e[0] in seen:
-            idx = [k for k,(i,_) in enumerate(events) if i==e[0]]
-            if idx:
-                i0 = idx[0]
-                events[i0] = (events[i0][0], events[i0][1] + e[1])
-            else:
-                events.append(e); seen.add(e[0])
+            idx = [k for k,(ii,_) in enumerate(events) if ii==e[0]]
+            if idx: events[idx[0]] = (events[idx[0]][0], events[idx[0]][1] + e[1])
+            else: events.append(e); seen.add(e[0])
         else:
             events.append(e); seen.add(e[0])
 
-    forecast = [0.0]*futN
-    details=[]
+    clim_factor = climate_suitability_factor(tmin7, tmax7, tmean7, rh7)
+    forecast=[0.0]*futN; details=[]
     for (ev_idx, mm_tot) in events:
         lag = dynamic_lag_days(tmean7, elev, rh7, sw7, concavity, past_api, habitat)
         peak_idx = ev_idx + lag
         sigma = 2.5 if mm_tot < 25 else 3.0
         amp = event_strength(mm_tot)
+        # Modulatori: microclima, affidabilità, clima di fondo, areale/ospiti
         amp *= clamp(0.85 + 0.3*(micro-0.5), 0.75, 1.15)
-        if ev_idx >= pastN:
-            amp *= (0.5 + 0.5*reliability)
+        if ev_idx >= pastN: amp *= (0.5 + 0.5*reliability)
+        amp *= clamp(0.3 + 0.7*clim_factor, 0.0, 1.0)
+        amp *= clamp(suitability, 0.0, 1.0) * clamp(host_factor, 0.2, 1.0)
         for j in range(futN):
             abs_j = pastN + j
             forecast[j] += 100.0 * amp * gaussian_kernel(abs_j, peak_idx, sigma)
@@ -369,7 +430,7 @@ def best_window(values: List[int]) -> Tuple[int,int,int]:
         if m>best_m: best_s,best_e,best_m=i,i+2,m
     return best_s,best_e,best_m
 
-# =============== Modello dimensionale (diametro cappello) ===============
+# ---------------- Modello dimensionale (diametro cappello) ----------------
 def cap_growth_rate_cm_per_day(tmean: float, rh: float) -> float:
     if rh < 40: return 0.0
     ur_f = clamp((rh - 40.0) / (85.0 - 40.0), 0.0, 1.0)
@@ -382,12 +443,10 @@ def cap_growth_rate_cm_per_day(tmean: float, rh: float) -> float:
     return 2.1 * ur_f * clamp(t_f,0.0,1.0)  # cm/giorno
 
 def estimate_size_today_cm(events: List[Dict[str,Any]], pastN:int, tmean7:float, rh7:float) -> Tuple[float,str]:
-    if not events:
-        return 0.0, "—"
+    if not events: return 0.0, "—"
     today_abs = pastN
     peak_idxs = [e["predicted_peak_abs_index"] for e in events if "predicted_peak_abs_index" in e]
-    if not peak_idxs:
-        return 0.0, "—"
+    if not peak_idxs: return 0.0, "—"
     peak_idx = min(peak_idxs, key=lambda k: abs(today_abs - k))
     start_buttons = peak_idx - 2
     age_days = max(0, today_abs - start_buttons)
@@ -399,16 +458,10 @@ def estimate_size_today_cm(events: List[Dict[str,Any]], pastN:int, tmean7:float,
     return round(size_cm,1), cls
 
 def estimate_size_range_today_cm(events: List[Dict[str,Any]], pastN:int, tmean7:float, rh7:float) -> Tuple[float,float]:
-    """
-    Range dimensioni attese oggi considerando coorti +/- 2 giorni rispetto alla coorte mediana.
-    Modello semplice: stessa velocità di crescita g(T,UR) per le coorti vicine.
-    """
-    if not events:
-        return (0.0, 0.0)
+    if not events: return (0.0, 0.0)
     today_abs = pastN
     peak_idxs = [e["predicted_peak_abs_index"] for e in events if "predicted_peak_abs_index" in e]
-    if not peak_idxs:
-        return (0.0, 0.0)
+    if not peak_idxs: return (0.0, 0.0)
     peak_idx = min(peak_idxs, key=lambda k: abs(today_abs - k))
     start_buttons = peak_idx - 2
     age_med = max(0, today_abs - start_buttons)
@@ -420,25 +473,33 @@ def estimate_size_range_today_cm(events: List[Dict[str,Any]], pastN:int, tmean7:
     if smax < smin: smin, smax = smax, smin
     return round(smin,1), round(smax,1)
 
-# =============== Spiegazione dinamica (centrata su flush e dimensioni) ===============
+# ---------------- Spiegazione (estesa) ----------------
 def build_analysis_text(payload: Dict[str,Any]) -> str:
     idx = payload["index"]
     best = payload["best_window"]
     p15 = payload["P15_mm"]; p7 = payload["P7_mm"]
     rh7 = payload.get("RH7_pct", None); sw7 = payload.get("SW7_kj", None)
     tm7 = payload["Tmean7_c"]
-    aspect = payload.get("aspect_octant") or "NA"
+    aspect = payload.get("aspect_octant")
     slope = payload.get("slope_deg")
     elev = payload.get("elevation_m")
+    aspect_conf = payload.get("aspect_confidence",0.0)
+    northness = payload.get("northness",0.0)
     habitat_used = (payload.get("habitat_used") or "").capitalize() or "Altro"
     habitat_source = payload.get("habitat_source","manuale")
     size_cm = payload.get("size_cm", 0.0)
     size_class = payload.get("size_class", "—")
     rng = payload.get("size_range_cm",[0.0,0.0])
+    suit = payload.get("suitability_score",1.0)
+    suit_reason = payload.get("suitability_reason","")
+    host_factor = payload.get("host_factor",1.0)
 
     out=[]
+    # Oggi
+    exp = aspect if aspect else "pianeggiante (nessuna esposizione)"
     out.append(f"<p><strong>Indice attuale (flush): {idx}/100</strong> • Habitat: <strong>{habitat_used}</strong> ({habitat_source}). "
-               f"Quota <strong>{elev} m</strong>, pendenza <strong>{slope}°</strong>, esposizione <strong>{aspect or 'NA'}</strong>.</p>")
+               f"Quota <strong>{elev} m</strong>, pendenza <strong>{slope}°</strong>, esposizione <strong>{exp}</strong> "
+               f"(conf {round(aspect_conf*100):d}%, northness {northness:+.2f}).</p>")
 
     if size_cm > 0:
         note_range = ""
@@ -447,20 +508,28 @@ def build_analysis_text(payload: Dict[str,Any]) -> str:
         out.append(f"<p>Per oggi, la <strong>taglia media stimata</strong> dei cappelli è ~<strong>{size_cm} cm</strong> "
                    f"({size_class}).{note_range}</p>")
 
-    out.append("<h4>Come stimiamo i giorni di uscita</h4>")
-    out.append("<p>Il modello individua gli <strong>eventi di pioggia</strong> (passati e previsti) e applica un "
-               "<strong>ritardo biologico dinamico</strong> (5–15 giorni) dipendente da temperatura media, quota, umidità/irraggiamento, "
-               "concavità del versante e habitat. Il picco di probabilità di flush viene quindi proiettato nei prossimi 10 giorni.</p>")
+    # Perché pioggia ≠ porcini garantiti
+    out.append("<h4>Perché dopo la pioggia non sempre nascono porcini</h4><ul>"
+               "<li><strong>Ospiti ECM</strong>: i porcini fruttificano in simbiosi con conifere e latifoglie idonee; senza ospite la probabilità è quasi nulla.</li>"
+               "<li><strong>Finestra climatica</strong>: serve termica temperata e UR non troppo bassa/alta; ondate di caldo o siccità antecedente possono ritardare/azzerare il flush.</li>"
+               "<li><strong>Suolo e concavità</strong>: serve umidità nel profilo; impluvi/ombreggi aumentano la riuscita, convessità/irraggiamento la riducono.</li>"
+               "<li><strong>Fenologia stagionale</strong>: gli apici stagionali dipendono da stagione/quota/habitat; fuori fase stagionale il segnale è debole.</li>"
+               "</ul>")
 
+    # Filtro areale/ecologico
+    out.append(f"<h4>Idoneità ecologica/areale</h4>"
+               f"<p>Fattore di idoneità: <strong>{round(suit*100):d}%</strong> "
+               f"(motivo: {suit_reason}; ospiti/habitat: fattore {host_factor:.2f}). "
+               f"In aree tropicali di bassa quota o senza ospiti ECM l'indice viene <strong>ridotto quasi a zero</strong>.</p>")
+
+    # Eventi e finestre
     evs = payload.get("flush_events", [])
     if evs:
         out.append("<h4>Eventi di pioggia e finestre stimate</h4><ul>")
         for e in evs:
-            when = e.get("event_when")
-            mm = e.get("event_mm")
-            lag = e.get("lag_days")
+            when = e.get("event_when"); mm = e.get("event_mm"); lag = e.get("lag_days")
             out.append(f"<li>Evento ~<strong>{mm} mm</strong> il <strong>{when}</strong> → "
-                       f"flush atteso ~<strong>{lag} giorni</strong> dopo (condizionato a T, quota, microclima).</li>")
+                       f"flush atteso ~<strong>{lag} giorni</strong> dopo (dipende da T, UR, suolo, microclima e habitat).</li>")
         out.append("</ul>")
 
     if best and best.get("mean",0)>0:
@@ -468,34 +537,35 @@ def build_analysis_text(payload: Dict[str,Any]) -> str:
         out.append(f"<p>Nei prossimi 10 giorni la finestra con <strong>maggiore probabilità</strong> è tra "
                    f"<strong>giorno {s+1}</strong> e <strong>giorno {e+1}</strong> (media ≈ <strong>{m}</strong>).</p>")
 
+    # Contesto meteo/microclima
     cause=[]
     cause.append(f"Antecedente: 15 gg = <strong>{p15:.0f} mm</strong> (7 gg: {p7:.0f} mm).")
-    cause.append(f"Termica media 7 gg: <strong>{tm7:.1f}°C</strong> (ritardo biologico variabile 5–15 gg).")
-    if aspect != "NA":
-        if aspect in ("N","NE","NW"): cause.append("Versante fresco/ombroso, conserva umidità.")
-        elif aspect in ("S","SE","SW"): cause.append("Versante caldo/irradiato: asciuga più in fretta.")
+    cause.append(f"Termica media 7 gg: <strong>{tm7:.1f}°C</strong>; UR7 ≈ <strong>{rh7:.0f}%</strong>; radiazione ≈ <strong>{sw7:.0f} kJ m⁻²</strong>.")
+    if aspect:
+        if aspect in ("N","NE","NW"): cause.append("Versante fresco/ombroso → conserva umidità.")
+        elif aspect in ("S","SE","SW"): cause.append("Versante caldo/irradiato → asciuga più in fretta.")
         else: cause.append("Esposizione intermedia (E/W).")
-    if rh7 is not None and sw7 is not None:
-        if rh7 < 55 and sw7 > 18000: cause.append("UR% bassa e radiazione alta: flush più lento e concentrato in impluvi/ombra.")
-        elif rh7 >= 70 and sw7 < 15000: cause.append("UR% alta e radiazione moderata: ritardo minore e flush più ampio.")
+    else:
+        cause.append("Pendenza bassa → esposizione trascurabile.")
     out.append("<h4>Contesto meteo-microclimatico</h4><ul>" + "".join(f"<li>{c}</li>" for c in cause) + "</ul>")
 
-    spp = species_for_habitat(habitat_used)
-    out.append("<h4>Specie di porcini probabili (in base all’habitat)</h4><ul>" + "".join(
-        f"<li><em>{s['latin']}</em> — {s['common']}</li>" for s in spp
-    ) + "</ul>")
-
+    # Consigli
     out.append("<h4>Consigli operativi</h4><ul>"
-               "<li>Cerca <strong>bordi di impluvio</strong> e <strong>zone ombrose</strong> se UR bassa e radiazione alta.</li>"
-               "<li>Se l’indice oggi è elevato ma le dimensioni previste sono piccole, privilegia aree più calde/esposte per cappelli già formati.</li>"
-               "<li>Dopo nuovi rovesci nei prossimi giorni, ri-controlla: il modello aggiorna automaticamente le finestre di uscita.</li>"
+               "<li>Cerca <strong>impluvi e margini ombrosi</strong> quando UR è bassa/radiazione alta; evita dorsali esposte.</li>"
+               "<li>Se l'indice è alto ma taglia piccola, prova aree più calde/esposte; se indice basso ma stagione idonea, aspetta il <em>lag</em> del prossimo evento.</li>"
+               "<li>Ricorda i limiti: previsioni probabilistiche, fortemente dipendenti dall’ospite e dal micro-sito.</li>"
                "</ul>")
 
-    notes = safety_notes_short()
-    out.append("<details><summary>Note rapide di sicurezza</summary><ul>" + "".join(f"<li>{n}</li>" for n in notes) + "</ul></details>")
+    # Riferimenti sintetici (nominali)
+    out.append("<details><summary>Riferimenti essenziali (sintesi)</summary>"
+               "<ul>"
+               "<li>Distribuzione/ECM dei porcini (emisfero nord; conifere/latifoglie).</li>"
+               "<li>Northness = sin(pendenza)·cos(aspect) per stimare l'esposizione termica/idrica.</li>"
+               "<li>Rendimento e timing guidati da meteo/umidità del suolo; la pioggia da sola non basta.</li>"
+               "</ul></details>")
     return "\n".join(out)
 
-# =============== Harvest mapping (indice → conteggio atteso) ===============
+# ---------------- Mappa indice → raccolto atteso ----------------
 def harvest_text_from_index(score:int, hours:int) -> str:
     factor = 1.0 if hours <= 2 else 1.45
     if score < 15: base = (0, 1)
@@ -510,7 +580,7 @@ def harvest_text_from_index(score:int, hours:int) -> str:
     if lo <= 1 and hi <= 1: return "0–1 porcini"
     return f"{lo}–{hi} porcini"
 
-# =============== ENDPOINTS ===============
+# ---------------- ENDPOINTS ----------------
 @app.get("/api/health")
 async def health():
     return {"ok":True,"time":datetime.now(timezone.utc).isoformat()}
@@ -534,10 +604,10 @@ async def api_score(
 ):
     om_task=asyncio.create_task(fetch_open_meteo(lat,lon,past=15,future=10))
     ow_task=asyncio.create_task(fetch_openweather(lat,lon))
-    dem_task=asyncio.create_task(fetch_elevation_grid_multiscale(lat,lon))
+    dem_task=asyncio.create_task(fetch_elevation_multiscale_metrics(lat,lon))
     osm_task=asyncio.create_task(fetch_osm_habitat(lat,lon)) if autohabitat==1 else None
 
-    om,ow,(elev_m,slope_deg,aspect_deg,aspect_oct,concavity)=await asyncio.gather(om_task,ow_task,dem_task)
+    om,ow,(elev_m,slope_deg,aspect_deg,aspect_oct,concavity,aspect_conf,northness)=await asyncio.gather(om_task,ow_task,dem_task)
     auto_hab, auto_conf, auto_scores = ("",0.0,{})
     if osm_task:
         try:
@@ -545,6 +615,7 @@ async def api_score(
         except Exception:
             auto_hab, auto_conf, auto_scores = ("",0.0,{})
 
+    # Habitat finale
     habitat_used = habitat.strip().lower()
     habitat_source = "manuale"
     if autohabitat==1:
@@ -556,6 +627,7 @@ async def api_score(
     if not habitat_used:
         habitat_used = "altro"
 
+    # Open-Meteo
     d=om["daily"]; timev=d["time"]
     P_om=[float(x or 0.0) for x in d["precipitation_sum"]]
     Tmin_om, Tmax_om, Tm_om = d["temperature_2m_min"], d["temperature_2m_max"], d["temperature_2m_mean"]
@@ -570,6 +642,7 @@ async def api_score(
     ET0_p_om=ET0_om[:pastN]; ET0_f_om=ET0_om[pastN:pastN+futN]
     RH_p_om=RH_om[:pastN]; SW_p_om=SW_om[:pastN]
 
+    # Blend con OpenWeather (se disponibile)
     P_fut_ow:List[float]=[]; Tmin_f_ow:List[float]=[]; Tmax_f_ow:List[float]=[]; Tm_f_ow:List[float]=[]
     if ow and "daily" in ow:
         for day in ow["daily"]:
@@ -590,30 +663,43 @@ async def api_score(
         Tmax_f_blend.append(blend(Tmax_f_ow,Tmax_f_om,i) if ow_len else Tmax_f_om[i])
         Tm_f_blend.append(blend(Tm_f_ow,Tm_f_om,i) if ow_len else Tm_om[i+pastN])
 
-    API_val=api_index(P_past_om,half_life=half); ET7=sum(ET0_p_om[-7:]) if ET0_p_om else 0.0
+    API_val=api_index(P_past_om,half_life=half)
+    ET7=sum(ET0_p_om[-7:]) if ET0_p_om else 0.0
     RH7=sum(RH_p_om[-7:])/max(1,len(RH_p_om[-7:])) if RH_p_om else 60.0
     SW7=sum(SW_p_om[-7:])/max(1,len(SW_p_om[-7:])) if SW_p_om else 15000.0
-    Tfit_today=temperature_fit(float(Tmin_p_om[-1]),float(Tmax_p_om[-1]),float(Tm_p_om[-1]))
-    micro_today = microclimate_from_aspect(aspect_oct or None, float(slope_deg), float(RH7), float(SW7), float(sum(map(float,Tm_p_om[-7:]))/7.0))
-
     Tm7=sum(map(float,Tm_p_om[-7:]))/max(1,len(Tm_p_om[-7:]))
+
+    # Microclima da esposizione
+    micro_today = microclimate_from_aspect(aspect_oct or None, float(slope_deg), float(RH7), float(SW7), float(Tm7))
+
+    # Filtro areale/ecologico e fattore ospite
+    suitability_score, suitability_reason = biogeographic_suitability(lat, elev_m, habitat_used, auto_scores, Tm7, RH7)
+    host_factor = 1.0 if any(k in habitat_used for k in ("castagno","faggio","quercia","conifere","misto")) else 0.3
+
+    # Previsione di flush (con modulatori areali/climatici)
+    Tmin7 = float(Tmin_p_om[-1]) if Tmin_p_om else Tm7-2.0
+    Tmax7 = float(Tmax_p_om[-1]) if Tmax_p_om else Tm7+2.0
     reliability = reliability_from_sources(P_fut_ow[:ow_len],P_fut_om[:ow_len]) if ow_len else 0.6
     flush_forecast, events_details = build_flush_forecast(
-        past_api=API_val, tmean7=Tm7, elev=elev_m, rh7=RH7, sw7=SW7,
+        past_api=API_val,
+        tmin7=Tmin7, tmax7=Tmax7, tmean7=Tm7, elev=elev_m, rh7=RH7, sw7=SW7,
         concavity=concavity, micro=micro_today, habitat=habitat_used,
         timev=om["daily"]["time"], pastN=pastN, futN=futN,
         P_past=P_past_om, P_fut_blend=P_fut_blend,
-        reliability=reliability
+        reliability=reliability,
+        suitability=suitability_score, host_factor=host_factor
     )
     s,e,m=best_window(flush_forecast)
-
     flush_today = int(flush_forecast[0] if flush_forecast else 0)
 
+    # Dimensioni
     size_cm, size_cls = estimate_size_today_cm(events_details, pastN=pastN, tmean7=Tm7, rh7=RH7)
     size_min_cm, size_max_cm = estimate_size_range_today_cm(events_details, pastN=pastN, tmean7=Tm7, rh7=RH7)
 
+    # Raccolto atteso coerente
     harvest_txt = harvest_text_from_index(flush_today, hours)
 
+    # Tabelle piogge
     rain_past={om["daily"]["time"][i]: round(P_past_om[i],1) for i in range(min(pastN,len(om["daily"]["time"])))}
     rain_future={om["daily"]["time"][pastN+i] if pastN+i<len(om["daily"]["time"]) else f"+{i+1}d":round(P_fut_blend[i],1) for i in range(futN)}
 
@@ -621,7 +707,9 @@ async def api_score(
         "lat": lat, "lon": lon,
         "elevation_m": round(elev_m),
         "slope_deg": slope_deg, "aspect_deg": aspect_deg,
-        "aspect_octant": aspect_oct if aspect_oct else "NA",
+        "aspect_octant": aspect_oct if aspect_oct else None,
+        "aspect_confidence": aspect_conf,
+        "northness": northness,
         "concavity": round(concavity,3),
 
         "API_star_mm": round(API_val,1),
@@ -651,7 +739,12 @@ async def api_score(
         "size_cm": size_cm,
         "size_class": size_cls,
         "size_range_cm": [size_min_cm, size_max_cm],
+
+        "suitability_score": round(suitability_score,3),
+        "suitability_reason": suitability_reason,
+        "host_factor": round(host_factor,2),
     }
     response_data["dynamic_explanation"] = build_analysis_text(response_data)
     return response_data
+
 
