@@ -12,7 +12,7 @@
     .wrap{max-width:1280px;margin:0 auto;padding:20px;display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
     @media(max-width:960px){.wrap{grid-template-columns:1fr}}
     .card{background:linear-gradient(180deg,#0e1728,#0f192c);padding:16px;border-radius:14px;border:1px solid var(--border);box-shadow:0 12px 28px rgba(0,0,0,.35);margin-bottom:16px}
-    input,button{padding:10px;border-radius:10px;border:1px solid #2b3b52;font-size:15px;color:var(--text);background:#0b1526}
+    input,button,select{padding:10px;border-radius:10px;border:1px solid #2b3b52;font-size:15px;color:var(--text);background:#0b1526}
     button{cursor:pointer;font-weight:700}
     button.ok{background:linear-gradient(90deg,#22d3ee,#1ee59a);border:none;color:#062f2a}
     button.warn{background:linear-gradient(90deg,#ffd166,#22d3ee);border:none;color:#062f2a}
@@ -20,9 +20,9 @@
     .metric{background:#0b1526;padding:10px;border-radius:12px;text-align:center;border:1px solid #223249}
     .metric .val{font-size:1.6rem;font-weight:800}
     .right-panel{display:flex;flex-direction:column;gap:16px}
-    #map{height:460px;border-radius:12px;overflow:hidden}
+    #map{height:480px;border-radius:12px;overflow:hidden}
     .calendar{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:8px}
-    .bar{height:100px;position:relative;background:#1f2937;border-radius:8px}
+    .bar{height:110px;position:relative;background:#1f2937;border-radius:8px}
     .bar>i{position:absolute;bottom:0;left:0;width:100%;border-radius:8px}
     .bar>span{position:absolute;top:-18px;left:0;width:100%;text-align:center;font-size:.7rem}
     .table{border:1px solid #223249;border-radius:12px;overflow:hidden}
@@ -37,12 +37,14 @@
     #loading .ball:nth-child(2){animation-delay:.15s;background:#1ee59a}
     #loading .ball:nth-child(3){animation-delay:.3s;background:#ffd166}
     @keyframes bounce{to{transform:translateY(-10px)}}
+    .row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+    .badge{display:inline-block;padding:4px 8px;border:1px solid #223249;border-radius:999px;font-size:.8rem; margin-right:6px}
   </style>
 </head>
 <body>
   <header>
     <h1 style="margin:0;font-size:1.4rem;">Trova Porcini — by Antonio Pio D’Aloia</h1>
-    <div class="muted" style="font-size:.85rem;">Modello avanzato: storico 15 gg + forecast 10 gg (OW 60% • OM 40%). Fallback automatici.</div>
+    <div class="muted" style="font-size:.85rem;">Modello avanzato: storico 15 gg + forecast 10 gg (OW 60% • OM 40%). Microclima da esposizione, UR%, radiazione, habitat.</div>
   </header>
 
   <div id="loading"><div><span class="ball"></span><span class="ball"></span><span class="ball"></span></div></div>
@@ -50,29 +52,48 @@
   <div class="wrap">
     <div class="left-panel">
       <div class="card">
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div class="row">
           <input id="place" type="text" placeholder="Località (es. Abbadia San Salvatore)" style="flex:1"/>
           <button id="btnSearch" class="ok">Cerca</button>
+        </div>
+        <div class="row">
           <input id="coords" type="text" placeholder="lat, lon (Google)" style="flex:1;min-width:220px"/>
           <button id="btnCoords" class="warn">Usa coordinate</button>
+          <select id="habitat" title="Habitat">
+            <option value="">Habitat: Altro/Non specificato</option>
+            <option>Castagno</option><option>Faggio</option><option>Quercia</option>
+            <option>Conifere</option><option>Misto</option>
+          </select>
+          <select id="hours">
+            <option value="2">Durata uscita: 2 h</option>
+            <option value="4">Durata uscita: 4 h</option>
+          </select>
         </div>
-        <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Suggerimento: incolla le coordinate da Google Maps o clicca sulla mappa.</div>
+        <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Suggerimento: incolla le coordinate da Google Maps o clicca sulla mappa. Specifica l’habitat per una stima leggermente più mirata.</div>
 
         <div class="metrics">
           <div class="metric"><div class="muted">Indice</div><div id="metricIndex" class="val">—</div></div>
-          <div class="metric"><div class="muted">Stima Raccolto (2 h)</div><div id="metricHarvest" class="val">—</div></div>
+          <div class="metric"><div class="muted">Stima Raccolto</div><div id="metricHarvest" class="val">—</div></div>
           <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
         </div>
-        <div id="metricAltitude" class="muted" style="text-align:center; margin-top:8px;"></div>
+        <div id="metricSite" class="muted" style="text-align:center; margin-top:8px;"></div>
       </div>
+
       <div class="card">
         <div class="muted" style="margin-bottom:6px;">Previsione indice (10 giorni)</div>
         <div id="forecast" class="calendar"></div>
       </div>
+
       <div class="card">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div><div class="muted" style="margin-bottom:6px;">Piogge passate (15 gg)</div><div id="rainPast" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div></div>
-          <div><div class="muted" style="margin-bottom:6px;">Piogge future (10 gg)</div><div id="rainFuture" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div></div>
+          <div>
+            <div class="muted" style="margin-bottom:6px;">Piogge passate (15 gg)</div>
+            <div id="rainPast" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div>
+          </div>
+          <div>
+            <div class="muted" style="margin-bottom:6px;">Piogge future (10 gg)</div>
+            <div id="rainFuture" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -115,31 +136,44 @@
     }
 
     function renderUI(s){
-        // Metriche e altitudine
+        // Metriche e sito
         $("#metricIndex").textContent = s.index ?? "—";
         $("#metricHarvest").textContent = s.harvest_estimate ?? "—";
         $("#metricReliability").textContent = s.reliability != null ? Math.round(s.reliability * 100) + "%" : "—";
-        $("#metricAltitude").textContent = s.elevation_m != null ? `Altitudine: ${s.elevation_m} m s.l.m.` : "";
+        const a = s.aspect_octant && s.aspect_octant !== "NA" ? s.aspect_octant : "NA";
+        $("#metricSite").innerHTML = `
+          <span class="badge">Quota: ${s.elevation_m ?? "—"} m</span>
+          <span class="badge">Pendenza: ${s.slope_deg ?? "—"}°</span>
+          <span class="badge">Esposizione: ${a}</span>
+        `;
 
-        // Previsione a barre
+        // Previsione a barre (affidabilità già inclusa dall'API)
         const forecastCont = $("#forecast"); forecastCont.innerHTML="";
-        (s.forecast || []).forEach(v => {
+        (s.forecast || []).forEach((v, i) => {
             const box = document.createElement("div"); box.className="bar";
             const fill = document.createElement("i");
+            fill.title = `Giorno ${i+1} • Indice ${v}`;
             fill.style.height = Math.max(4, v) + "%";
             fill.style.background = v >= 70 ? "var(--accent)" : v >= 55 ? "var(--warn)" : "var(--danger)";
             const lab = document.createElement("span"); lab.textContent = v;
             box.appendChild(fill); box.appendChild(lab); forecastCont.appendChild(box);
         });
 
-        // Tabelle piogge
+        // Tabelle piogge con ordinamento corretto
         const fillTable = (el, d) => {
             el.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
-            Object.keys(d || {}).sort().forEach(k => {
-                const tr = document.createElement("div"); tr.className = "tr";
-                tr.innerHTML = `<div>${k}</div><div>${Number(d[k]).toFixed(1)}</div>`;
-                el.appendChild(tr);
+            const keys = Object.keys(d || {});
+            keys.sort((a,b)=>{
+              const pa = a.startsWith("+") ? 1 : 0, pb = b.startsWith("+") ? 1 : 0;
+              if (pa!==pb) return pa-pb;
+              if (pa) return parseInt(a.slice(1)) - parseInt(b.slice(1));
+              return a.localeCompare(b);
             });
+            for (const k of keys) {
+              const tr = document.createElement("div"); tr.className = "tr";
+              tr.innerHTML = `<div>${k}</div><div>${Number(d[k]).toFixed(1)}</div>`;
+              el.appendChild(tr);
+            }
         };
         fillTable($("#rainPast"), s.rain_past || {});
         fillTable($("#rainFuture"), s.rain_future || {});
@@ -148,20 +182,28 @@
         const expPanel = $("#explanationPanel");
         const expText = $("#explanationText");
         if (s.dynamic_explanation) {
-            expText.innerHTML = s.dynamic_explanation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // Rende il testo bold
+            expText.innerHTML = s.dynamic_explanation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             expPanel.style.display = "block";
         } else {
             expPanel.style.display = "none";
         }
     }
-    
+
+    async function fetchScore(lat, lon){
+        const habitat = $("#habitat").value || "";
+        const hours = parseInt($("#hours").value, 10) || 2;
+        const params = new URLSearchParams({lat,lon,habitat,hours});
+        return apiGet(`${API}/score?${params.toString()}`);
+    }
+
     async function handleCoords(lat, lon) {
         showLoad(true);
         try {
             marker.setLatLng([lat, lon]);
             map.setView([lat, lon], 11);
-            const s = await apiGet(`${API}/score?lat=${lat}&lon=${lon}`);
+            const s = await fetchScore(lat, lon);
             renderUI(s);
+            localStorage.setItem("lastQuery", JSON.stringify({lat,lon,habitat:$("#habitat").value,hours:$("#hours").value}));
         } catch(e) {
             console.error(e);
             alert("Errore durante il calcolo. Dettagli in console.");
@@ -197,8 +239,31 @@
     $("#btnCoords").addEventListener("click", handleCoordsStr);
     $("#place").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handlePlace(); });
     $("#coords").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handleCoordsStr(); });
+    $("#habitat").addEventListener("change", ()=>{
+      const last = localStorage.getItem("lastQuery");
+      if(last){ const j=JSON.parse(last); if(j.lat && j.lon){ handleCoords(j.lat,j.lon); } }
+    });
+    $("#hours").addEventListener("change", ()=>{
+      const last = localStorage.getItem("lastQuery");
+      if(last){ const j=JSON.parse(last); if(j.lat && j.lon){ handleCoords(j.lat,j.lon); } }
+    });
 
-    initMap();
+    // ripristina ultima query
+    (function restore(){
+      const last = localStorage.getItem("lastQuery");
+      if(last){
+        try{ const j=JSON.parse(last);
+          if(j.habitat) $("#habitat").value=j.habitat;
+          if(j.hours) $("#hours").value=j.hours;
+          if(j.lat && j.lon){ handleCoords(j.lat,j.lon); return; }
+        }catch{}
+      }
+      // default
+      initMap();
+    })();
+
+    // se restore non ha chiamato initMap
+    if(!map) initMap();
   </script>
 </body>
 </html>
