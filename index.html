@@ -47,7 +47,7 @@
 <body>
   <header>
     <h1 style="margin:0;font-size:1.4rem;">Trova Porcini — by Antonio Pio D’Aloia</h1>
-    <div class="muted" style="font-size:.85rem;">Modello: storico 15 gg + forecast 10 gg (OW 60% • OM 40%). DEM multi-scala, microclima da esposizione, UR% e radiazione. Habitat auto con override manuale.</div>
+    <div class="muted" style="font-size:.85rem;">Le barre ora mostrano la <strong>previsione di uscita dei porcini</strong> (flush) nei prossimi 10 giorni: eventi di pioggia → lag biologico 5–15 gg → probabilità.</div>
   </header>
 
   <div id="loading"><div><span class="ball"></span><span class="ball"></span><span class="ball"></span></div></div>
@@ -78,16 +78,17 @@
         <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Tip: lascia “Auto” per usare l’habitat rilevato (OSM). Se non ti convince, disattiva “Auto” e seleziona tu l’habitat.</div>
 
         <div class="metrics">
-          <div class="metric"><div class="muted">Indice</div><div id="metricIndex" class="val">—</div></div>
-          <div class="metric"><div class="muted">Raccolto</div><div id="metricHarvest" class="val">—</div></div>
+          <div class="metric"><div class="muted">Indice (oggi)</div><div id="metricIndex" class="val">—</div></div>
+          <div class="metric"><div class="muted">Raccolto atteso</div><div id="metricHarvest" class="val">—</div></div>
           <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
         </div>
         <div id="metricSite" class="muted" style="text-align:center; margin-top:8px;"></div>
       </div>
 
       <div class="card">
-        <div class="muted" style="margin-bottom:6px;">Previsione indice (10 giorni)</div>
+        <div class="muted" style="margin-bottom:6px;">Previsione uscita porcini (10 giorni)</div>
         <div id="forecast" class="calendar"></div>
+        <div class="muted" style="margin-top:6px;font-size:.8rem;">Le barre rappresentano la <em>probabilità/forza</em> del flush. Il calcolo usa gli eventi di pioggia (passati+previsti) e un lag biologico dinamico.</div>
       </div>
 
       <div class="card">
@@ -160,7 +161,7 @@
         (s.forecast || []).forEach((v, i) => {
             const box = document.createElement("div"); box.className="bar";
             const fill = document.createElement("i");
-            fill.title = `Giorno ${i+1} • Indice ${v}`;
+            fill.title = `Giorno ${i+1} • Probabilità/forza flush ${v}`;
             fill.style.height = Math.max(4, v) + "%";
             fill.style.background = v >= 70 ? "var(--accent)" : v >= 55 ? "var(--warn)" : "var(--danger)";
             const lab = document.createElement("span"); lab.textContent = v;
@@ -185,7 +186,6 @@
         fillTable($("#rainPast"), s.rain_past || {});
         fillTable($("#rainFuture"), s.rain_future || {});
 
-        // Analisi estesa (già HTML dall'API)
         const expPanel = $("#explanationPanel");
         const expText = $("#explanationText");
         if (s.dynamic_explanation) {
@@ -200,7 +200,6 @@
         const hours = parseInt($("#hours").value, 10) || 2;
         const autoHab = $("#autoHab").checked ? 1 : 0;
         let habitat = $("#habitat").value || "";
-        // se Auto è attivo, ignora selezione manuale (server userà OSM)
         if (autoHab === 1) habitat = "";
         const params = new URLSearchParams({lat,lon,hours,autohabitat:String(autoHab)});
         if (habitat) params.append("habitat", habitat);
@@ -273,7 +272,6 @@
       if(j.lat && j.lon){ handleCoords(j.lat,j.lon); }
     });
 
-    // ripristina ultima query
     (function restore(){
       const last = localStorage.getItem("lastQuery");
       if(last){
