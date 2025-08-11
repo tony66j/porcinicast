@@ -276,18 +276,29 @@ def compute_smi_series(dates: List[datetime], precip_mm: List[float], tmin: List
     S = 0.0
     smi_raw = []
     for i, d in enumerate(dates):
-        doy = d.timetuple().tm_yday
-        pet = pet_hargreaves(tmin[i], tmax[i], tmean[i], lat, doy)
-        forcing = precip_mm[i] - pet
-        S = (1 - alpha) * S + alpha * forcing
+        try:
+            doy = d.timetuple().tm_yday
+            pet = pet_hargreaves(tmin[i], tmax[i], tmean[i], lat, doy)
+            forcing = precip_mm[i] - pet
+            S = (1 - alpha) * S + alpha * forcing
+        except Exception:
+            # se qualunque input è NaN/errato, mantieni S precedente (decay)
+            S = (1 - alpha) * S
         smi_raw.append(S)
-    arr = np.array(smi_raw)
-    if len(arr) >= 20:
-        p5, p95 = np.percentile(arr, [5, 95])
+    arr = np.array(smi_raw, dtype=float)
+    # usa solo valori finiti per i percentili
+    arr_valid = arr[np.isfinite(arr)]
+    if arr_valid.size >= 5:
+        p5, p95 = np.percentile(arr_valid, [5, 95])
     else:
-        p5, p95 = float(arr.min()), float(arr.max() if arr.max()!=arr.min() else arr.min()+1)
+        p5, p95 = (float(np.nanmin(arr_valid)) if arr_valid.size>0 else -1.0,
+                   float(np.nanmax(arr_valid)) if arr_valid.size>0 else 1.0)
+        if p95 - p5 < 1e-6:
+            p5, p95 = p5-1.0, p95+1.0
     norm = (arr - p5) / max(1e-6, (p95 - p5))
     norm = np.clip(norm, 0.0, 1.0)
+    # sostituisci eventuali NaN residui con 0.5
+    norm[~np.isfinite(norm)] = 0.5
     return norm.tolist()
 
 # —— Cold-shock ——
@@ -401,6 +412,29 @@ def reliability_score(source_agreement: float, coverage_ok: bool, had_keys: bool
     if had_keys:
         base += 0.05
     return float(np.clip(base, 0.2, 0.95))
+
+# —— Sanitizzazione numerica per JSON ——
+def safe_round(x: Optional[float], nd: int = 2) -> Optional[float]:
+    try:
+        if x is None:
+            return None
+        xf = float(x)
+        if math.isnan(xf) or math.isinf(xf):
+            return None
+        return round(xf, nd)
+    except Exception:
+        return None
+
+def safe_num(x: Optional[float]) -> Optional[float]:
+    try:
+        if x is None:
+            return None
+        xf = float(x)
+        if math.isnan(xf) or math.isinf(xf):
+            return None
+        return xf
+    except Exception:
+        return None
 
 # —— Schemi risposta ——
 class PredictResponse(BaseModel):
@@ -591,18 +625,18 @@ async def predict(
         aspect_str = dirs[k]
     analysis = {
         "microtopography": {
-            "slope_deg": round(slope_deg, 1),
-            "aspect_deg": None if math.isnan(aspect_deg) else round(aspect_deg, 1),
+            "slope_deg": safe_round(slope_deg, 1),
+            "aspect_deg": None if math.isnan(aspect_deg) else safe_round(aspect_deg, 1),
             "aspect_octant": aspect_str,
-            "concavity_proxy": round(concav, 2),
-            "twi_proxy": round(twi_px, 2),
-            "energy_index": round(energy_idx, 2),
+            "concavity_proxy": safe_round(concav, 2),
+            "twi_proxy": safe_round(twi_px, 2),
+            "energy_index": safe_round(energy_idx, 2),
         },
         "drivers": {
-            "smi_today": round(smi[i0], 2) if i0 < len(smi) else None,
-            "cold_shock": round(shock, 2),
-            "vpd_max_today_hPa": round(vpdmax_b[i0], 1) if i0 < len(vpdmax_b) else None,
-            "urmin_today_%": round(urmin_b[i0], 1) if i0 < len(urmin_b) else None,
+            "smi_today": safe_round(smi[i0], 2) if i0 < len(smi) else None,
+            "cold_shock": safe_round(shock, 2),
+            "vpd_max_today_hPa": safe_round(vpdmax_b[i0], 1) if i0 < len(vpdmax_b) else None,
+            "urmin_today_%": safe_round(urmin_b[i0], 1) if i0 < len(urmin_b) else None,
         },
         "sources": {
             "open_meteo": True,
@@ -620,7 +654,7 @@ async def predict(
     }
 
     resp = PredictResponse(
-        index_today=round(index_today, 1),
+        index_today=round(index_today if math.isfinite(index_today) else 0.0, 1),
         expected_harvest=expected,
         size_today=size_today,
         forecast_10d=forecast_10d,
@@ -629,3 +663,4 @@ async def predict(
         reliability=round(reliab, 2),
     )
     return resp
+
