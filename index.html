@@ -1,302 +1,348 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Trova Porcini — by Antonio Pio D’Aloia</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trova Porcini – Analisi</title>
   <style>
-    :root{--bg:#0b1220;--panel:#111b2b;--text:#e9f1fa;--muted:#9fb0c2;--accent:#1ee59a;--warn:#ffd166;--danger:#ef476f;--border:#233144;}
-    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#0a1020,#0f1930);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
-    header{padding:16px 20px;border-bottom:1px solid var(--border);backdrop-filter:blur(6px)}
-    .wrap{max-width:1280px;margin:0 auto;padding:20px;display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
-    @media(max-width:960px){.wrap{grid-template-columns:1fr}}
-    .card{background:linear-gradient(180deg,#0e1728,#0f192c);padding:16px;border-radius:14px;border:1px solid var(--border);box-shadow:0 12px 28px rgba(0,0,0,.35);margin-bottom:16px}
-    input,button,select,label{color:var(--text)}
-    input,button,select{padding:10px;border-radius:10px;border:1px solid #2b3b52;font-size:15px;background:#0b1526}
-    button{cursor:pointer;font-weight:700}
-    button.ok{background:linear-gradient(90deg,#22d3ee,#1ee59a);border:none;color:#062f2a}
-    button.warn{background:linear-gradient(90deg,#ffd166,#22d3ee);border:none;color:#062f2a}
-    .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
-    @media(max-width:680px){.metrics{grid-template-columns:repeat(2,1fr)}}
-    .metric{background:#0b1526;padding:10px;border-radius:12px;text-align:center;border:1px solid #223249}
-    .metric .val{font-size:1.6rem;font-weight:800}
-    .right-panel{display:flex;flex-direction:column;gap:16px}
-    #map{height:480px;border-radius:12px;overflow:hidden}
-    .calendar{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:8px}
-    .bar{height:110px;position:relative;background:#1f2937;border-radius:8px}
-    .bar>i{position:absolute;bottom:0;left:0;width:100%;border-radius:8px}
-    .bar>span{position:absolute;top:-18px;left:0;width:100%;text-align:center;font-size:.7rem}
-    .table{border:1px solid #223249;border-radius:12px;overflow:hidden}
-    .tr{display:grid;grid-template-columns:1fr 80px;padding:8px 10px;border-bottom:1px solid #223249}
-    .tr.head{background:#0b1526;font-weight:bold}
-    .tr:last-child{border-bottom:none}
-    details summary{cursor:pointer;font-weight:700;margin-top:10px;color:#b9c7ff}
-    .muted{color:var(--muted);font-size:.9rem}
-    #explanationPanel h3{margin-top:0;color:#b9c7ff} #explanationPanel p, #explanationPanel li{line-height:1.6;color:#9fb0c2}
-    #loading{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.35);z-index:999}
-    #loading .ball{width:12px;height:12px;border-radius:50%;margin:6px;background:#22d3ee;display:inline-block;animation:bounce 0.8s infinite alternate}
-    #loading .ball:nth-child(2){animation-delay:.15s;background:#1ee59a}
-    #loading .ball:nth-child(3){animation-delay:.3s;background:#ffd166}
-    @keyframes bounce{to{transform:translateY(-10px)}}
-    .row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
-    .badge{display:inline-block;padding:4px 8px;border:1px solid #223249;border-radius:999px;font-size:.8rem; margin-right:6px}
-    .switch{display:flex;align-items:center;gap:8px}
-    .switch input{transform:scale(1.1)}
+    :root{
+      --bg:#0b0d10; --panel:#12161b; --muted:#8aa0b6; --text:#e6eef6;
+      --accent:#62d5b4; --accent-2:#8bb7ff; --danger:#ff6b6b; --warn:#ffc857; --ok:#66e28a;
+      --shadow:0 8px 24px rgba(0,0,0,.35);
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:linear-gradient(180deg,#0a0c0f 0%,#0d1218 100%);color:var(--text);font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    a{color:var(--accent-2)}
+    .wrap{max-width:1100px;margin:32px auto;padding:0 16px}
+    header{display:flex;gap:16px;align-items:center;margin-bottom:18px}
+    header h1{font-size:22px;margin:0}
+    header .badge{padding:4px 10px;border-radius:999px;background:linear-gradient(90deg,#1b2230,#17202b);color:#cfe6ff;border:1px solid #283343}
+    .panel{background:linear-gradient(180deg,#12161b,#0f141a);border:1px solid #1e2937;border-radius:var(--radius);box-shadow:var(--shadow)}
+    .panel h3{margin:0 0 8px 0;font-size:18px}
+    .controls{display:grid;grid-template-columns:1.1fr .8fr .8fr .8fr .8fr auto;gap:10px;align-items:end;padding:16px}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    input[type=text],input[type=number],select{
+      width:100%;padding:10px 12px;border-radius:10px;border:1px solid #243142;background:#0d141b;color:var(--text)
+    }
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid #2a384b;background:linear-gradient(180deg,#1b2430,#151c26);color:#e9f5ff;font-weight:600;cursor:pointer}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.28)}
+    .grid{display:grid;gap:14px;padding:16px}
+    .grid.g2{grid-template-columns:1fr 1fr}
+    .grid.g3{grid-template-columns:1.1fr .9fr .9fr}
+    .metric{display:flex;gap:12px;align-items:center}
+    .metric .k{font-size:12px;color:var(--muted)}
+    .metric .v{font-size:22px;font-weight:700}
+    .chip{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #273244;background:#0f1520;color:#cfe6ff}
+    .chip.ok{border-color:#224733;background:#0f1a14;color:#b9f3cf}
+    .chip.warn{border-color:#4a3b1a;background:#1a160f;color:#ffe0a3}
+    .chip.bad{border-color:#4a1a1a;background:#1a0f10;color:#ffb9b9}
+    .section{padding:16px}
+    .hr{height:1px;background:linear-gradient(90deg,transparent,#253244,transparent);margin:12px 0}
+    #chart{width:100%;height:160px;border-radius:12px;background:linear-gradient(180deg,#0c1015,#0b0f14);border:1px solid #1e2937}
+    table{width:100%;border-collapse:collapse;border:1px solid #232f40;border-radius:12px;overflow:hidden}
+    th,td{padding:8px 10px;border-bottom:1px solid #232f40;font-size:13px}
+    th{background:#131922;color:#b7c9dd;text-align:left}
+    tr:hover td{background:#0f141b}
+    .events ul{margin:6px 0 0 18px}
+    .events li{margin:2px 0}
+    details{background:#0e141b;border:1px solid #203045;border-radius:12px;padding:10px}
+    summary{cursor:pointer}
+    .muted{color:#93a7bd}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    footer{margin:24px 0 40px;color:#8aa0b6;font-size:12px;text-align:center}
   </style>
 </head>
 <body>
-  <header>
-    <h1 style="margin:0;font-size:1.4rem;">Trova Porcini — by Antonio Pio D’Aloia</h1>
-    <div class="muted" style="font-size:.85rem;">
-      Le barre mostrano la <strong>previsione di uscita dei porcini</strong> (flush) nei prossimi 10 giorni: eventi di pioggia → lag biologico 5–15 gg → probabilità.
-      L'<strong>Indice (oggi)</strong> ora coincide con la probabilità/forza di uscita odierna.
-    </div>
-  </header>
-
-  <div id="loading"><div><span class="ball"></span><span class="ball"></span><span class="ball"></span></div></div>
-
   <div class="wrap">
-    <div class="left-panel">
-      <div class="card">
-        <div class="row">
-          <input id="place" type="text" placeholder="Località (es. Abbadia San Salvatore)" style="flex:1"/>
-          <button id="btnSearch" class="ok">Cerca</button>
+    <header>
+      <h1>🍄 Trova Porcini — Analisi sito</h1>
+      <span class="badge">v2.2 UI</span>
+    </header>
+
+    <!-- Controls -->
+    <div class="panel">
+      <div class="controls">
+        <div>
+          <label>Località (geocoding)</label>
+          <input id="q" type="text" placeholder="Es. Abbadia San Salvatore" />
         </div>
-        <div class="row">
-          <input id="coords" type="text" placeholder="lat, lon (Google)" style="flex:1;min-width:220px"/>
-          <button id="btnCoords" class="warn">Usa coordinate</button>
-          <select id="habitat" title="Habitat">
-            <option value="">Habitat: auto (OSM)</option>
-            <option>Castagno</option><option>Faggio</option><option>Quercia</option>
-            <option>Conifere</option><option>Misto</option><option>Altro</option>
+        <div>
+          <label>Latitudine</label>
+          <input id="lat" type="number" step="0.0001" placeholder="42.88" />
+        </div>
+        <div>
+          <label>Longitudine</label>
+          <input id="lon" type="number" step="0.0001" placeholder="11.63" />
+        </div>
+        <div>
+          <label>Habitat</label>
+          <select id="habitat">
+            <option value="">(auto da OSM)</option>
+            <option>castagno</option><option>faggio</option><option>quercia</option>
+            <option>conifere</option><option>misto</option><option>altro</option>
           </select>
-          <label class="switch" title="Se attivo, uso l'habitat automatico da OSM">
-            <input id="autoHab" type="checkbox" checked/> Auto
-          </label>
-          <select id="hours" title="Durata uscita">
-            <option value="2">Durata uscita: 2 h</option>
-            <option value="4">Durata uscita: 4 h</option>
+        </div>
+        <div>
+          <label>Ore sul campo</label>
+          <select id="hours">
+            <option>2</option><option selected>4</option><option>6</option><option>8</option>
           </select>
         </div>
-        <div class="muted" style="font-size:0.8rem;margin-bottom:12px;">Tip: lascia “Auto” per usare l’habitat rilevato (OSM). Se non ti convince, disattiva “Auto” e seleziona tu l’habitat.</div>
-
-        <div class="metrics">
-          <div class="metric"><div class="muted">Indice (oggi)</div><div id="metricIndex" class="val">—</div></div>
-          <div class="metric"><div class="muted">Raccolto atteso</div><div id="metricHarvest" class="val">—</div></div>
-          <div class="metric"><div class="muted">Taglia (oggi)</div><div id="metricSize" class="val">—</div></div>
-          <div class="metric"><div class="muted">Affidabilità</div><div id="metricReliability" class="val">—</div></div>
+        <div style="display:flex;gap:8px;">
+          <button id="btnGeo" class="btn" title="Cerca">🔎 Cerca</button>
+          <button id="btnRun" class="btn" title="Analizza">📈 Analizza</button>
         </div>
-        <div id="metricSite" class="muted" style="text-align:center; margin-top:8px;"></div>
       </div>
+    </div>
 
-      <div class="card">
-        <div class="muted" style="margin-bottom:6px;">Previsione uscita porcini (10 giorni)</div>
-        <div id="forecast" class="calendar"></div>
-        <div class="muted" style="margin-top:6px;font-size:.8rem;">Le barre rappresentano la <em>probabilità/forza</em> del flush. Il calcolo usa gli eventi di pioggia (passati+previsti) e un lag biologico dinamico.</div>
+    <!-- KPIs -->
+    <div class="grid g3">
+      <div class="panel section">
+        <h3>Indice oggi</h3>
+        <div class="metric"><div class="k">Forza flush</div><div id="k-index" class="v">—</div></div>
+        <div class="hr"></div>
+        <div class="metric"><div class="k">Finestra migliore</div><div id="k-window" class="v">—</div></div>
       </div>
+      <div class="panel section">
+        <h3>Affidabilità</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span id="k-reliab" class="chip">reliability: —</span>
+          <span id="k-conf" class="chip">model confidence: —</span>
+          <span id="k-vpd" class="chip">VPD: —</span>
+        </div>
+        <div class="hr"></div>
+        <div class="muted" id="k-diag">SMI: — • TWI: — • Energy: —</div>
+      </div>
+      <div class="panel section">
+        <h3>Dimensioni & Raccolto</h3>
+        <div class="metric"><div class="k">Taglia media</div><div id="k-size" class="v">—</div></div>
+        <div class="metric"><div class="k">Range</div><div id="k-size-range" class="v">—</div></div>
+        <div class="metric"><div class="k">Raccolto atteso</div><div id="k-harvest" class="v">—</div></div>
+        <div class="muted" id="k-harvest-note"></div>
+      </div>
+    </div>
 
-      <div class="card">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <!-- Forecast chart -->
+    <div class="panel section">
+      <h3>Previsione prossimi 10 giorni</h3>
+      <canvas id="chart"></canvas>
+    </div>
+
+    <!-- Events + Rains -->
+    <div class="grid g2">
+      <div class="panel section events">
+        <h3>Eventi piovosi & lag</h3>
+        <div id="events">—</div>
+      </div>
+      <div class="panel section">
+        <h3>Piogge</h3>
+        <div class="grid g2">
           <div>
-            <div class="muted" style="margin-bottom:6px;">Piogge passate (15 gg)</div>
-            <div id="rainPast" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div>
+            <div class="muted">Ultimi 15 giorni</div>
+            <table id="tblPast"><thead><tr><th>Giorno</th><th>mm</th></tr></thead><tbody></tbody></table>
           </div>
           <div>
-            <div class="muted" style="margin-bottom:6px;">Piogge future (10 gg)</div>
-            <div id="rainFuture" class="table"><div class="tr head"><div>Data</div><div>mm</div></div></div>
+            <div class="muted">Prossimi 10 giorni</div>
+            <table id="tblFuture"><thead><tr><th>Giorno</th><th>mm</th></tr></thead><tbody></tbody></table>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="right-panel">
-      <div class="card"><div id="map"></div></div>
-      <div class="card" id="explanationPanel" style="display:none;">
-          <h3>Analisi del Modello</h3>
-          <div id="explanationText"></div>
-      </div>
+    <!-- Long dynamic analysis -->
+    <div class="panel section">
+      <h3>Analisi modello (estesa)</h3>
+      <div id="analysis" class="muted">—</div>
     </div>
+
+    <!-- Raw JSON -->
+    <details class="panel section">
+      <summary>JSON di diagnostica</summary>
+      <pre id="raw" class="mono" style="white-space:pre-wrap;word-break:break-word"></pre>
+    </details>
+
+    <footer>© Trova Porcini — UI estesa. Suggerimenti benvenuti.</footer>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const API = "/api";
-    const $ = s => document.querySelector(s);
-    const showLoad = (v)=>{ $("#loading").style.display = v ? "grid" : "none"; };
+    const $ = sel => document.querySelector(sel);
+    const fmt = n => (n===null||n===undefined||isNaN(n)) ? "—" : (Math.round(n*10)/10).toString().replace('.',',');
 
-    let map, marker;
-    function initMap(){
-      map = L.map('map').setView([42.5,12.5], 6);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
-      marker = L.marker([42.5,12.5]).addTo(map);
-      setTimeout(()=>map.invalidateSize(), 250);
-      map.on("click", e => handleCoords(e.latlng.lat, e.latlng.lng));
+    $('#btnGeo').addEventListener('click', async () => {
+      const q = $('#q').value.trim();
+      if (!q) return;
+      try{
+        const r = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+        if(!r.ok) throw new Error('geocode');
+        const j = await r.json();
+        $('#lat').value = (j.lat || j.latitude || '').toFixed(4);
+        $('#lon').value = (j.lon || j.longitude || '').toFixed(4);
+      }catch(e){ alert('Geocoding non riuscito.'); }
+    });
+
+    $('#btnRun').addEventListener('click', async () => {
+      const lat = parseFloat($('#lat').value);
+      const lon = parseFloat($('#lon').value);
+      const hours = parseInt($('#hours').value,10);
+      const habitat = ($('#habitat').value||'').trim();
+      const autohabitat = habitat ? 0 : 1;
+
+      if (isNaN(lat) || isNaN(lon)) { alert('Inserisci latitudine e longitudine.'); return; }
+
+      const url = new URL('/api/score', window.location.origin);
+      url.searchParams.set('lat',lat);
+      url.searchParams.set('lon',lon);
+      url.searchParams.set('hours',hours);
+      url.searchParams.set('autohabitat',autohabitat);
+      if(habitat) url.searchParams.set('habitat', habitat);
+
+      try{
+        const r = await fetch(url.toString());
+        if(!r.ok){ throw new Error('fetch'); }
+        const j = await r.json();
+        renderAll(j);
+      }catch(e){
+        console.error(e);
+        alert('Errore durante l’analisi.');
+      }
+    });
+
+    function setChip(el, label, value, mode='neutral'){
+      el.textContent = `${label}: ${value}`;
+      el.classList.remove('ok','warn','bad');
+      if(mode==='ok') el.classList.add('ok');
+      else if(mode==='warn') el.classList.add('warn');
+      else if(mode==='bad') el.classList.add('bad');
     }
 
-    function parseCoords(str){
-      const m = /^\s*([+-]?\d+(?:[.,]\d+)?)\s*[,;\s]\s*([+-]?\d+(?:[.,]\d+)?)\s*$/.exec((str||"").trim());
-      if(!m) return null;
-      const lat = parseFloat(m[1].replace(",", ".")), lon = parseFloat(m[2].replace(",", "."));
-      if(!isFinite(lat)||!isFinite(lon)||lat<-90||lat>90||lon<-180||lon>180) return null;
-      return {lat,lon};
-    }
-    async function apiGet(u){
-      const r = await fetch(u);
-      if(!r.ok){ const t = await r.text().catch(()=>""); throw new Error(t||"errore rete"); }
-      return r.json();
-    }
+    function renderAll(j){
+      // KPIs
+      $('#k-index').textContent = j.index ?? '—';
+      if (j.best_window){
+        $('#k-window').textContent = `giorni ${j.best_window.start+1}–${j.best_window.end+1} (media≈${j.best_window.mean})`;
+      } else { $('#k-window').textContent = '—'; }
 
-    function renderUI(s){
-        $("#metricIndex").textContent = s.index ?? "—";
-        $("#metricHarvest").textContent = s.harvest_estimate ?? "—";
-        let sizeText = "—";
-        if (s.size_cm && s.size_class) {
-          const r = (s.size_range_cm && s.size_range_cm.length === 2)
-            ? ` (${Number(s.size_range_cm[0]).toFixed(1)}–${Number(s.size_range_cm[1]).toFixed(1)} cm)` : "";
-          sizeText = `${Number(s.size_cm).toFixed(1)} cm${r}`;
-        }
-        $("#metricSize").textContent = sizeText;
-        $("#metricReliability").textContent = s.reliability != null ? Math.round(s.reliability * 100) + "%" : "—";
+      const rel = Number(j.reliability ?? 0);
+      const conf = Number(j.model_confidence ?? 0);
+      const vpd = (j.vpd_today_hpa==null) ? null : Number(j.vpd_today_hpa);
 
-        const a = s.aspect_octant && s.aspect_octant !== "NA" ? s.aspect_octant : "NA";
-        const habUsed = (s.habitat_used || "").charAt(0).toUpperCase() + (s.habitat_used || "").slice(1);
-        const source = s.habitat_source || "—";
-        let autoConf = s.auto_habitat_confidence!=null ? ` (auto conf ${Math.round(s.auto_habitat_confidence*100)}%)` : "";
-        $("#metricSite").innerHTML = `
-          <span class="badge">Quota: ${s.elevation_m ?? "—"} m</span>
-          <span class="badge">Pendenza: ${s.slope_deg ?? "—"}°</span>
-          <span class="badge">Esposizione: ${a}</span>
-          <span class="badge">Habitat: ${habUsed} — ${source}${autoConf}</span>
-        `;
+      setChip($('#k-reliab'), 'reliability', rel.toFixed(2),
+        rel>=0.75 ? 'ok' : rel>=0.55 ? 'warn' : 'bad');
+      setChip($('#k-conf'), 'model confidence', conf,
+        conf>=75 ? 'ok' : conf>=55 ? 'warn' : 'bad');
+      if(vpd==null) setChip($('#k-vpd'),'VPD','—','warn');
+      else setChip($('#k-vpd'),'VPD', `${vpd.toFixed(1)} hPa`,
+        vpd<=6? 'ok' : vpd<10? 'warn' : 'bad');
 
-        const forecastCont = $("#forecast"); forecastCont.innerHTML="";
-        (s.forecast || []).forEach((v, i) => {
-            const box = document.createElement("div"); box.className="bar";
-            const fill = document.createElement("i");
-            fill.title = `Giorno ${i+1} • Probabilità/forza flush ${v}`;
-            fill.style.height = Math.max(4, v) + "%";
-            fill.style.background = v >= 70 ? "var(--accent)" : v >= 55 ? "var(--warn)" : "var(--danger)";
-            const lab = document.createElement("span"); lab.textContent = v;
-            box.appendChild(fill); box.appendChild(lab); forecastCont.appendChild(box);
+      const diag = j.diagnostics || {};
+      $('#k-diag').textContent = `SMI: ${diag.smi_source || '—'} (thr ${fmt(diag.smi_threshold)}) • `
+        + `TWI ${fmt(diag.twi_proxy)} • Energy ${fmt(diag.energy_index)} • Habitat: ${String(j.habitat_used||'—')}`;
+
+      // Size / Harvest
+      $('#k-size').textContent = `${fmt(j.size_cm)} cm (${j.size_class || '—'})`;
+      $('#k-size-range').textContent = `${fmt(j.size_range_cm?.[0])}–${fmt(j.size_range_cm?.[1])} cm`;
+      $('#k-harvest').textContent = j.harvest_estimate || '—';
+      $('#k-harvest-note').textContent = j.harvest_note || '';
+
+      // Events
+      const evs = j.flush_events || [];
+      if(!evs.length){ $('#events').innerHTML = '<span class="muted">Nessun evento utile</span>'; }
+      else{
+        const ul = document.createElement('ul');
+        evs.forEach(e=>{
+          const li = document.createElement('li');
+          const obs = e.observed ? 'osservato' : 'previsto';
+          li.textContent = `${e.event_when}: ${e.event_mm} mm → flush ~${e.lag_days} gg (${obs})`;
+          ul.appendChild(li);
         });
-
-        const fillTable = (el, d) => {
-            el.innerHTML = '<div class="tr head"><div>Data</div><div>mm</div></div>';
-            const keys = Object.keys(d || {});
-            keys.sort((a,b)=>{
-              const pa = a.startsWith("+") ? 1 : 0, pb = b.startsWith("+") ? 1 : 0;
-              if (pa!==pb) return pa-pb;
-              if (pa) return parseInt(a.slice(1)) - parseInt(b.slice(1));
-              return a.localeCompare(b);
-            });
-            for (const k of keys) {
-              const tr = document.createElement("div"); tr.className = "tr";
-              tr.innerHTML = `<div>${k}</div><div>${Number(d[k]).toFixed(1)}</div>`;
-              el.appendChild(tr);
-            }
-        };
-        fillTable($("#rainPast"), s.rain_past || {});
-        fillTable($("#rainFuture"), s.rain_future || {});
-
-        const expPanel = $("#explanationPanel");
-        const expText = $("#explanationText");
-        if (s.dynamic_explanation) {
-            expText.innerHTML = s.dynamic_explanation;
-            expPanel.style.display = "block";
-        } else {
-            expPanel.style.display = "none";
-        }
-    }
-
-    async function fetchScore(lat, lon){
-        const hours = parseInt($("#hours").value, 10) || 2;
-        const autoHab = $("#autoHab").checked ? 1 : 0;
-        let habitat = $("#habitat").value || "";
-        if (autoHab === 1) habitat = "";
-        const params = new URLSearchParams({lat,lon,hours,autohabitat:String(autoHab)});
-        if (habitat) params.append("habitat", habitat);
-        return apiGet(`${API}/score?${params.toString()}`);
-    }
-
-    async function handleCoords(lat, lon) {
-        showLoad(true);
-        try {
-            marker.setLatLng([lat, lon]);
-            map.setView([lat, lon], 11);
-            const s = await fetchScore(lat, lon);
-            renderUI(s);
-            localStorage.setItem("lastQuery", JSON.stringify({
-              lat,lon,
-              habitat:$("#habitat").value,
-              autoHab:$("#autoHab").checked,
-              hours:$("#hours").value
-            }));
-        } catch(e) {
-            console.error(e);
-            alert("Errore durante il calcolo. Dettagli in console.");
-        } finally {
-            showLoad(false);
-        }
-    }
-    async function handlePlace() {
-        const q = $("#place").value.trim();
-        if (!q) { alert("Inserisci una località"); return; }
-        showLoad(true);
-        try {
-            const g = await apiGet(`${API}/geocode?q=${encodeURIComponent(q)}`);
-            $("#place").value = g.display;
-            await handleCoords(g.lat, g.lon);
-        } catch (e) {
-            console.error(e);
-            alert("Errore geocoding. Prova con le coordinate.");
-        } finally {
-            showLoad(false);
-        }
-    }
-    async function handleCoordsStr(){
-        const c = parseCoords($("#coords").value.trim());
-        if (!c) { alert("Coordinate non valide. Esempio: 41.127, 14.782"); return; }
-        showLoad(true);
-        try { await handleCoords(c.lat, c.lon); }
-        catch(e){ console.error(e); alert("Errore durante il calcolo."); }
-        finally{ showLoad(false); }
-    }
-
-    $("#btnSearch").addEventListener("click", handlePlace);
-    $("#btnCoords").addEventListener("click", handleCoordsStr);
-    $("#place").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handlePlace(); });
-    $("#coords").addEventListener("keydown", (e)=>{ if(e.key==="Enter") handleCoordsStr(); });
-    $("#habitat").addEventListener("change", ()=>{
-      if(!$("#autoHab").checked){
-        const last = localStorage.getItem("lastQuery");
-        const j = last ? JSON.parse(last) : {};
-        if(j.lat && j.lon){ handleCoords(j.lat,j.lon); }
+        $('#events').innerHTML = ''; $('#events').appendChild(ul);
       }
-    });
-    $("#hours").addEventListener("change", ()=>{
-      const last = localStorage.getItem("lastQuery");
-      const j = last ? JSON.parse(last) : {};
-      if(j.lat && j.lon){ handleCoords(j.lat,j.lon); }
-    });
-    $("#autoHab").addEventListener("change", ()=>{
-      const last = localStorage.getItem("lastQuery");
-      const j = last ? JSON.parse(last) : {};
-      if(j.lat && j.lon){ handleCoords(j.lat,j.lon); }
-    });
 
-    (function restore(){
-      const last = localStorage.getItem("lastQuery");
-      if(last){
-        try{ const j=JSON.parse(last);
-          if(j.habitat) $("#habitat").value=j.habitat;
-          if(typeof j.autoHab==="boolean") $("#autoHab").checked=j.autoHab;
-          if(j.hours) $("#hours").value=j.hours;
-          if(j.lat && j.lon){ initMap(); handleCoords(j.lat,j.lon); return; }
-        }catch{}
+      // Rains tables
+      fillTable($('#tblPast tbody'), j.rain_past);
+      fillTable($('#tblFuture tbody'), j.rain_future);
+
+      // Chart
+      drawChart($('#chart'), j.forecast || []);
+
+      // Analysis (extended HTML from backend)
+      $('#analysis').innerHTML = j.dynamic_explanation || '<span class="muted">—</span>';
+
+      // Raw JSON
+      $('#raw').textContent = JSON.stringify(j, null, 2);
+    }
+
+    function fillTable(tbody, obj){
+      tbody.innerHTML = '';
+      if(!obj){ return; }
+      const rows = Object.entries(obj);
+      rows.forEach(([d, v])=>{
+        const tr = document.createElement('tr');
+        const td1 = document.createElement('td'); td1.textContent = d;
+        const td2 = document.createElement('td'); td2.textContent = v;
+        tr.appendChild(td1); tr.appendChild(td2);
+        tbody.appendChild(tr);
+      });
+    }
+
+    function drawChart(canvas, arr){
+      const W = canvas.clientWidth || 800;
+      const H = canvas.clientHeight || 160;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = W*dpr; canvas.height = H*dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0,0,W,H);
+
+      // axes
+      ctx.strokeStyle = '#233245'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(30, H-24); ctx.lineTo(W-10, H-24); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(30, 10); ctx.lineTo(30, H-24); ctx.stroke();
+
+      const n = Math.max(1, arr.length);
+      const maxV = Math.max(100, ...arr);
+      const x0 = 34, x1 = W - 16;
+      const y0 = H - 26, y1 = 14;
+      const sx = (x1 - x0) / Math.max(1, n-1);
+      const sy = (y0 - y1) / maxV;
+
+      // grid
+      ctx.strokeStyle = 'rgba(255,255,255,.06)';
+      [20,40,60,80,100].forEach(v=>{
+        const y = y0 - v*sy;
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+        ctx.fillStyle = '#6f859b'; ctx.font = '11px system-ui';
+        ctx.fillText(String(v), 4, y+4);
+      });
+
+      // line
+      ctx.beginPath();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#8bb7ff';
+      arr.forEach((v,i)=>{
+        const x = x0 + i*sx;
+        const y = y0 - v*sy;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+
+      // points
+      ctx.fillStyle = '#62d5b4';
+      arr.forEach((v,i)=>{
+        const x = x0 + i*sx;
+        const y = y0 - v*sy;
+        ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+      });
+
+      // x labels
+      ctx.fillStyle = '#8aa0b6'; ctx.font = '11px system-ui';
+      for(let i=0;i<n;i++){
+        const x = x0 + i*sx;
+        ctx.fillText(String(i+1), x-3, H-8);
       }
-      initMap();
-    })();
+    }
   </script>
 </body>
 </html>
+
