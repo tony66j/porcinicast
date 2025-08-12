@@ -1,37 +1,36 @@
-# main.py — Trova Porcini API (v2.0.0)
-# Compatibile al 100% con la tua UI (endpoint e JSON identici alla v1.8.2)
-# Novità (implementa quanto richiesto):
-#  • VPD (deficit di pressione di vapore) → penalità/gating su flush e crescita
-#  • ΔTmin_3d (cold‑shock) → accorcia il lag se c'è raffreddamento brusco
-#  • TWI‑proxy + energy index (esposizione/pendenza) → moltiplicatore dell’ampiezza
-#  • SMI (indice umidità suolo) stimato con P‑ET0 (subito) + prefetch ERA5‑Land via CDS (in background, cache)
-#  • Blend Open‑Meteo + OpenWeather invariato (T pesata, P = max)
-#  • Geocoding robusto (Nominatim → fallback Open‑Meteo)
-#  • DEM multiscala con cache, habitat auto OSM invariati
+# main.py — Trova Porcini API (v2.1.0)
+# Compatibile con la tua UI (endpoint e JSON identici).
+# Novità vs v2.0:
+#  • BLEND anche sul passato (ultimi 3–5 giorni) usando OpenWeather Timemachine (se KEY e piano permettono):
+#      - Precipitazione: P_past_blend = max(P_OM, P_OWpast)
+#      - Temperature:    T*_past_blend = media pesata (OW 0.6 negli ultimi 3 gg, altrimenti 0.5)
+#  • Tutte le logiche eco-fisiche v2.0 restano: SMI (P-ET0 + cache ERA5-Land), ΔTmin(3d) shock, VPD gating,
+#    TWI-proxy + energy index, lag stocastico 5–15 gg, affidabilità OW vs OM, ecc.
 #
-# Nota su ERA5‑Land (CDS): i download possono richiedere minuti (coda).
-# Per non bloccare l’API, qui effettuiamo un *prefetch asincrono* in background (se presenti `CDS_API_KEY`/`cdsapi`).
-# Nell’immediato l’SMI usa P‑ET0; appena il dato ERA5‑Land è disponibile, verrà usato in richieste successive.
+# Nota su ERA5-Land: download lenti → prefetch asincrono con cache; se librerie assenti o errore, fallback a P-ET0.
+# Chiavi:
+#   - OPENWEATHER_API_KEY  (necessaria per OW forecast e Timemachine)
+#   - CDS_API_KEY          (opzionale, formato "UID:KEY" per cdsapi)
+#   - NOMINATIM_EMAIL      (consigliato)
 #
-# Requisiti minimi: fastapi, httpx, uvicorn
-# Facoltativi per ERA5‑Land: cdsapi, netCDF4 (se assenti → fallback automatico)
+# Avvio: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import os, httpx, math, asyncio, tempfile, time
+import os, httpx, math, asyncio, tempfile, time, json
 from typing import Dict, List, Tuple, Any, Optional
 from datetime import datetime, timezone, timedelta
 
-app = FastAPI(title="Trova Porcini API (v2.0.0)", version="2.0.0")
+app = FastAPI(title="Trova Porcini API (v2.1.0)", version="2.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True
 )
 
-HEADERS = {"User-Agent":"Trovaporcini/2.0.0 (+site)", "Accept-Language":"it"}
+HEADERS = {"User-Agent":"Trovaporcini/2.1.0 (+site)", "Accept-Language":"it"}
 OWM_KEY = os.environ.get("OPENWEATHER_API_KEY")
 CDS_API_URL = os.environ.get("CDS_API_URL", "https://cds.climate.copernicus.eu/api")
-CDS_API_KEY = os.environ.get("CDS_API_KEY", "")  # formato: UID:KEY
+CDS_API_KEY = os.environ.get("CDS_API_KEY", "")
 
 # ----------------------------- UTIL -----------------------------
 def clamp(v,a,b): return a if v<a else b if v>b else v
@@ -81,8 +80,6 @@ def twi_proxy_from_slope_concavity(slope_deg: float, concavity: float) -> float:
     # normalizza ~0..1
     return clamp((twi + 2.2) / 4.0, 0.0, 1.0)
 
-# microclima stagionale da esposizione/pendenza
-
 def microclimate_energy(aspect_oct: Optional[str], slope_deg: float, month: int) -> float:
     if not aspect_oct or slope_deg < 0.8: return 0.5
     summer = 1.0 if month in (7,8,9) else 0.6
@@ -119,7 +116,51 @@ async def fetch_openweather(lat:float,lon:float)->Dict[str,Any]:
     except Exception:
         return {}
 
-# ----------------------- Geocoding robusto -----------------------
+async def fetch_openweather_past(lat:float, lon:float, days:int=5) -> Dict[str, Dict[str,float]]:
+    """
+    Usa One Call Timemachine per gli ultimi 'days' giorni (max 5 tipico).
+    Ritorna dizionario: {"YYYY-MM-DD": {"rain": mm, "tmin": C, "tmax": C, "tmean": C}}
+    Se fallisce → {}.
+    """
+    if not OWM_KEY: return {}
+    out: Dict[str, Dict[str,float]] = {}
+    base = datetime.now(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
+    try:
+        async with httpx.AsyncClient(timeout=35, headers=HEADERS) as c:
+            for d in range(1, days+1):
+                ts = int((base - timedelta(days=d)).timestamp())
+                url = "https://api.openweathermap.org/data/3.0/onecall/timemachine"
+                params = {"lat": lat, "lon": lon, "dt": ts, "units":"metric", "lang":"it", "appid": OWM_KEY}
+                try:
+                    r = await c.get(url, params=params)
+                    r.raise_for_status()
+                    j = r.json()
+                    hours = j.get("hourly") or []
+                    if not hours: 
+                        continue
+                    rr = 0.0; tmin = +1e9; tmax = -1e9; tsum = 0.0; n = 0
+                    for h in hours:
+                        # precipitazione: 'rain' dict con '1h'
+                        rain = 0.0
+                        if isinstance(h.get("rain"), dict):
+                            rain = float(h["rain"].get("1h") or 0.0)
+                        elif isinstance(h.get("snow"), dict):
+                            rain = float(h["snow"].get("1h") or 0.0)  # conta neve
+                        rr += rain
+                        t = float(h.get("temp", 0.0))
+                        tmin = min(tmin, t); tmax = max(tmax, t); tsum += t; n += 1
+                    if n==0: 
+                        continue
+                    tmean = tsum/n
+                    day = (base - timedelta(days=d)).date().isoformat()
+                    out[day] = {"rain": rr, "tmin": tmin, "tmax": tmax, "tmean": tmean}
+                except Exception:
+                    continue
+    except Exception:
+        return {}
+    return out
+
+# ----------------------- Geocoding -----------------------
 async def geocode_nominatim(q:str)->Optional[Dict[str,Any]]:
     url="https://nominatim.openstreetmap.org/search"
     params={"format":"json","q":q,"addressdetails":1,"limit":1,"email":os.getenv("NOMINATIM_EMAIL","info@example.com")}
@@ -144,14 +185,19 @@ _elev_cache: Dict[str, Any] = {}
 def _grid_key(lat:float,lon:float,step:float)->str: return f"{round(lat,5)},{round(lon,5)}@{int(step)}"
 
 async def _fetch_elev_block(lat:float,lon:float,step_m:float)->Optional[List[List[float]]]:
+    """3x3 da Open-Elevation intorno al punto (approx)."""
     key=_grid_key(lat,lon,step_m)
     if key in _elev_cache:
         return _elev_cache[key]
     try:
+        # offset in gradi (approssimazione locale)
         deg_lat=1/111320.0
         deg_lon=1/(111320.0*max(0.2,math.cos(math.radians(lat))))
-        dlat,dlon=step_m*deg_lat,step_m*deg_lon
-        coords=[{"latitude":lat+dr*dlat,"longitude":lon+dc*dlon} for dr in(-1,0,1) for dc in(-1,0,1)]
+        dlat=step_m*deg_lat; dlon=step_m*deg_lon
+        coords=[]
+        for dy in (-dlat,0,dlat):
+            for dx in (-dlon,0,dlon):
+                coords.append({"latitude":lat+dy,"longitude":lon+dx})
         async with httpx.AsyncClient(timeout=20,headers=HEADERS) as c:
             r=await c.post("https://api.open-elevation.com/api/v1/lookup",json={"locations":coords})
             r.raise_for_status(); j=r.json()
@@ -250,114 +296,12 @@ async def fetch_osm_habitat(lat: float, lon: float, radius_m: int = 400) -> Tupl
             continue
     return "misto", 0.15, {"castagno":0,"faggio":0,"quercia":0,"conifere":0,"misto":1}
 
-# -------------------- Lag & previsione (v2) --------------------
-
-def stochastic_lag_days(smi: float, shock: float, tmean7: float) -> int:
-    # base 10 giorni, accorciato con SMI alto e shock; modulato da T7
-    lag = 10.0 - 4.0*smi - 2.0*shock
-    if 16 <= tmean7 <= 20: lag -= 1.0
-    elif tmean7 < 12: lag += 1.0
-    elif tmean7 > 22: lag += 0.5
-    return int(round(clamp(lag, 5.0, 15.0)))
-
-def gaussian_kernel(x: float, mu: float, sigma: float) -> float:
-    return math.exp(-0.5*((x-mu)/sigma)**2)
-
-def event_strength(mm: float) -> float:
-    return 1.0 - math.exp(-mm/20.0)
-
-# ----------------------- Specie & safety -----------------------
-from typing import TypedDict
-class FlushDetail(TypedDict, total=False):
-    event_day_index: int
-    event_when: str
-    event_mm: float
-    lag_days: int
-    predicted_peak_abs_index: int
-
-# --------------- Modello dimensionale (diametro) ---------------
-def cap_growth_rate_cm_per_day(tmean: float, rh: float, vpd_hpa_max: float) -> float:
-    if rh < 40: return 0.0
-    ur_f = clamp((rh - 40.0) / (85.0 - 40.0), 0.0, 1.0)
-    if tmean <= 10: t_f = 0.2 * (tmean/10.0)
-    elif tmean <= 16: t_f = 0.2 + 0.8*(tmean-10)/6.0
-    elif tmean <= 20: t_f = 1.0
-    elif tmean <= 24: t_f = 1.0 - 0.6*(tmean-20)/4.0
-    elif tmean <= 28: t_f = 0.4 - 0.3*(tmean-24)/4.0
-    else: t_f = 0.1
-    vpd_pen = vpd_penalty(vpd_hpa_max)
-    return 2.1 * ur_f * clamp(t_f,0.0,1.0) * vpd_pen
-
-# ---------------- Spiegazione (flush + dimensioni) ----------------
-def build_analysis_text(payload: Dict[str,Any]) -> str:
-    idx = payload["index"]
-    best = payload["best_window"]
-    p15 = payload["P15_mm"]; p7 = payload["P7_mm"]
-    rh7 = payload.get("RH7_pct", None); sw7 = payload.get("SW7_kj", None)
-    tm7 = payload["Tmean7_c"]
-    aspect = payload.get("aspect_octant") or "NA"
-    slope = payload.get("slope_deg"); elev = payload.get("elevation_m")
-    habitat_used = (payload.get("habitat_used") or "").capitalize() or "Altro"
-    habitat_source = payload.get("habitat_source","manuale")
-    size_cm = payload.get("size_cm", 0.0)
-    size_class = payload.get("size_class", "—")
-    rng = payload.get("size_range_cm",[0.0,0.0])
-
-    out=[]
-    out.append(f"<p><strong>Indice attuale (flush): {idx}/100</strong> • Habitat: <strong>{habitat_used}</strong> ({habitat_source}). "
-               f"Quota <strong>{elev} m</strong>, pendenza <strong>{slope}°</strong>, esposizione <strong>{aspect or 'NA'}</strong>.</p>")
-
-    if size_cm > 0:
-        note_range = ""
-        if rng and len(rng)==2 and rng[1] > 0:
-            note_range = f" Range atteso oggi: <strong>{rng[0]}–{rng[1]} cm</strong> (coorti di età diverse durante il flush)."
-        out.append(f"<p>Per oggi, la <strong>taglia media stimata</strong> dei cappelli è ~<strong>{size_cm} cm</strong> "
-                   f"({size_class}).{note_range}</p>")
-
-    out.append("<h4>Come stimiamo i giorni di uscita</h4>")
-    out.append("<p>Il modello usa <strong>SMI</strong> (umidità del suolo), <strong>ΔTmin</strong> (shock termico) e <strong>VPD</strong> "
-               "per modulare l'innesco e il ritardo; gli <strong>eventi di pioggia</strong> attivano un picco che viene spostato "
-               "in avanti di un <strong>lag stocastico</strong> (5–15 giorni) e scalato con indice energetico da esposizione/pendenza e TWI‑proxy.</p>")
-
-    evs = payload.get("flush_events", [])
-    if evs:
-        out.append("<h4>Eventi e finestre stimate</h4><ul>")
-        for e in evs:
-            when = e.get("event_when"); mm = e.get("event_mm"); lag = e.get("lag_days")
-            out.append(f"<li>Evento ~<strong>{mm} mm</strong> il <strong>{when}</strong> → "
-                       f"flush atteso ~<strong>{lag} giorni</strong> dopo.</li>")
-        out.append("</ul>")
-
-    if best and best.get("mean",0)>0:
-        s,e,m = best["start"], best["end"], best["mean"]
-        out.append(f"<p>Nei prossimi 10 giorni la finestra con <strong>maggiore probabilità</strong> è tra "
-                   f"<strong>giorno {s+1}</strong> e <strong>giorno {e+1}</strong> (media ≈ <strong>{m}</strong>).</p>")
-
-    cause=[]
-    cause.append(f"Antecedente: 15 gg = <strong>{p15:.0f} mm</strong> (7 gg: {p7:.0f} mm).")
-    cause.append(f"Termica media 7 gg: <strong>{tm7:.1f}°C</strong>.")
-    out.append("<h4>Contesto meteo‑microclimatico</h4><ul>" + "".join(f"<li>{c}</li>" for c in cause) + "</ul>")
-
-    return "\n".join(out)
-
-# --------------- Affidabilità ----------------
-
-def reliability_from_sources(P_ow:List[float], P_om:List[float], T_ow:List[float], T_om:List[float]) -> float:
-    n=min(len(P_ow),len(P_om),len(T_ow),len(T_om))
-    if n==0: return 0.6
-    dp=[abs((P_ow[i] or 0.0)-(P_om[i] or 0.0)) for i in range(n)]
-    dt=[abs((T_ow[i] or 0.0)-(T_om[i] or 0.0)) for i in range(n)]
-    avg_dp=sum(dp)/n; avg_dt=sum(dt)/n
-    sP = 0.95/(1.0+avg_dp/10.0)
-    sT = 0.95/(1.0+avg_dt/6.0)
-    return clamp(0.25 + 0.5*((sP+sT)/2.0), 0.25, 0.95)
-
-# ----------------------- SMI (P‑ET0 + CDS prefetch) -----------------------
+# ----------------------- SMI (P-ET0 + CDS prefetch) -----------------------
 SM_CACHE: Dict[str, Dict[str, Any]] = {}
 
 async def _prefetch_era5l_sm(lat: float, lon: float, days: int = 40) -> None:
-    if not CDS_API_KEY:
-        return
+    """Prefetch ERA5-Land swvl1 (umidità volumetrica strato 1). Cache in memoria; best-effort."""
+    if not CDS_API_KEY: return
     key = f"{round(lat,3)},{round(lon,3)}"
     if key in SM_CACHE and (time.time() - SM_CACHE[key].get("ts", 0)) < 12*3600:
         return
@@ -365,7 +309,7 @@ async def _prefetch_era5l_sm(lat: float, lon: float, days: int = 40) -> None:
         import cdsapi  # type: ignore
         from netCDF4 import Dataset, num2date  # type: ignore
     except Exception:
-        return  # librerie opzionali non presenti → skip
+        return
     def _blocking_download() -> Optional[Dict[str, Any]]:
         try:
             c = cdsapi.Client(url=CDS_API_URL, key=CDS_API_KEY, quiet=True, verify=1)
@@ -373,7 +317,7 @@ async def _prefetch_era5l_sm(lat: float, lon: float, days: int = 40) -> None:
             start = end - timedelta(days=days-1)
             years = sorted({start.year, end.year})
             months = [f"{m:02d}" for m in range(1,13)] if len(years)>1 else [f"{m:02d}" for m in range(start.month, end.month+1)]
-            days_list = [f"{d:02d}" for d in range(1,31)]  # il server ignora i giorni non validi
+            days_list = [f"{d:02d}" for d in range(1,31)]
             bbox = [lat+0.05, lon-0.05, lat-0.05, lon+0.05]  # N,W,S,E
             req = {
                 "product_type": "reanalysis",
@@ -391,25 +335,16 @@ async def _prefetch_era5l_sm(lat: float, lon: float, days: int = 40) -> None:
             ds = Dataset(target)
             t = ds.variables["time"]
             times = num2date(t[:], t.units)
-            swvl1 = ds.variables.get("swvl1")
-            if swvl1 is None:
-                ds.close(); os.remove(target); return None
-            vals = swvl1[:]
-            # collassa lat/lon prendendo il primo pixel
-            if vals.ndim == 3:
-                vals = vals[:,0,0]
+            var = ds.variables["swvl1"] if "swvl1" in ds.variables else ds.variables["volumetric_soil_water_layer_1"]
+            data = var[:]
+            # media spaziale e raggruppamento per data (UTC)
+            daily: Dict[str, float] = {}
             import numpy as _np
-            out: Dict[str, float] = {}
-            for tt, vv in zip(times, vals):
-                if isinstance(vv, _np.ma.MaskedArray):
-                    v = float(vv.filled(_np.nan))
-                else:
-                    v = float(vv)
-                d = datetime(tt.year, tt.month, tt.day).date().isoformat()
-                out.setdefault(d, [])
-                out[d].append(v)
-            daily = {d: float(_np.nanmean(vs)) for d, vs in out.items()}
-            ds.close(); os.remove(target)
+            for i in range(data.shape[0]):
+                v = float(_np.nanmean(_np.array(data[i]).astype("float64")))
+                day = times[i].date().isoformat()
+                if day not in daily: daily[day]=v
+                else: daily[day] = (daily[day]+v)/2.0
             return {"daily": daily, "ts": time.time()}
         except Exception:
             return None
@@ -424,7 +359,6 @@ def smi_from_p_et0(P: List[float], ET0: List[float]) -> List[float]:
         forcing=(P[i] or 0.0) - (ET0[i] or 0.0)
         S=(1-alpha)*S + alpha*forcing
         xs.append(S)
-    # normalizza 5–95° percentile
     import numpy as _np
     arr=_np.array(xs, dtype=float)
     valid=arr[_np.isfinite(arr)]
@@ -436,6 +370,79 @@ def smi_from_p_et0(P: List[float], ET0: List[float]) -> List[float]:
     out=(arr-p5)/max(1e-6,(p95-p5))
     out=_np.clip(out,0.0,1.0)
     return out.tolist()
+
+# --------------- Affidabilità ----------------
+def reliability_from_sources(P_ow:List[float], P_om:List[float], T_ow:List[float], T_om:List[float]) -> float:
+    n=min(len(P_ow),len(P_om),len(T_ow),len(T_om))
+    if n==0: return 0.6
+    dp=[abs((P_ow[i] or 0.0)-(P_om[i] or 0.0)) for i in range(n)]
+    dt=[abs((T_ow[i] or 0.0)-(T_om[i] or 0.0)) for i in range(n)]
+    avg_dp=sum(dp)/n; avg_dt=sum(dt)/n
+    sP = 0.95/(1.0+avg_dp/10.0)
+    sT = 0.95/(1.0+avg_dt/6.0)
+    return clamp(0.25 + 0.5*((sP+sT)/2.0), 0.25, 0.95)
+
+# -------------------- Lag & previsione (v2) --------------------
+def stochastic_lag_days(smi: float, shock: float, tmean7: float) -> int:
+    # base 10 giorni, accorciato con SMI alto e shock; modulato da T7
+    lag = 10.0 - 4.0*smi - 2.0*shock
+    if 16 <= tmean7 <= 20: lag -= 1.0
+    elif tmean7 < 12: lag += 1.0
+    elif tmean7 > 22: lag += 0.5
+    return int(round(clamp(lag, 5.0, 15.0)))
+
+def gaussian_kernel(x: float, mu: float, sigma: float) -> float:
+    return math.exp(-0.5*((x-mu)/sigma)**2)
+
+def event_strength(mm: float) -> float:
+    return 1.0 - math.exp(-mm/20.0)
+
+# ---------------- Spiegazione (flush + dimensioni) ----------------
+def build_analysis_text(payload: Dict[str,Any]) -> str:
+    idx = payload["index"]
+    best = payload["best_window"]
+    p15 = payload["P15_mm"]; p7 = payload["P7_mm"]
+    tm7 = payload["Tmean7_c"]
+    aspect = payload.get("aspect_octant") or "NA"
+    slope = payload.get("slope_deg"); elev = payload.get("elevation_m")
+    habitat_used = (payload.get("habitat_used") or "").capitalize() or "Altro"
+    habitat_source = payload.get("habitat_source","manuale")
+    size_cm = payload.get("size_cm", 0.0)
+    size_class = payload.get("size_class", "—")
+    rng = payload.get("size_range_cm",[0.0,0.0])
+
+    out=[]
+    out.append(f"<p><strong>Indice attuale (flush): {idx}/100</strong> • Habitat: <strong>{habitat_used}</strong> ({habitat_source}). "
+               f"Quota <strong>{elev} m</strong>, pendenza <strong>{slope}°</strong>, esposizione <strong>{aspect or 'NA'}</strong>.</p>")
+
+    if size_cm > 0:
+        note_range = ""
+        if rng and len(rng)==2 and rng[1] > 0:
+            note_range = f" Range atteso oggi: <strong>{rng[0]}–{rng[1]} cm</strong>."
+        out.append(f"<p>Per oggi, la <strong>taglia media stimata</strong> dei cappelli è ~<strong>{size_cm} cm</strong> "
+                   f"({size_class}).{note_range}</p>")
+
+    out.append("<h4>Come stimiamo i giorni di uscita</h4>")
+    out.append("<p>Il modello usa <strong>SMI</strong> (umidità del suolo), <strong>ΔTmin</strong> (shock termico) e <strong>VPD</strong> "
+               "per modulare l'innesco e il ritardo; gli <strong>eventi di pioggia</strong> attivano un picco spostato in avanti da un "
+               "<strong>lag stocastico</strong> (5–15 giorni) e scalato con indice energetico (esposizione/pendenza) e TWI-proxy.</p>")
+
+    evs = payload.get("flush_events", [])
+    if evs:
+        out.append("<h4>Eventi e finestre stimate</h4><ul>")
+        for e in evs:
+            when = e.get("event_when"); mm = e.get("event_mm"); lag = e.get("lag_days")
+            out.append(f"<li>Evento ~<strong>{mm} mm</strong> il <strong>{when}</strong> → flush atteso ~<strong>{lag} giorni</strong> dopo.</li>")
+        out.append("</ul>")
+
+    if best and best.get("mean",0)>0:
+        s,e,m = best["start"], best["end"], best["mean"]
+        out.append(f"<p>Finestra migliore prossimi 10 giorni: <strong>giorni {s+1}–{e+1}</strong> (media ≈ <strong>{m}</strong>).</p>")
+    cause=[]
+    cause.append(f"Antecedente 15 gg: <strong>{p15:.0f} mm</strong> (7 gg: {p7:.0f} mm).")
+    cause.append(f"Termica media 7 gg: <strong>{tm7:.1f}°C</strong>.")
+    out.append("<h4>Contesto meteo-microclimatico</h4><ul>" + "".join(f"<li>{c}</li>" for c in cause) + "</ul>")
+    return "\n".join(out)
 
 # ----------------------------- ENDPOINTS -----------------------------
 @app.get("/api/health")
@@ -459,11 +466,11 @@ async def api_score(
     hours:int=Query(2, ge=2, le=8)
 ):
     # fetch paralleli
-    om_task=asyncio.create_task(fetch_open_meteo(lat,lon,past=15,future=10))
-    ow_task=asyncio.create_task(fetch_openweather(lat,lon))
-    dem_task=asyncio.create_task(fetch_elevation_grid_multiscale(lat,lon))
-    osm_task=asyncio.create_task(fetch_osm_habitat(lat,lon)) if autohabitat==1 else None
-    # prefetch ERA5‑Land (non blocca la risposta)
+    om_task  = asyncio.create_task(fetch_open_meteo(lat,lon,past=15,future=10))
+    ow_task  = asyncio.create_task(fetch_openweather(lat,lon))
+    dem_task = asyncio.create_task(fetch_elevation_grid_multiscale(lat,lon))
+    osm_task = asyncio.create_task(fetch_osm_habitat(lat,lon)) if autohabitat==1 else None
+    # prefetch ERA5-Land (non blocca la risposta)
     _ = asyncio.create_task(_prefetch_era5l_sm(lat,lon))
 
     om,ow,(elev_m,slope_deg,aspect_deg,aspect_oct,concavity)=await asyncio.gather(om_task,ow_task,dem_task)
@@ -495,13 +502,14 @@ async def api_score(
     SW_om=d.get("shortwave_radiation_sum",[15000.0]*len(P_om))
 
     pastN=15; futN=10
+    # slice OM passato/futuro
     P_past_om=P_om[:pastN]; P_fut_om=P_om[pastN:pastN+futN]
     Tmin_p_om,Tmax_p_om,Tm_p_om=Tmin_om[:pastN],Tmax_om[:pastN],Tm_om[:pastN]
     Tmin_f_om,Tmax_f_om,Tm_f_om=Tmin_om[pastN:pastN+futN],Tmax_om[pastN:pastN+futN],Tm_om[pastN:pastN+futN]
     ET0_p_om=ET0_om[:pastN]; RH_p_om=RH_om[:pastN]; SW_p_om=SW_om[:pastN]
     RH_f_om=RH_om[pastN:pastN+futN] if len(RH_om)>=pastN+futN else [60.0]*futN
 
-    # Blend con OpenWeather (se disponibile)
+    # ------------------- BLEND FUTURO con OW (come v2.0) -------------------
     P_fut_ow:List[float]=[]; Tmin_f_ow:List[float]=[]; Tmax_f_ow:List[float]=[]; Tm_f_ow:List[float]=[]
     if ow and "daily" in ow:
         for day in ow["daily"][:futN]:
@@ -512,13 +520,10 @@ async def api_score(
             Tm_f_ow.append(float(t.get("day", (t.get("min",0.0)+t.get("max",0.0))/2.0)))
     ow_len=min(len(P_fut_ow),futN)
 
-    # Strategia blend: P = max(OM,OW); T = media pesata (OW 0.6 nei primi 3gg, poi 0.5)
     P_fut_blend=[]; Tmin_f_blend=[]; Tmax_f_blend=[]; Tm_f_blend=[]
     for i in range(futN):
-        # precip
         if i<ow_len: P_fut_blend.append(max(P_fut_om[i], P_fut_ow[i]))
         else: P_fut_blend.append(P_fut_om[i])
-        # temperature
         if i<ow_len:
             w_ow = 0.6 if i<=2 else 0.5
             w_om = 1.0 - w_ow
@@ -528,24 +533,51 @@ async def api_score(
         else:
             Tmin_f_blend.append(Tmin_f_om[i]); Tmax_f_blend.append(Tmax_f_om[i]); Tm_f_blend.append(Tm_f_om[i])
 
-    # Indicatori recenti per lag/microclima
-    API_val=api_index(P_past_om,half_life=half)
+    # ------------------- BLEND PASSATO con OW Timemachine (NUOVO) -------------------
+    # best-effort: tipicamente OW fornisce fino a 5 giorni passati; fondiamo solo sulla coda degli ultimi k giorni
+    P_past_blend = P_past_om[:]
+    Tmin_p_blend, Tmax_p_blend, Tm_p_blend = Tmin_p_om[:], Tmax_p_om[:], Tm_p_om[:]
+    try:
+        ow_past = await fetch_openweather_past(lat, lon, days=5)
+        # allinea per stringa data come in OM (timezone "auto" → uso le stringhe OM)
+        # prendo le ultime posizioni del passato (oggi-1 → index pastN-1, ecc.)
+        for idx in range(pastN-1, max(-1, pastN-6), -1):
+            if idx < 0 or idx >= len(timev): 
+                continue
+            dstr = timev[idx]
+            if dstr in ow_past:
+                rec = ow_past[dstr]
+                P_owd = float(rec.get("rain", 0.0))
+                Tmin_owd = float(rec.get("tmin", Tmin_p_blend[idx]))
+                Tmax_owd = float(rec.get("tmax", Tmax_p_blend[idx]))
+                Tm_owd   = float(rec.get("tmean", Tm_p_blend[idx]))
+                # P = max
+                P_past_blend[idx] = max(P_past_blend[idx], P_owd)
+                # T = media pesata (OW 0.6 per gli ultimi 3gg, poi 0.5)
+                days_back = (pastN-1) - idx
+                w_ow = 0.6 if days_back <= 2 else 0.5
+                w_om = 1.0 - w_ow
+                Tmin_p_blend[idx] = w_om*Tmin_p_blend[idx] + w_ow*Tmin_owd
+                Tmax_p_blend[idx] = w_om*Tmax_p_blend[idx] + w_ow*Tmax_owd
+                Tm_p_blend[idx]   = w_om*Tm_p_blend[idx]   + w_ow*Tm_owd
+    except Exception:
+        pass
+
+    # Indicatori recenti per lag/microclima (usiamo il passato BLEND)
+    API_val=api_index(P_past_blend,half_life=half)
     ET7=sum(ET0_p_om[-7:]) if ET0_p_om else 0.0
     RH7=sum(RH_p_om[-7:])/max(1,len(RH_p_om[-7:])) if RH_p_om else 60.0
     SW7=sum(SW_p_om[-7:])/max(1,len(SW_p_om[-7:])) if SW_p_om else 15000.0
+    Tm7=float(sum(Tm_p_blend[-7:])/max(1,len(Tm_p_blend[-7:])))
 
-    # SMI (primario: P‑ET0; se cache ERA5‑Land esiste per questo punto, la usiamo)
+    # SMI (primario: P-ET0; se cache ERA5-Land esiste per questo punto, la usiamo)
     smi_series = smi_from_p_et0(P_om, ET0_om)
     cache_key = f"{round(lat,3)},{round(lon,3)}"
     sm_used = "P-ET0"
+    import numpy as _np
     if cache_key in SM_CACHE:
-        # prova ad allineare alle date OM
         daily_sm = SM_CACHE[cache_key].get("daily", {})
-        tmp=[]
-        for dstr in timev:
-            tmp.append(float(daily_sm.get(dstr, float('nan'))))
-        # normalizza 5–95
-        import numpy as _np
+        tmp=[float(daily_sm.get(dstr, float('nan'))) for dstr in timev]
         arr=_np.array(tmp, dtype=float)
         if _np.any(_np.isfinite(arr)):
             valid=arr[_np.isfinite(arr)]
@@ -556,27 +588,26 @@ async def api_score(
             sm_used = "ERA5-Land (CDS cache)"
 
     # soglia dinamica (ultimi 15 gg)
-    import numpy as _np
     sm_last=_np.array(smi_series[-15:], dtype=float)
     sm_last=sm_last[_np.isfinite(sm_last)]
     sm_thr=float(_np.percentile(sm_last,55)) if sm_last.size>0 else 0.6
 
-    # Shock termico
+    # Shock termico (da serie Tmin OM passata)
     shock = cold_shock_from_tmin_series(Tmin_p_om)
 
     # VPD serie future (usa RH_om futuro + Tm_f_blend)
     vpd_fut=[vpd_hpa(float(Tm_f_blend[i]), float(RH_f_om[i] if i<len(RH_f_om) else 60.0)) for i in range(futN)]
 
-    # Energia microclimatica e TWI‑proxy
+    # Energia microclimatica e TWI-proxy
     month_now = datetime.now(timezone.utc).month
     energy = microclimate_energy(aspect_oct, float(slope_deg), month_now)
     twi = twi_proxy_from_slope_concavity(float(slope_deg), float(concavity))
     micro_amp = clamp(energy * (0.8 + 0.4*(twi-0.5)*2.0), 0.6, 1.2)
 
-    # Previsione di flush (nuova logica)
+    # Affidabilità previsioni (confronto OW vs OM nei giorni coperti da OW)
     reliability = reliability_from_sources(P_fut_ow[:ow_len],P_fut_om[:ow_len],Tm_f_ow[:ow_len],Tm_f_om[:ow_len]) if ow_len else 0.6
 
-    # 1) Rileva eventi pioggia base (come prima)
+    # 1) Rileva eventi pioggia base (passato BLEND + futuro BLEND)
     def rain_events(times: List[str], rains: List[float]) -> List[Tuple[int,float]]:
         events=[]; n=min(len(times),len(rains)); i=0
         while i<n:
@@ -585,29 +616,26 @@ async def api_score(
             else: i += 1
         return events
 
-    ev_past = rain_events(timev[:pastN], P_past_om)
+    ev_past = rain_events(timev[:pastN], P_past_blend)
     ev_fut_raw = rain_events(timev[pastN:pastN+futN], P_fut_blend)
-    # rende indici assoluti
     ev_fut=[(pastN+i, mm) for (i,mm) in ev_fut_raw]
+    events = ev_past + ev_fut
 
-    # 2) Applica gating da SMI: se SMI vicino all'evento < soglia → indebolisci o scarta
+    # 2) Gating da SMI vicino all'evento + soglia dinamica
     def smi_amp(ev_abs_idx:int)->float:
         i0=max(0, ev_abs_idx-1); i1=min(len(smi_series), ev_abs_idx+1)
         loc=float(_np.nanmean(_np.array(smi_series[i0:i1+1], dtype=float))) if i1>i0 else float(smi_series[ev_abs_idx])
         if not (loc==loc):  # NaN
             loc=0.5
-        # moltiplicatore 0.4..1.2 in base a SMI e soglia
         base = 0.6 + 0.7*loc
         if loc < sm_thr: base *= 0.6
         return clamp(base, 0.3, 1.2)
 
-    events = ev_past + ev_fut
-
-    forecast=[0.0]*futN; details: List[FlushDetail]=[]
+    # 3) Previsione con lag stocastico e penalità VPD
+    forecast=[0.0]*futN; details: List[Dict[str,Any]]=[]
     for (ev_idx_abs, mm_tot) in events:
-        # lag stocastico guidato da SMI+shock+T7
         sm_loc = smi_amp(ev_idx_abs)
-        lag = stochastic_lag_days(smi=min(1.0, max(0.0, sm_loc)), shock=shock, tmean7=sum(Tm_p_om[-7:])/max(1,len(Tm_p_om[-7:])))
+        lag = stochastic_lag_days(smi=min(1.0, max(0.0, sm_loc)), shock=shock, tmean7=Tm7)
         peak_idx = ev_idx_abs + lag
         sigma = 2.5 if mm_tot < 25 else 3.0
         amp = event_strength(mm_tot) * micro_amp * sm_loc
@@ -635,9 +663,9 @@ async def api_score(
         denom = 1 + (1 if i>0 else 0) + (1 if i+1<len(out) else 0)
         smoothed.append(int(round(w/denom)))
 
+    # finestra migliore
     s=e=m=0
     if len(smoothed)>=3:
-        # best finestra 3gg
         best_s,best_e,best_m=0,2,round((smoothed[0]+smoothed[1]+smoothed[2])/3)
         for i in range(1,len(smoothed)-2):
             med=round((smoothed[i]+smoothed[i+1]+smoothed[i+2])/3)
@@ -646,10 +674,22 @@ async def api_score(
 
     flush_today = int(smoothed[0] if smoothed else 0)
 
-    # Dimensioni con VPD
-    vpd7=max(vpd_hpa(float(sum(Tm_p_om[-7:])/max(1,len(Tm_p_om[-7:]))), float(RH7)), 0.0)
-    size_rate = cap_growth_rate_cm_per_day(float(sum(Tm_p_om[-7:])/max(1,len(Tm_p_om[-7:]))), float(RH7), float(vpd7))
-    # stima età coorte principale ~ distanza da picco più vicino
+    # Dimensioni con VPD (tasso da Tm7 & RH7, penalizzato da VPD7)
+    vpd7=max(vpd_hpa(Tm7, float(RH7)), 0.0)
+    def cap_growth_rate_cm_per_day(tmean: float, rh: float, vpd_hpa_max: float) -> float:
+        if rh < 40: return 0.0
+        ur_f = clamp((rh - 40.0) / (85.0 - 40.0), 0.0, 1.0)
+        if tmean <= 10: t_f = 0.2 * (tmean/10.0)
+        elif tmean <= 16: t_f = 0.2 + 0.8*(tmean-10)/6.0
+        elif tmean <= 20: t_f = 1.0
+        elif tmean <= 24: t_f = 1.0 - 0.6*(tmean-20)/4.0
+        elif tmean <= 28: t_f = 0.4 - 0.3*(tmean-24)/4.0
+        else: t_f = 0.1
+        vpd_pen = vpd_penalty(vpd_hpa_max)
+        return 2.1 * ur_f * clamp(t_f,0.0,1.0) * vpd_pen
+
+    size_rate = cap_growth_rate_cm_per_day(Tm7, float(RH7), float(vpd7))
+    # età coorte principale: distanza dal picco più vicino
     if details:
         today_abs = pastN
         peak_idxs = [d.get("predicted_peak_abs_index", today_abs) for d in details]
@@ -682,8 +722,8 @@ async def api_score(
 
     harvest_txt = harvest_text_from_index(flush_today, hours)
 
-    # Tabelle piogge
-    rain_past={timev[i]: round(P_past_om[i],1) for i in range(min(pastN,len(timev)))}
+    # Tabelle piogge (uso la time-line OM per coerenza con la UI)
+    rain_past={timev[i]: round(P_past_blend[i],1) for i in range(min(pastN,len(timev)))}
     rain_future={timev[pastN+i] if pastN+i<len(timev) else f"+{i+1}d":round(P_fut_blend[i],1) for i in range(futN)}
 
     response_data = {
@@ -693,13 +733,13 @@ async def api_score(
         "aspect_octant": aspect_oct if aspect_oct else "NA",
         "concavity": round(concavity,3),
 
-        "API_star_mm": round(api_index(P_past_om,half_life=half),1),
-        "P7_mm": round(sum(P_past_om[-7:]),1),
-        "P15_mm": round(sum(P_past_om),1),
+        "API_star_mm": round(api_index(P_past_blend,half_life=half),1),
+        "P7_mm": round(sum(P_past_blend[-7:]),1),
+        "P15_mm": round(sum(P_past_blend),1),
         "ET0_7d_mm": round(ET7,1),
         "RH7_pct": round(RH7,1),
         "SW7_kj": round(SW7,0),
-        "Tmean7_c": round(sum(Tm_p_om[-7:])/max(1,len(Tm_p_om[-7:])),1),
+        "Tmean7_c": round(Tm7,1),
 
         "index": flush_today,
         "forecast": [int(x) for x in smoothed],
@@ -721,7 +761,6 @@ async def api_score(
         "size_class": size_cls,
         "size_range_cm": [round(smin,1), round(smax,1)],
 
-        # diagnostica nuova
         "diagnostics": {
             "smi_source": sm_used,
             "smi_threshold": round(sm_thr,2),
@@ -732,7 +771,3 @@ async def api_score(
     }
     response_data["dynamic_explanation"] = build_analysis_text(response_data)
     return response_data
-
-# ----
-# index.html: nessuna modifica necessaria rispetto alla tua versione (v1.8.2). Mantieni quello che hai caricato.
-# ----
