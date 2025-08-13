@@ -1,21 +1,25 @@
 services:
   - type: web
-    name: porcini-api
-    env: python
+    name: porcinicast-api-advanced
+    env: docker
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     autoDeploy: true
-    envVars: []
-    repo: https://example.com/your/repo  # (aggiorna con il tuo repo)
-    rootDir: backend
-  - type: web
-    name: porcini-web
-    env: static
-    plan: free
-    buildCommand: ""
-    staticPublishPath: frontend
-    routes:
-      - type: rewrite
-        source: /api/(.*)
-        destination: https://porcini-api.onrender.com/api/$1
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      # Aggiungi qui le tue API keys se necessarie
+      # - key: OPENWEATHER_API_KEY
+      #   value: "your_key_here"
+      # - key: CDS_API_KEY
+      #   value: "your_cds_key"
+    healthCheckPath: /api/health
+    
+    # Configurazioni di scaling per performance
+    disk:
+      name: porcini-data
+      sizeGB: 1
+      mountPath: /app/data
