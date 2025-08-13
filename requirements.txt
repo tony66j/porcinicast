@@ -1,7 +1,10 @@
-fastapi==0.111.0
-uvicorn==0.30.1
-httpx==0.27.0
-numpy==1.26.4
-scipy==1.11.4
-cdsapi==0.7.4
-netCDF4==1.6.5
+# Versioni fisse e compatibili per Render
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+httpx==0.25.2
+numpy==1.24.4
+scipy==1.10.1
+
+# Opzionali - commentati per evitare errori di build
+# cdsapi==0.7.0
+# netCDF4==1.6.2
