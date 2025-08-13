@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Trova Porcini – Analisi v2.4</title>
+  <title>Trova Porcini – Analisi v2.5</title>
   <style>
     :root{
       --bg:#0b0d10; --panel:#12161b; --muted:#8aa0b6; --text:#e6eef6;
@@ -58,10 +58,20 @@
     .confidence-item{text-align:center;padding:8px;background:#0a0f14;border-radius:8px;border:1px solid #1e2937}
     .confidence-label{font-size:10px;color:var(--muted);margin-bottom:4px}
     .confidence-value{font-size:14px;font-weight:600}
-    .crowdsource{background:linear-gradient(135deg,#1a2332,#0f1419);border:2px solid #2a4a3d}
-    .crowdsource h3{color:#66e28a;margin-bottom:12px}
-    .input-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+    
+    /* Stili migliorati per sezione crowdsource */
+    .crowdsource{
+      background:linear-gradient(135deg,#1a2332,#0f1419);
+      border:2px solid #2a4a3d;
+      margin-top:20px;
+      padding:20px!important;
+    }
+    .crowdsource h3{color:#66e28a;margin-bottom:16px;font-size:20px}
+    .crowdsource h4{color:var(--accent);margin:12px 0 8px 0;font-size:16px}
+    .input-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
     .input-group input, .input-group select{flex:1;min-width:120px}
+    .input-group input[type="text"]{min-width:250px}
+    
     .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
     .stat-item{text-align:center;padding:12px;background:#0a0f14;border-radius:10px;border:1px solid #1e2937}
     .stat-value{font-size:20px;font-weight:700;color:var(--accent)}
@@ -71,20 +81,50 @@
     .notification.success{background:#28a745}
     .notification.error{background:#dc3545}
     .version-badge{background:linear-gradient(45deg,#667eea,#764ba2);padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600}
+    
+    /* Stili per analisi dettagliata */
+    .field-analysis{
+      background:#0a0f14;
+      border-radius:12px;
+      padding:16px;
+      margin-top:12px;
+      line-height:1.7;
+    }
+    .field-analysis h4{
+      color:var(--accent);
+      margin:20px 0 12px 0;
+      font-size:16px;
+      border-bottom:1px solid #1e2937;
+      padding-bottom:8px;
+    }
+    .field-analysis h4:first-child{margin-top:0}
+    .field-analysis p{margin:8px 0;color:#d8e3f0}
+    .field-analysis em{color:var(--muted);font-style:italic}
+    .field-analysis strong{color:#fff;font-weight:600}
+    .return-advice{
+      background:linear-gradient(135deg,#1a2a3e,#0f1925);
+      border-left:4px solid var(--accent);
+      padding:12px;
+      border-radius:8px;
+      margin:16px 0!important;
+    }
+    
     @media (max-width: 768px) {
       .controls{grid-template-columns:1fr;gap:8px}
       .grid.g3{grid-template-columns:1fr}
       .grid.g4{grid-template-columns:1fr 1fr}
       .input-group{flex-direction:column;align-items:stretch}
+      .crowdsource .grid.g2{grid-template-columns:1fr}
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1>🍄 Trova Porcini — Analisi Avanzata</h1>
-      <span class="badge version-badge">v2.4.0</span>
+      <h1>🍄 Trova Porcini — Analisi Scientifica Avanzata</h1>
+      <span class="badge version-badge">v2.5.0</span>
       <span class="badge">AI Enhanced</span>
+      <span class="badge">Lag Biologico Dinamico</span>
     </header>
 
     <!-- Controls -->
@@ -131,7 +171,7 @@
         <div class="hr"></div>
         <div class="metric"><div class="k">Finestra migliore</div><div id="k-window" class="v">—</div></div>
         <div style="margin-top:8px;">
-          <span id="k-model-version" class="chip">v2.4.0</span>
+          <span id="k-model-version" class="chip">v2.5.0</span>
           <span id="k-has-validations" class="chip">validazioni: —</span>
         </div>
       </div>
@@ -179,19 +219,27 @@
 
     <!-- Forecast chart -->
     <div class="panel section">
-      <h3>📈 Previsione Prossimi 10 Giorni</h3>
+      <h3>📈 Previsione Prossimi 10 Giorni (Lag Biologico Dinamico)</h3>
       <div style="margin-bottom:8px;color:var(--muted);font-size:12px;">
-        ✨ <strong>Miglioramenti v2.4:</strong> Soglie dinamiche • Smoothing avanzato • Confidence multi-dimensionale
+        ✨ <strong>v2.5:</strong> Lag biologico basato su letteratura scientifica • Analisi dettagliata campo • Consigli dinamici
       </div>
       <canvas id="chart"></canvas>
     </div>
 
-    <!-- Crowd-sourcing sezione -->
+    <!-- Analisi dettagliata campo (NUOVA SEZIONE PRINCIPALE) -->
+    <div class="panel section">
+      <h3>🧭 Analisi Dettagliata e Consigli di Raccolta</h3>
+      <div id="analysis" class="field-analysis">
+        <p class="muted">Esegui un'analisi per visualizzare consigli dettagliati...</p>
+      </div>
+    </div>
+
+    <!-- Crowd-sourcing sezione VISIBILE E MIGLIORATA -->
     <div class="panel section crowdsource">
       <h3>🤝 Contribuisci al Miglioramento del Modello</h3>
       <div class="grid g2">
         <div>
-          <h4 style="color:var(--accent);margin-bottom:8px;">✅ Hai trovato porcini qui?</h4>
+          <h4>✅ Hai trovato porcini qui?</h4>
           <div class="input-group">
             <select id="foundSpecies">
               <option value="aereus">B. aereus (porcino nero)</option>
@@ -202,12 +250,14 @@
             <input type="number" id="foundQuantity" placeholder="Quantità" min="1" max="50" value="3">
           </div>
           <div class="input-group">
-            <input type="text" id="foundNotes" placeholder="Note opzionali (dimensioni, qualità...)" maxlength="200">
+            <input type="text" id="foundNotes" placeholder="Note: dimensioni, qualità, habitat specifico..." maxlength="200">
+          </div>
+          <div class="input-group">
             <button id="btnReportFound" class="btn success">📍 Segnala Ritrovamento</button>
           </div>
         </div>
         <div>
-          <h4 style="color:var(--muted);margin-bottom:8px;">❌ Hai cercato senza trovare?</h4>
+          <h4>❌ Hai cercato senza trovare?</h4>
           <div class="input-group">
             <select id="searchedHours">
               <option value="1">1 ora</option>
@@ -215,26 +265,28 @@
               <option value="3">3 ore</option>
               <option value="4">4+ ore</option>
             </select>
-            <input type="text" id="searchNotes" placeholder="Habitat, condizioni..." maxlength="200">
+          </div>
+          <div class="input-group">
+            <input type="text" id="searchNotes" placeholder="Note: condizioni, habitat visitato..." maxlength="200">
           </div>
           <div class="input-group">
             <button id="btnReportSearch" class="btn secondary">🔍 Segnala Ricerca Vuota</button>
           </div>
         </div>
       </div>
-      <div style="margin-top:12px;padding:8px 12px;background:#0a0f14;border-radius:8px;border:1px solid #1e2937;">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">💡 Perché è importante segnalare anche le ricerche vuote?</div>
-        <div style="font-size:12px;">I dati negativi sono cruciali per addestrare il modello ML. Aiutano a identificare condizioni che <em>sembrano</em> favorevoli ma non producono funghi.</div>
+      <div style="margin-top:16px;padding:12px;background:#0a0f14;border-radius:8px;border:1px solid #1e2937;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">💡 Perché è importante segnalare anche le ricerche vuote?</div>
+        <div style="font-size:13px;line-height:1.5;">I dati negativi sono cruciali per addestrare il modello ML. Aiutano a identificare condizioni che <em>sembrano</em> favorevoli ma non producono funghi, migliorando l'accuratezza delle previsioni future.</div>
       </div>
     </div>
 
     <!-- Eventi + Rains -->
     <div class="grid g2">
       <div class="panel section events">
-        <h3>🌧️ Eventi Piovosi & Lag</h3>
+        <h3>🌧️ Eventi Piovosi & Lag Biologico</h3>
         <div id="events">—</div>
         <div style="margin-top:8px;font-size:11px;color:var(--muted);">
-          🔄 <strong>Novità:</strong> Soglie dinamiche adattate a SMI, stagione e quota
+          🔬 <strong>v2.5:</strong> Lag dinamico basato su Boddy et al. (2014), Büntgen et al. (2012)
         </div>
       </div>
       <div class="panel section">
@@ -276,12 +328,6 @@
       <div id="topSpecies" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
     </div>
 
-    <!-- Analisi estesa -->
-    <div class="panel section">
-      <h3>🧠 Analisi Modello (Estesa)</h3>
-      <div id="analysis" class="muted">—</div>
-    </div>
-
     <!-- Diagnostica tecnica -->
     <details class="panel section">
       <summary>🔧 Diagnostica Tecnica & JSON</summary>
@@ -294,7 +340,7 @@
     </details>
 
     <footer>
-      © 2025 Trova Porcini v2.4 — Modello scientifico con IA • Crowd-sourcing • Auto-miglioramento
+      © 2025 Trova Porcini v2.5 — Modello biologico avanzato basato su letteratura scientifica • Crowd-sourcing • Auto-miglioramento
     </footer>
   </div>
 
@@ -392,6 +438,7 @@
         if (response.ok) {
           showNotification('🍄 Segnalazione registrata! Grazie per il contributo.');
           $('#foundNotes').value = '';
+          $('#foundQuantity').value = '3';
           loadValidationStats();
         } else {
           throw new Error('Errore server');
@@ -484,11 +531,11 @@
       }
 
       // Version and validations indicators
-      $('#k-model-version').textContent = `v${j.model_version || '2.4.0'}`;
+      $('#k-model-version').textContent = `v${j.model_version || '2.5.0'}`;
       $('#k-has-validations').textContent = `validazioni: ${j.has_local_validations ? 'SÌ' : 'NO'}`;
       $('#k-has-validations').className = j.has_local_validations ? 'chip ok' : 'chip warn';
 
-      // Detailed confidence (NEW in v2.4)
+      // Detailed confidence
       if (j.confidence_detailed) {
         const conf = j.confidence_detailed;
         $('#conf-met').textContent = conf.meteorological?.toFixed(2) || '—';
@@ -511,7 +558,7 @@
       $('#k-harvest').textContent = j.harvest_estimate || '—';
       $('#k-harvest-note').textContent = j.harvest_note || '';
 
-      // Events
+      // Events with biological lag
       const evs = j.flush_events || [];
       if(!evs.length){ 
         $('#events').innerHTML = '<span class="muted">Nessun evento utile</span>'; 
@@ -520,7 +567,7 @@
         evs.forEach(e=>{
           const li = document.createElement('li');
           const obs = e.observed ? 'osservato' : 'previsto';
-          li.textContent = `${e.event_when}: ${e.event_mm} mm → flush ~${e.lag_days} gg (${obs})`;
+          li.innerHTML = `<strong>${e.event_when}</strong>: ${e.event_mm} mm → flush ~<strong>${e.lag_days} gg</strong> (${obs})`;
           ul.appendChild(li);
         });
         $('#events').innerHTML = ''; 
@@ -534,6 +581,86 @@
       // Chart
       drawChart($('#chart'), j.forecast || []);
 
-      // Extended analysis
-      $('#analysis').innerHTML = j.dynamic_explanation || '<span class="muted">—
+      // ANALISI DETTAGLIATA (la parte più importante!)
+      $('#analysis').innerHTML = j.dynamic_explanation || '<span class="muted">Analisi non disponibile</span>';
 
+      // Diagnostics
+      if (j.diagnostics) {
+        const diag = j.diagnostics;
+        $('#diagnostics').textContent = JSON.stringify(diag, null, 2);
+      }
+
+      // Raw JSON
+      $('#raw').textContent = JSON.stringify(j, null, 2);
+    }
+
+    function fillTable(tbody, data){
+      tbody.innerHTML = '';
+      if(!data) return;
+      Object.entries(data).forEach(([day,mm])=>{
+        const tr = document.createElement('tr');
+        const td1 = document.createElement('td');
+        const td2 = document.createElement('td');
+        td1.textContent = day;
+        td2.textContent = fmt(mm);
+        if(mm >= 10) td2.style.color = 'var(--accent)';
+        else if(mm >= 5) td2.style.color = 'var(--warn)';
+        tr.appendChild(td1);
+        tr.appendChild(td2);
+        tbody.appendChild(tr);
+      });
+    }
+
+    function drawChart(canvas, forecast){
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width = canvas.offsetWidth;
+      const h = canvas.height = 160;
+      
+      // Clear
+      ctx.clearRect(0, 0, w, h);
+      
+      if(!forecast || !forecast.length) return;
+      
+      const n = forecast.length;
+      const max = Math.max(...forecast, 100);
+      const barW = w / (n * 1.5);
+      const gap = barW * 0.5;
+      
+      // Draw bars
+      forecast.forEach((val, i) => {
+        const x = i * (barW + gap) + gap/2;
+        const barH = (val / max) * (h - 30);
+        const y = h - barH - 20;
+        
+        // Gradient
+        const grad = ctx.createLinearGradient(0, y, 0, h-20);
+        if(val >= 70) {
+          grad.addColorStop(0, '#66e28a');
+          grad.addColorStop(1, '#4CAF50');
+        } else if(val >= 40) {
+          grad.addColorStop(0, '#ffc857');
+          grad.addColorStop(1, '#FF9800');
+        } else {
+          grad.addColorStop(0, '#ff6b6b');
+          grad.addColorStop(1, '#f44336');
+        }
+        
+        ctx.fillStyle = grad;
+        ctx.fillRect(x, y, barW, barH);
+        
+        // Value on top
+        ctx.fillStyle = '#e6eef6';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(val, x + barW/2, y - 5);
+        
+        // Day label
+        ctx.fillStyle = '#8aa0b6';
+        ctx.font = '10px system-ui';
+        const label = i === 0 ? 'Oggi' : i === 1 ? 'Dom' : `+${i}`;
+        ctx.fillText(label, x + barW/2, h - 5);
+      });
+    }
+  </script>
+</body>
+</html>
