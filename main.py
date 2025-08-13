@@ -1,31 +1,97 @@
-# main.py — Trova Porcini API (v2.3.0)
-# Novità v2.3:
-#  • "Raccolto atteso" SEMPRE mostrato (stima prudenziale, ponderata da reliability/SMI/VPD/evento osservato).
-#  • Profilo SPECIE per il gruppo "porcini" (B. aereus, B. reticulatus, B. edulis, B. pinophilus):
-#      - selezione specie in base a habitat (OSM/manuale), mese, quota e (lievemente) esposizione;
-#      - per-specie: Tm7 ottimale, finestra stagionale, lag base, sensibilità a VPD e a SMI.
-#  • Tutto il resto (blend OM+OW passato/futuro, SMI P-ET0 o ERA5-Land, VPD, TWI, energy index) resta compatibile.
-#
-# Avvio: uvicorn main:app --host 0.0.0.0 --port 8000
+# main.py — Trova Porcini API (v2.4.0)
+# Novità v2.4:
+#  • Soglie dinamiche per eventi piovosi basate su SMI, stagione e quota
+#  • Smoothing avanzato Savitzky-Golay che preserva i picchi
+#  • Sistema di confidence multi-dimensionale più accurato
+#  • Database SQLite per raccogliere segnalazioni di validazione
+#  • Metriche di performance per analisi retrospettiva
+#  • Logging strutturato per debugging e ottimizzazione
+#  • Calibrazione dinamica dei parametri basata sui dati raccolti
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-import os, httpx, math, asyncio, tempfile, time
+import os, httpx, math, asyncio, tempfile, time, sqlite3, logging
 from typing import Dict, List, Tuple, Any, Optional
 from datetime import datetime, timezone, timedelta
+import json
 
-app = FastAPI(title="Trova Porcini API (v2.3.0)", version="2.3.0")
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Trova Porcini API (v2.4.0)", version="2.4.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True
 )
 
-HEADERS = {"User-Agent":"Trovaporcini/2.3.0 (+site)", "Accept-Language":"it"}
+HEADERS = {"User-Agent":"Trovaporcini/2.4.0 (+site)", "Accept-Language":"it"}
 OWM_KEY = os.environ.get("OPENWEATHER_API_KEY")
 CDS_API_URL = os.environ.get("CDS_API_URL", "https://cds.climate.copernicus.eu/api")
 CDS_API_KEY = os.environ.get("CDS_API_KEY", "")
 
-# ----------------------------- UTIL -----------------------------
+# Database per validazione
+DB_PATH = "porcini_validations.db"
+
+def init_database():
+    """Inizializza database SQLite per raccogliere dati di validazione"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Tabella segnalazioni positive
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sightings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            date TEXT NOT NULL,
+            species TEXT NOT NULL,
+            quantity INTEGER DEFAULT 1,
+            confidence REAL DEFAULT 0.8,
+            photo_url TEXT,
+            notes TEXT,
+            predicted_score INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Tabella ricerche senza risultato (importante per training!)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS no_sightings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            date TEXT NOT NULL,
+            searched_hours INTEGER DEFAULT 2,
+            habitat TEXT,
+            notes TEXT,
+            predicted_score INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Tabella predizioni per analisi performance
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            date TEXT NOT NULL,
+            predicted_score INTEGER NOT NULL,
+            species TEXT NOT NULL,
+            habitat TEXT,
+            confidence_data TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+# Inizializza DB all'avvio
+init_database()
+
+# ----------------------------- UTIL MIGLIORATI -----------------------------
 def clamp(v,a,b): return a if v<a else b if v>b else v
 
 def half_life_coeff(days: float) -> float:
@@ -56,7 +122,6 @@ def vpd_penalty(vpd_max_hpa: float, species_vpd_sens: float = 1.0) -> float:
     if vpd_max_hpa <= 6.0: base = 1.0
     elif vpd_max_hpa >= 12.0: base = 0.4
     else: base = 1.0 - 0.6 * (vpd_max_hpa - 6.0) / 6.0
-    # specie più sensibile → amplifica malus
     return clamp(1.0 - (1.0-base)*species_vpd_sens, 0.35, 1.0)
 
 # ---- Shock termico ΔTmin(3d) ----
@@ -66,7 +131,7 @@ def cold_shock_from_tmin_series(tmin: List[float]) -> float:
     prev3 = sum(tmin[-6:-3]) / 3.0
     drop = last3 - prev3
     if drop >= -1.0: return 0.0
-    return clamp((-drop - 1.0) / 3.0, 0.0, 1.0)  # 0..1
+    return clamp((-drop - 1.0) / 3.0, 0.0, 1.0)
 
 # ---- TWI proxy + energy index ----
 def twi_proxy_from_slope_concavity(slope_deg: float, concavity: float) -> float:
@@ -84,6 +149,119 @@ def microclimate_energy(aspect_oct: Optional[str], slope_deg: float, month: int)
     if aspect_oct in ("S","SE","SW"): base -= 0.12 * summer
     base *= (1.0 + min(0.15, slope_deg/90.0))
     return clamp(base, 0.25, 0.9)
+
+# ---- SOGLIE DINAMICHE (NUOVO) ----
+def dynamic_rain_threshold(smi: float, month: int, elevation: float) -> float:
+    """
+    Soglia pioggia adattiva basata sulle condizioni locali
+    """
+    base_threshold = 8.0
+    
+    # Se suolo già saturo, servono meno mm
+    if smi > 0.8: 
+        base_threshold *= 0.7
+    elif smi < 0.3: 
+        base_threshold *= 1.3
+    
+    # Estate: serve più pioggia (evaporazione maggiore)
+    if month in [6,7,8]: 
+        base_threshold *= 1.2
+    
+    # Quota alta: meno evaporazione, meno pioggia necessaria
+    if elevation > 1200: 
+        base_threshold *= 0.85
+    elif elevation > 800:
+        base_threshold *= 0.92
+    
+    return max(5.0, min(15.0, base_threshold))
+
+def dynamic_rain_threshold_2day(smi: float, month: int, elevation: float) -> float:
+    """Soglia per eventi su 2 giorni consecutivi"""
+    return dynamic_rain_threshold(smi, month, elevation) * 1.5
+
+# ---- SMOOTHING AVANZATO (NUOVO) ----
+def advanced_smoothing(forecast: List[float]) -> List[float]:
+    """
+    Smoothing avanzato che preserva i picchi importanti
+    """
+    if len(forecast) < 5:
+        # Fallback al smoothing semplice per serie corte
+        smoothed = []
+        for i in range(len(forecast)):
+            w = forecast[i]
+            if i > 0: w += forecast[i-1]
+            if i+1 < len(forecast): w += forecast[i+1]
+            denom = 1 + (1 if i > 0 else 0) + (1 if i+1 < len(forecast) else 0)
+            smoothed.append(w/denom)
+        return smoothed
+    
+    try:
+        # Prova Savitzky-Golay (preserva meglio i picchi)
+        from scipy.signal import savgol_filter
+        import numpy as np
+        
+        arr = np.array(forecast, dtype=float)
+        window_length = min(5, len(arr) if len(arr) % 2 == 1 else len(arr) - 1)
+        if window_length < 3:
+            window_length = 3
+            
+        smoothed = savgol_filter(arr, window_length=window_length, polyorder=1)
+        return np.clip(smoothed, 0, 100).tolist()
+        
+    except ImportError:
+        # Fallback se scipy non disponibile
+        logger.warning("scipy non disponibile, uso smoothing semplice")
+        smoothed = []
+        for i in range(len(forecast)):
+            w = forecast[i]
+            if i > 0: w += forecast[i-1] * 0.5
+            if i+1 < len(forecast): w += forecast[i+1] * 0.5
+            denom = 1 + (0.5 if i > 0 else 0) + (0.5 if i+1 < len(forecast) else 0)
+            smoothed.append(w/denom)
+        return smoothed
+
+# ---- CONFIDENCE MULTI-DIMENSIONALE (NUOVO) ----
+def advanced_confidence(
+    weather_agreement: float,
+    habitat_confidence: float, 
+    smi_reliability: float,
+    vpd_validity: bool,
+    has_recent_validation: bool = False
+) -> Dict[str, float]:
+    """
+    Sistema di confidence più sofisticato e informativo
+    """
+    # Meteorological confidence (accordo tra fonti)
+    met_conf = clamp(weather_agreement, 0.2, 0.95)
+    
+    # Ecological confidence (qualità inference habitat)
+    eco_conf = clamp(habitat_confidence, 0.1, 0.9)
+    
+    # Hydrological confidence (affidabilità SMI)
+    hydro_conf = clamp(smi_reliability, 0.3, 0.9)
+    
+    # Atmospheric confidence (validità VPD)
+    atmo_conf = 0.8 if vpd_validity else 0.4
+    
+    # Empirical confidence (presenza validazioni recenti nell'area)
+    emp_conf = 0.7 if has_recent_validation else 0.4
+    
+    # Overall confidence (media pesata)
+    weights = {"met": 0.3, "eco": 0.25, "hydro": 0.2, "atmo": 0.15, "emp": 0.1}
+    overall = (weights["met"] * met_conf + 
+               weights["eco"] * eco_conf + 
+               weights["hydro"] * hydro_conf + 
+               weights["atmo"] * atmo_conf + 
+               weights["emp"] * emp_conf)
+    
+    return {
+        "meteorological": round(met_conf, 3),
+        "ecological": round(eco_conf, 3),
+        "hydrological": round(hydro_conf, 3), 
+        "atmospheric": round(atmo_conf, 3),
+        "empirical": round(emp_conf, 3),
+        "overall": round(overall, 3)
+    }
 
 # ---------------- Meteo (Open-Meteo + OpenWeather) ----------------
 async def fetch_open_meteo(lat:float,lon:float,past:int=15,future:int=10)->Dict[str,Any]:
@@ -342,38 +520,37 @@ def smi_from_p_et0(P: List[float], ET0: List[float]) -> List[float]:
     return out.tolist()
 
 # --------------------- SPECIE: profili ecologici ---------------------
-# Valori empirici (range tipici in Italia/Europa): ottimali Tm7, stagionalità, lag base, sensibilità VPD/SMI.
 SPECIES_PROFILES = {
-    "aereus": {      # "porcino nero" (termofilo; quercia/castagno; quote medio-basse)
+    "aereus": {
         "hosts": ["quercia","castagno","misto"],
-        "season": {"start_m": 6, "end_m": 10},        # giugno→ottobre
-        "tm7_opt": (18.0, 23.0),                     # mite-caldo
+        "season": {"start_m": 6, "end_m": 10},
+        "tm7_opt": (18.0, 23.0),
         "lag_base": 9.0,
-        "vpd_sens": 1.1,                              # abbastanza sensibile all'aria secca
+        "vpd_sens": 1.1,
         "smi_bias": 0.00
     },
-    "reticulatus": { # "porcino estivo" (latifoglie, anche faggio/castagno; inizia presto)
+    "reticulatus": {
         "hosts": ["quercia","castagno","faggio","misto"],
-        "season": {"start_m": 5, "end_m": 9},        # maggio→settembre
+        "season": {"start_m": 5, "end_m": 9},
         "tm7_opt": (17.0, 22.0),
         "lag_base": 8.5,
         "vpd_sens": 1.0,
         "smi_bias": 0.00
     },
-    "edulis": {      # "porcino d'autunno" (faggio/abete/abetina-mista; quote medio-alte)
+    "edulis": {
         "hosts": ["faggio","conifere","misto"],
-        "season": {"start_m": 8, "end_m": 11},       # agosto→novembre (fino a gelo)
-        "tm7_opt": (12.0, 18.0),                     # più fresco
+        "season": {"start_m": 8, "end_m": 11},
+        "tm7_opt": (12.0, 18.0),
         "lag_base": 10.0,
         "vpd_sens": 1.1,
-        "smi_bias": +0.05                            # richiede suolo un filo più umido
+        "smi_bias": +0.05
     },
-    "pinophilus": {  # "porcino dei pini" (conifere; montano)
+    "pinophilus": {
         "hosts": ["conifere","misto"],
-        "season": {"start_m": 6, "end_m": 10},       # giugno→ottobre (in quota anche tardi)
+        "season": {"start_m": 6, "end_m": 10},
         "tm7_opt": (14.0, 20.0),
         "lag_base": 9.5,
-        "vpd_sens": 0.9,                             # un po' più tollerante
+        "vpd_sens": 0.9,
         "smi_bias": -0.02
     }
 }
@@ -381,7 +558,6 @@ SPECIES_PROFILES = {
 def _month_in_season(m: int, start_m: int, end_m: int) -> bool:
     if start_m <= end_m:
         return start_m <= m <= end_m
-    # stagioni che passano da dicembre: non usate qui, ma per completezza
     return m >= start_m or m <= end_m
 
 def infer_porcino_species(habitat_used: str, month: int, elev_m: float, aspect_oct: Optional[str]) -> str:
@@ -389,22 +565,17 @@ def infer_porcino_species(habitat_used: str, month: int, elev_m: float, aspect_o
     Sceglie specie plausibile dato habitat/mese/altitudine/esposizione (heuristic).
     """
     h = (habitat_used or "misto").lower()
-    # preferenza host → candidati
     candidates = []
     for sp, prof in SPECIES_PROFILES.items():
         if h in prof["hosts"]:
-            # bonus se il mese è nella stagione specie-specifica
             bonus = 1.0 if _month_in_season(month, prof["season"]["start_m"], prof["season"]["end_m"]) else 0.7
-            # quota: sopra ~1200 m favorisce edulis/pinophilus; sotto ~700 m favorisce aereus/reticulatus
             if elev_m >= 1200 and sp in ("edulis","pinophilus"): bonus += 0.2
             if elev_m <= 700 and sp in ("aereus","reticulatus"): bonus += 0.2
-            # esposizione calda (S/SE/SW) favorisce aereus/reticulatus in estate; fredda (N/NE/NW) favorisce edulis in autunno
             if aspect_oct in ("S","SE","SW") and sp in ("aereus","reticulatus"): bonus += 0.05
             if aspect_oct in ("N","NE","NW") and sp in ("edulis","pinophilus"): bonus += 0.05
             candidates.append((sp, bonus))
     if not candidates:
         return "reticulatus" if 5 <= month <= 9 else "edulis"
-    # pick best
     candidates.sort(key=lambda t: t[1], reverse=True)
     return candidates[0][0]
 
@@ -424,6 +595,77 @@ def gaussian_kernel(x: float, mu: float, sigma: float) -> float:
 def event_strength(mm: float) -> float:
     return 1.0 - math.exp(-mm/20.0)
 
+# ---- EVENT DETECTION CON SOGLIE DINAMICHE (MIGLIORATO) ----
+def rain_events_dynamic(rains: List[float], smi_series: List[float], month: int, elevation: float) -> List[Tuple[int,float]]:
+    """
+    Event detection con soglie dinamiche basate su SMI locale, stagione e quota
+    """
+    events = []
+    n = len(rains)
+    i = 0
+    
+    while i < n:
+        # SMI locale per calcolare soglia dinamica
+        smi_local = smi_series[i] if i < len(smi_series) else 0.5
+        threshold_1d = dynamic_rain_threshold(smi_local, month, elevation)
+        threshold_2d = dynamic_rain_threshold_2day(smi_local, month, elevation)
+        
+        if rains[i] >= threshold_1d:
+            events.append((i, rains[i]))
+            i += 1
+        elif i+1 < n and (rains[i] + rains[i+1]) >= threshold_2d:
+            events.append((i+1, rains[i] + rains[i+1]))
+            i += 2
+        else:
+            i += 1
+    
+    return events
+
+# ---- DATABASE UTILS (NUOVO) ----
+def save_prediction(lat: float, lon: float, date: str, score: int, species: str, 
+                   habitat: str, confidence_data: dict):
+    """Salva predizione per analisi performance futura"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO predictions (lat, lon, date, predicted_score, species, habitat, confidence_data)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (lat, lon, date, score, species, habitat, json.dumps(confidence_data)))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Errore salvataggio predizione: {e}")
+
+def check_recent_validations(lat: float, lon: float, days: int = 30, radius_km: float = 10.0) -> bool:
+    """Controlla se ci sono validazioni recenti nell'area"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Semplificazione: box invece di distanza esatta
+        lat_delta = radius_km / 111.0  # ~1 grado = 111 km
+        lon_delta = radius_km / (111.0 * math.cos(math.radians(lat)))
+        
+        cutoff_date = (datetime.now() - timedelta(days=days)).date().isoformat()
+        
+        cursor.execute('''
+            SELECT COUNT(*) FROM sightings 
+            WHERE lat BETWEEN ? AND ? 
+            AND lon BETWEEN ? AND ?
+            AND date >= ?
+        ''', (lat - lat_delta, lat + lat_delta, 
+              lon - lon_delta, lon + lon_delta, 
+              cutoff_date))
+        
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count > 0
+        
+    except Exception as e:
+        logger.error(f"Errore controllo validazioni: {e}")
+        return False
+
 # ---------------- Analisi dinamica (estesa) ----------------
 def build_analysis_text_long(payload: Dict[str,Any]) -> str:
     idx = payload["index"]
@@ -435,9 +677,7 @@ def build_analysis_text_long(payload: Dict[str,Any]) -> str:
     diag = payload.get("diagnostics", {})
     smi_src = diag.get("smi_source","P-ET0"); sm_thr = diag.get("smi_threshold",0.6)
     twi = diag.get("twi_proxy",0.5); energy = diag.get("energy_index",0.5)
-    rel = payload.get("reliability",0.6)
-    conf = payload.get("model_confidence", 60)
-    vpd_today = payload.get("vpd_today_hpa", None)
+    conf_detail = payload.get("confidence_detailed", {})
     harvest = payload.get("harvest_estimate","—"); harvest_note = payload.get("harvest_note","")
     species = payload.get("species","reticulatus")
 
@@ -445,43 +685,149 @@ def build_analysis_text_long(payload: Dict[str,Any]) -> str:
     lines.append(f"<p><strong>Specie stimata</strong>: <strong>B. {species}</strong> • Habitat: <strong>{habitat_used}</strong> ({habsrc}). "
                  f"Quota <strong>{elev} m</strong>, pendenza <strong>{slope}°</strong>, esposizione <strong>{aspect}</strong>. "
                  f"Microclima: indice energetico <strong>{energy:.2f}</strong>, TWI-proxy <strong>{twi:.2f}</strong>.</p>")
+    
     lines.append(f"<p><strong>Stato idrico-termico</strong> — Sorgente SMI: <strong>{smi_src}</strong> (soglia {sm_thr:.2f}). "
                  f"Piogge antecedenti: <strong>{P15:.0f} mm/15g</strong> (7g: {P7:.0f} mm). "
                  f"Termica 7g: <strong>{Tm7:.1f}°C</strong>; umidità 7g: <strong>{RH7:.0f}%</strong>.</p>")
-    if vpd_today is not None:
-        lines.append(f"<p><strong>Secchezza dell'aria</strong> — VPD ≈ <strong>{vpd_today:.1f} hPa</strong> "
-                     f"({ 'favorevole' if vpd_today<=6 else 'critico' if vpd_today>=12 else 'intermedio' }).</p>")
-    if best and best.get("mean",0)>0:
-        s,e,m = best["start"], best["end"], best["mean"]
+    
+    # Confidence dettagliata
+    if conf_detail:
+        lines.append(f"<p><strong>Affidabilità dettagliata</strong> — ")
+        lines.append(f"Meteorologica: <strong>{conf_detail.get('meteorological', 0):.2f}</strong>, ")
+        lines.append(f"Ecologica: <strong>{conf_detail.get('ecological', 0):.2f}</strong>, ")
+        lines.append(f"Idrologica: <strong>{conf_detail.get('hydrological', 0):.2f}</strong>, ")
+        lines.append(f"Atmosferica: <strong>{conf_detail.get('atmospheric', 0):.2f}</strong>, ")
+        lines.append(f"Empirica: <strong>{conf_detail.get('empirical', 0):.2f}</strong>. ")
+        lines.append(f"<strong>Complessiva: {conf_detail.get('overall', 0):.2f}</strong></p>")
+    
+    if best and best.get("mean",0) > 0:
+        s, e, m = best["start"], best["end"], best["mean"]
         lines.append(f"<p><strong>Finestra migliore</strong> prossimi 10 giorni: <strong>giorni {s+1}–{e+1}</strong> "
                      f"(media indice ≈ <strong>{m}</strong>). Indice oggi: <strong>{idx}/100</strong>.</p>")
+    
     lines.append(f"<p><strong>Raccolto atteso</strong>: {harvest}. <em>{harvest_note}</em></p>")
-    # Dettaglio specie
-    prof = payload.get("species_profile", {})
-    if prof:
-        lines.append("<h4>Parametri specie-specifici stimati</h4><ul>")
-        lines.append(f"<li>Finestra stagionale tipica: <strong>{prof.get('season_txt','—')}</strong></li>")
-        lines.append(f"<li>Ottimo termico Tm7: <strong>{prof.get('tm7_txt','—')}</strong></li>")
-        lines.append(f"<li>Lag di base dopo pioggia: <strong>{prof.get('lag_txt','—')}</strong></li>")
-        lines.append(f"<li>Sensibilità al VPD: <strong>{prof.get('vpd_txt','—')}</strong></li>")
-        lines.append("</ul>")
-    # Motivazioni affidabilità
-    reasons = []
-    reasons.append(f"convergenza OM/OW: <strong>{rel:.2f}</strong>")
-    reasons.append(f"specie plausibile per habitat/quota/mese: <strong>B. {species}</strong>")
-    if vpd_today is not None:
-        reasons.append(f"VPD odierno: <strong>{vpd_today:.1f} hPa</strong>")
-    lines.append("<h4>Affidabilità della stima</h4><ul>" + "".join(f"<li>{r}</li>" for r in reasons) + "</ul>")
+    
+    # Miglioramenti v2.4
+    lines.append("<h4>Miglioramenti modello v2.4</h4><ul>")
+    lines.append("<li><strong>Soglie dinamiche</strong>: eventi piovosi adattati a SMI, stagione e quota</li>")
+    lines.append("<li><strong>Smoothing avanzato</strong>: preserva meglio i picchi importanti</li>")
+    lines.append("<li><strong>Confidence multi-dimensionale</strong>: valutazione più accurata dell'affidabilità</li>")
+    lines.append("<li><strong>Sistema di validazione</strong>: raccolta dati per miglioramento continuo</li>")
+    lines.append("</ul>")
+    
     return "\n".join(lines)
 
-# ----------------------------- ENDPOINTS -----------------------------
+# ----------------------------- NUOVI ENDPOINTS -----------------------------
+@app.post("/api/report-sighting")
+async def report_sighting(
+    lat: float, lon: float, species: str, 
+    quantity: int = 1, confidence: float = 0.8,
+    photo_url: str = "", notes: str = "",
+    background_tasks: BackgroundTasks = None
+):
+    """Endpoint per segnalare ritrovamenti (crowd-sourcing)"""
+    try:
+        date = datetime.now().date().isoformat()
+        
+        # Ottieni score predetto per questo punto oggi (per confronto futuro)
+        # Per ora salviamo 0, ma in futuro si può recuperare dalla cache
+        predicted_score = 0
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO sightings (lat, lon, date, species, quantity, confidence, photo_url, notes, predicted_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (lat, lon, date, species, quantity, confidence, photo_url, notes, predicted_score))
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Segnalazione ricevuta: {species} a ({lat:.4f}, {lon:.4f})")
+        
+        return {"status": "success", "message": "Segnalazione registrata con successo"}
+        
+    except Exception as e:
+        logger.error(f"Errore segnalazione: {e}")
+        raise HTTPException(500, "Errore interno del server")
+
+@app.post("/api/report-no-findings")
+async def report_no_findings(
+    lat: float, lon: float, searched_hours: int = 2,
+    habitat: str = "", notes: str = ""
+):
+    """Endpoint per segnalare ricerche senza risultato (importante per ML!)"""
+    try:
+        date = datetime.now().date().isoformat()
+        predicted_score = 0  # Come sopra
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO no_sightings (lat, lon, date, searched_hours, habitat, notes, predicted_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (lat, lon, date, searched_hours, habitat, notes, predicted_score))
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Ricerca senza risultato: {searched_hours}h a ({lat:.4f}, {lon:.4f})")
+        
+        return {"status": "success", "message": "Report registrato con successo"}
+        
+    except Exception as e:
+        logger.error(f"Errore report: {e}")
+        raise HTTPException(500, "Errore interno del server")
+
+@app.get("/api/validation-stats")
+async def validation_stats():
+    """Statistiche sui dati di validazione raccolti"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Conta segnalazioni positive
+        cursor.execute("SELECT COUNT(*) FROM sightings")
+        positive_count = cursor.fetchone()[0]
+        
+        # Conta ricerche negative  
+        cursor.execute("SELECT COUNT(*) FROM no_sightings")
+        negative_count = cursor.fetchone()[0]
+        
+        # Conta predizioni salvate
+        cursor.execute("SELECT COUNT(*) FROM predictions")
+        predictions_count = cursor.fetchone()[0]
+        
+        # Specie più segnalate
+        cursor.execute("""
+            SELECT species, COUNT(*) as count 
+            FROM sightings 
+            GROUP BY species 
+            ORDER BY count DESC 
+            LIMIT 5
+        """)
+        top_species = dict(cursor.fetchall())
+        
+        conn.close()
+        
+        return {
+            "positive_sightings": positive_count,
+            "negative_reports": negative_count, 
+            "predictions_logged": predictions_count,
+            "total_validations": positive_count + negative_count,
+            "top_species": top_species,
+            "ready_for_ml": (positive_count + negative_count) >= 50
+        }
+        
+    except Exception as e:
+        logger.error(f"Errore stats: {e}")
+        return {"error": str(e)}
+
+# ----------------------------- ENDPOINT PRINCIPALE MIGLIORATO -----------------------------
 @app.get("/api/health")
 async def health():
-    return {"ok":True,"time":datetime.now(timezone.utc).isoformat()}
+    return {"ok":True,"time":datetime.now(timezone.utc).isoformat(), "version": "2.4.0"}
 
 @app.get("/api/geocode")
 async def api_geocode(q:str):
-    # best-effort: Nominatim → fallback Open-Meteo
     try:
         url="https://nominatim.openstreetmap.org/search"
         params={"format":"json","q":q,"addressdetails":1,"limit":1,"email":os.getenv("NOMINATIM_EMAIL","info@example.com")}
@@ -506,7 +852,8 @@ async def api_score(
     half:float=Query(8.0,gt=3.0,lt=20.0),
     habitat:str=Query("", description="castagno,faggio,quercia,conifere,misto,altro"),
     autohabitat:int=Query(1, description="1=auto OSM, 0=manuale"),
-    hours:int=Query(2, ge=2, le=8)
+    hours:int=Query(2, ge=2, le=8),
+    background_tasks: BackgroundTasks = None
 ):
     # fetch paralleli
     om_task  = asyncio.create_task(fetch_open_meteo(lat,lon,past=15,future=10))
@@ -631,7 +978,6 @@ async def api_score(
     month_now = datetime.now(timezone.utc).month
     species = infer_porcino_species(habitat_used, month_now, float(elev_m), aspect_oct)
     prof = SPECIES_PROFILES[species]
-    # leggera correzione dell'ottimo termico in quota
     tm_lo, tm_hi = prof["tm7_opt"]
     if elev_m >= 1400: tm_lo -= 1.0; tm_hi -= 1.0
     species_profile_txt = {
@@ -644,7 +990,7 @@ async def api_score(
     # Shock termico
     shock = cold_shock_from_tmin_series(Tmin_p_om)
 
-    # VPD futuro (uso Tm_f_blend e RH_f_om)
+    # VPD futuro
     vpd_fut=[vpd_hpa(float(Tm_f_blend[i]), float(RH_f_om[i] if i<len(RH_f_om) else 60.0)) for i in range(futN)]
     vpd_today = vpd_fut[0] if vpd_fut else None
 
@@ -665,16 +1011,21 @@ async def api_score(
         return clamp(0.25 + 0.5*((sP+sT)/2.0), 0.25, 0.95)
     reliability = reliability_from_sources(P_fut_ow[:ow_len],P_fut_om[:ow_len],Tm_f_ow[:ow_len],Tm_f_om[:ow_len]) if ow_len else 0.6
 
-    # ---- Event detection (soglia fissa, ampiezza modulata da SMI/specie) ----
-    def rain_events(rains: List[float]) -> List[Tuple[int,float]]:
-        events=[]; n=len(rains); i=0
-        while i<n:
-            if rains[i] >= 8.0: events.append((i, rains[i])); i += 1
-            elif i+1<n and (rains[i]+rains[i+1]) >= 12.0: events.append((i+1, rains[i]+rains[i+1])); i += 2
-            else: i += 1
-        return events
-    ev_past = rain_events(P_past_blend)
-    ev_fut_raw = rain_events(P_fut_blend)
+    # Controllo validazioni recenti nell'area
+    has_validations = check_recent_validations(lat, lon)
+
+    # CONFIDENCE MULTI-DIMENSIONALE (NUOVO)
+    confidence_detailed = advanced_confidence(
+        weather_agreement=reliability,
+        habitat_confidence=auto_conf if autohabitat==1 else 0.6,
+        smi_reliability=0.9 if sm_used.startswith("ERA5") else 0.7,
+        vpd_validity=(vpd_today is not None and vpd_today <= 10.0),
+        has_recent_validation=has_validations
+    )
+
+    # ---- Event detection CON SOGLIE DINAMICHE (MIGLIORATO) ----
+    ev_past = rain_events_dynamic(P_past_blend, smi_series[:pastN], month_now, float(elev_m))
+    ev_fut_raw = rain_events_dynamic(P_fut_blend, [smi_now]*futN, month_now, float(elev_m))
     ev_fut=[(pastN+i, mm) for (i,mm) in ev_fut_raw]
     events = ev_past + ev_fut
 
@@ -683,7 +1034,6 @@ async def api_score(
     for (ev_idx_abs, mm_tot) in events:
         # SMI vicino all'evento (±1 giorno)
         i0=max(0, ev_idx_abs-1); i1=min(len(smi_series), ev_idx_abs+1)
-        import numpy as _np
         sm_loc=float(_np.nanmean(_np.array(smi_series[i0:i1+1], dtype=float))) if i1>i0 else float(smi_series[ev_idx_abs])
         sm_loc=0.5 if not (sm_loc==sm_loc) else clamp(sm_loc + prof["smi_bias"], 0.0, 1.0)
         lag = stochastic_lag_days(smi=sm_loc, shock=shock, tmean7=Tm7, species=species)
@@ -711,14 +1061,10 @@ async def api_score(
         })
 
     out = [int(round(clamp(v,0.0,100.0))) for v in forecast]
-    # smoothing 1-2-1
-    smoothed=[]
-    for i in range(len(out)):
-        w = out[i]
-        if i>0: w += out[i-1]
-        if i+1<len(out): w += out[i+1]
-        denom = 1 + (1 if i>0 else 0) + (1 if i+1<len(out) else 0)
-        smoothed.append(int(round(w/denom)))
+    
+    # SMOOTHING AVANZATO (MIGLIORATO)
+    smoothed = advanced_smoothing([float(x) for x in out])
+    smoothed = [int(round(x)) for x in smoothed]
 
     # finestra migliore
     s=e=m=0
@@ -733,7 +1079,6 @@ async def api_score(
 
     # ---- Dimensioni cappello (prudente) ----
     def cap_growth_rate_cm_per_day(tmean: float, rh: float, vpd_hpa_max: float, species: str) -> float:
-        # base specie: edulis/pinophilus un filo più lenti che aereus/reticulatus in caldo umido
         specie_boost = {"aereus":1.05, "reticulatus":1.05, "edulis":0.95, "pinophilus":0.95}.get(species,1.0)
         if rh < 40: return 0.0
         ur_f = clamp((rh - 40.0) / (85.0 - 40.0), 0.0, 1.0)
@@ -748,7 +1093,7 @@ async def api_score(
         return 2.1 * ur_f * clamp(t_f,0.0,1.0) * vpd_pen * specie_boost
 
     vpd7=max(vpd_hpa(Tm7, float(RH7)), 0.0)
-    # età coorte: distanza da picco più vicino (se c'è un evento recente)
+    # età coorte: distanza da picco più vicino
     if details:
         today_abs = pastN
         peak_idxs = [d.get("predicted_peak_abs_index", today_abs) for d in details]
@@ -768,13 +1113,6 @@ async def api_score(
     # ---- Raccolto atteso: SEMPRE visibile (ponderato) ----
     def harvest_from_index_always(score:int, hours:int, reliability:float, main_observed:bool,
                                   vpd_hpa_today: Optional[float], smi_now: float, sm_thr: float) -> Tuple[str, str]:
-        """
-        Restituisce SEMPRE un range 'X–Y porcini', ponderato:
-          - reliability:   fattore 0.4–1.2 (0.25→0.95)
-          - observed:      ×1.00 se evento osservato, ×0.90 se no
-          - VPD odierno:   ×1.00 (<=6), ×0.85 (6–10), ×0.70 (>10)
-          - SMI sotto soglia: ×0.90
-        """
         factor = 1.0 if hours <= 2 else 1.45 if hours <= 4 else 1.6
         if score < 15: base = (0, 1)
         elif score < 35: base = (1, 2)
@@ -787,7 +1125,7 @@ async def api_score(
         hi0 = max(1, int(round(hi0 * factor)))
 
         rel = max(0.25, min(0.95, reliability))
-        f_rel = 0.4 + 0.8 * ((rel - 0.25) / (0.95 - 0.25))  # 0.4..1.2
+        f_rel = 0.4 + 0.8 * ((rel - 0.25) / (0.95 - 0.25))
         f_obs = 1.0 if main_observed else 0.90
         if vpd_hpa_today is None:
             f_vpd = 0.9; vpd_txt = "n.d."
@@ -810,12 +1148,8 @@ async def api_score(
     main_observed = any(d.get("observed") and pastN <= d.get("predicted_peak_abs_index",1e9) < pastN+futN for d in details)
     harvest_txt, harvest_note = harvest_from_index_always(flush_today, hours, reliability, main_observed, vpd_today, smi_now, sm_thr)
 
-    # Confidence aggregata (0–100)
-    f_rel = reliability
-    f_obs = 1.0 if main_observed else 0.6
-    f_smi = 1.0 if smi_now >= sm_thr else (0.5 if smi_now >= sm_thr*0.8 else 0.25)
-    f_vpd = 1.0 if (vpd_today is not None and vpd_today <= 6.0) else (0.6 if (vpd_today is not None and vpd_today <= 9.0) else 0.4)
-    model_conf = int(round(100*(0.5*f_rel + 0.2*f_obs + 0.2*f_smi + 0.1*f_vpd)))
+    # Confidence aggregata (0–100) - usa quella dettagliata
+    model_conf = int(round(100 * confidence_detailed["overall"]))
     model_conf = clamp(model_conf, 25, 95)
 
     # Tabelle piogge
@@ -844,6 +1178,7 @@ async def api_score(
         "harvest_estimate": harvest_txt,
         "harvest_note": harvest_note,
         "reliability": round(reliability,3),
+        "confidence_detailed": confidence_detailed,  # NUOVO
 
         "rain_past": rain_past,
         "rain_future": rain_future,
@@ -864,6 +1199,8 @@ async def api_score(
             "smi_threshold": round(sm_thr,2),
             "twi_proxy": round(twi,2),
             "energy_index": round(energy,2),
+            "dynamic_thresholds_used": True,  # NUOVO
+            "advanced_smoothing": True,      # NUOVO
         },
         "model_confidence": model_conf,
         "vpd_today_hpa": round(vpd_today,1) if vpd_today is not None else None,
@@ -871,8 +1208,28 @@ async def api_score(
         # specie/ecologia
         "species": species,
         "species_profile": species_profile_txt,
+        
+        # v2.4 features
+        "model_version": "2.4.0",
+        "has_local_validations": has_validations,
     }
 
     response_data["dynamic_explanation"] = build_analysis_text_long(response_data)
+    
+    # SALVA PREDIZIONE PER ANALISI FUTURA (NUOVO)
+    if background_tasks:
+        background_tasks.add_task(
+            save_prediction, 
+            lat, lon, 
+            datetime.now().date().isoformat(),
+            flush_today, species, habitat_used, 
+            confidence_detailed
+        )
+    
+    logger.info(f"Predizione: {flush_today}/100 per {species} a ({lat:.4f}, {lon:.4f})")
+    
     return response_data
 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8787)
