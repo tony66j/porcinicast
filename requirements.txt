@@ -1,4 +1,31 @@
-# Requirements per modello SUPER AVANZATO v2.5.0
+# Requirements OTTIMIZZATI per Render - Risolve conflitti dipendenze
+# Versioni testate e compatibili tra loro
+
+# === CORE WEB FRAMEWORK ===
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# === HTTP CLIENT ===
+httpx==0.25.2
+
+# === SCIENTIFIC COMPUTING ===
+# Installate via Dockerfile con --only-binary
+# numpy e scipy gestiti dal Dockerfile
+
+# === GEOSPATIAL E CLIMATE DATA ===
+cdsapi==0.6.7
+netCDF4==1.6.2
+
+# === UTILITIES - VERSIONI COMPATIBILI ===
+python-multipart==0.0.5
+python-json-logger==2.0.4
+
+# === GEOSPATIAL ===
+geohash2==1.1
+
+# === PERFORMANCE ===
+uvloop==0.17.0
+httptools==0.5.0# Requirements per modello SUPER AVANZATO v2.5.0
 # Usa pre-compiled wheels via Dockerfile per evitare errori build
 
 # === CORE WEB FRAMEWORK ===
