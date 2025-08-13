@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Trova Porcini – Analisi</title>
+  <title>Trova Porcini – Analisi v2.4</title>
   <style>
     :root{
       --bg:#0b0d10; --panel:#12161b; --muted:#8aa0b6; --text:#e6eef6;
@@ -14,8 +14,8 @@
     *{box-sizing:border-box}
     html,body{margin:0;background:linear-gradient(180deg,#0a0c0f 0%,#0d1218 100%);color:var(--text);font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     a{color:var(--accent-2)}
-    .wrap{max-width:1100px;margin:32px auto;padding:0 16px}
-    header{display:flex;gap:16px;align-items:center;margin-bottom:18px}
+    .wrap{max-width:1200px;margin:32px auto;padding:0 16px}
+    header{display:flex;gap:16px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
     header h1{font-size:22px;margin:0}
     header .badge{padding:4px 10px;border-radius:999px;background:linear-gradient(90deg,#1b2230,#17202b);color:#cfe6ff;border:1px solid #283343}
     .panel{background:linear-gradient(180deg,#12161b,#0f141a);border:1px solid #1e2937;border-radius:var(--radius);box-shadow:var(--shadow)}
@@ -25,15 +25,18 @@
     input[type=text],input[type=number],select{
       width:100%;padding:10px 12px;border-radius:10px;border:1px solid #243142;background:#0d141b;color:var(--text)
     }
-    .btn{padding:10px 14px;border-radius:12px;border:1px solid #2a384b;background:linear-gradient(180deg,#1b2430,#151c26);color:#e9f5ff;font-weight:600;cursor:pointer}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid #2a384b;background:linear-gradient(180deg,#1b2430,#151c26);color:#e9f5ff;font-weight:600;cursor:pointer;transition:all 0.2s ease}
     .btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.28)}
+    .btn.success{background:linear-gradient(180deg,#28a745,#1e7e34);border-color:#1e7e34}
+    .btn.secondary{background:linear-gradient(180deg,#6c757d,#545b62);border-color:#545b62}
     .grid{display:grid;gap:14px;padding:16px}
     .grid.g2{grid-template-columns:1fr 1fr}
     .grid.g3{grid-template-columns:1.1fr .9fr .9fr}
+    .grid.g4{grid-template-columns:repeat(4,1fr)}
     .metric{display:flex;gap:12px;align-items:center}
     .metric .k{font-size:12px;color:var(--muted)}
     .metric .v{font-size:22px;font-weight:700}
-    .chip{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #273244;background:#0f1520;color:#cfe6ff}
+    .chip{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #273244;background:#0f1520;color:#cfe6ff;font-size:12px}
     .chip.ok{border-color:#224733;background:#0f1a14;color:#b9f3cf}
     .chip.warn{border-color:#4a3b1a;background:#1a160f;color:#ffe0a3}
     .chip.bad{border-color:#4a1a1a;background:#1a0f10;color:#ffb9b9}
@@ -47,17 +50,41 @@
     .events ul{margin:6px 0 0 18px}
     .events li{margin:2px 0}
     details{background:#0e141b;border:1px solid #203045;border-radius:12px;padding:10px}
-    summary{cursor:pointer}
+    summary{cursor:pointer;font-weight:600}
     .muted{color:#93a7bd}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
     footer{margin:24px 0 40px;color:#8aa0b6;font-size:12px;text-align:center}
+    .confidence-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px}
+    .confidence-item{text-align:center;padding:8px;background:#0a0f14;border-radius:8px;border:1px solid #1e2937}
+    .confidence-label{font-size:10px;color:var(--muted);margin-bottom:4px}
+    .confidence-value{font-size:14px;font-weight:600}
+    .crowdsource{background:linear-gradient(135deg,#1a2332,#0f1419);border:2px solid #2a4a3d}
+    .crowdsource h3{color:#66e28a;margin-bottom:12px}
+    .input-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+    .input-group input, .input-group select{flex:1;min-width:120px}
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
+    .stat-item{text-align:center;padding:12px;background:#0a0f14;border-radius:10px;border:1px solid #1e2937}
+    .stat-value{font-size:20px;font-weight:700;color:var(--accent)}
+    .stat-label{font-size:11px;color:var(--muted);margin-top:4px}
+    .notification{position:fixed;top:20px;right:20px;padding:12px 16px;border-radius:8px;color:white;font-weight:600;z-index:1000;transform:translateX(400px);transition:transform 0.3s ease}
+    .notification.show{transform:translateX(0)}
+    .notification.success{background:#28a745}
+    .notification.error{background:#dc3545}
+    .version-badge{background:linear-gradient(45deg,#667eea,#764ba2);padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600}
+    @media (max-width: 768px) {
+      .controls{grid-template-columns:1fr;gap:8px}
+      .grid.g3{grid-template-columns:1fr}
+      .grid.g4{grid-template-columns:1fr 1fr}
+      .input-group{flex-direction:column;align-items:stretch}
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1>🍄 Trova Porcini — Analisi sito</h1>
-      <span class="badge">v2.2 UI</span>
+      <h1>🍄 Trova Porcini — Analisi Avanzata</h1>
+      <span class="badge version-badge">v2.4.0</span>
+      <span class="badge">AI Enhanced</span>
     </header>
 
     <!-- Controls -->
@@ -96,47 +123,122 @@
       </div>
     </div>
 
-    <!-- KPIs -->
+    <!-- KPIs Principali -->
     <div class="grid g3">
       <div class="panel section">
-        <h3>Indice oggi</h3>
+        <h3>🎯 Indice Oggi</h3>
         <div class="metric"><div class="k">Forza flush</div><div id="k-index" class="v">—</div></div>
         <div class="hr"></div>
         <div class="metric"><div class="k">Finestra migliore</div><div id="k-window" class="v">—</div></div>
+        <div style="margin-top:8px;">
+          <span id="k-model-version" class="chip">v2.4.0</span>
+          <span id="k-has-validations" class="chip">validazioni: —</span>
+        </div>
       </div>
+      
       <div class="panel section">
-        <h3>Affidabilità</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <span id="k-reliab" class="chip">reliability: —</span>
-          <span id="k-conf" class="chip">model confidence: —</span>
-          <span id="k-vpd" class="chip">VPD: —</span>
+        <h3>🔬 Affidabilità Dettagliata</h3>
+        <div class="confidence-grid">
+          <div class="confidence-item">
+            <div class="confidence-label">Meteo</div>
+            <div id="conf-met" class="confidence-value">—</div>
+          </div>
+          <div class="confidence-item">
+            <div class="confidence-label">Eco</div>
+            <div id="conf-eco" class="confidence-value">—</div>
+          </div>
+          <div class="confidence-item">
+            <div class="confidence-label">Hydro</div>
+            <div id="conf-hydro" class="confidence-value">—</div>
+          </div>
+          <div class="confidence-item">
+            <div class="confidence-label">Atmo</div>
+            <div id="conf-atmo" class="confidence-value">—</div>
+          </div>
+          <div class="confidence-item">
+            <div class="confidence-label">Emp</div>
+            <div id="conf-emp" class="confidence-value">—</div>
+          </div>
         </div>
         <div class="hr"></div>
-        <div class="muted" id="k-diag">SMI: — • TWI: — • Energy: —</div>
+        <div class="metric">
+          <div class="k">Overall</div>
+          <div id="conf-overall" class="v" style="color:var(--accent)">—</div>
+        </div>
       </div>
+      
       <div class="panel section">
-        <h3>Dimensioni & Raccolto</h3>
+        <h3>🍄 Dimensioni & Raccolto</h3>
         <div class="metric"><div class="k">Taglia media</div><div id="k-size" class="v">—</div></div>
         <div class="metric"><div class="k">Range</div><div id="k-size-range" class="v">—</div></div>
-        <div class="metric"><div class="k">Raccolto atteso</div><div id="k-harvest" class="v">—</div></div>
-        <div class="muted" id="k-harvest-note"></div>
+        <div class="hr"></div>
+        <div class="metric"><div class="k">Raccolto atteso</div><div id="k-harvest" class="v" style="font-size:18px">—</div></div>
+        <div class="muted" id="k-harvest-note" style="font-size:11px;margin-top:4px"></div>
       </div>
     </div>
 
     <!-- Forecast chart -->
     <div class="panel section">
-      <h3>Previsione prossimi 10 giorni</h3>
+      <h3>📈 Previsione Prossimi 10 Giorni</h3>
+      <div style="margin-bottom:8px;color:var(--muted);font-size:12px;">
+        ✨ <strong>Miglioramenti v2.4:</strong> Soglie dinamiche • Smoothing avanzato • Confidence multi-dimensionale
+      </div>
       <canvas id="chart"></canvas>
     </div>
 
-    <!-- Events + Rains -->
+    <!-- Crowd-sourcing sezione -->
+    <div class="panel section crowdsource">
+      <h3>🤝 Contribuisci al Miglioramento del Modello</h3>
+      <div class="grid g2">
+        <div>
+          <h4 style="color:var(--accent);margin-bottom:8px;">✅ Hai trovato porcini qui?</h4>
+          <div class="input-group">
+            <select id="foundSpecies">
+              <option value="aereus">B. aereus (porcino nero)</option>
+              <option value="reticulatus">B. reticulatus (porcino estivo)</option>
+              <option value="edulis">B. edulis (porcino d'autunno)</option>
+              <option value="pinophilus">B. pinophilus (porcino dei pini)</option>
+            </select>
+            <input type="number" id="foundQuantity" placeholder="Quantità" min="1" max="50" value="3">
+          </div>
+          <div class="input-group">
+            <input type="text" id="foundNotes" placeholder="Note opzionali (dimensioni, qualità...)" maxlength="200">
+            <button id="btnReportFound" class="btn success">📍 Segnala Ritrovamento</button>
+          </div>
+        </div>
+        <div>
+          <h4 style="color:var(--muted);margin-bottom:8px;">❌ Hai cercato senza trovare?</h4>
+          <div class="input-group">
+            <select id="searchedHours">
+              <option value="1">1 ora</option>
+              <option value="2">2 ore</option>
+              <option value="3">3 ore</option>
+              <option value="4">4+ ore</option>
+            </select>
+            <input type="text" id="searchNotes" placeholder="Habitat, condizioni..." maxlength="200">
+          </div>
+          <div class="input-group">
+            <button id="btnReportSearch" class="btn secondary">🔍 Segnala Ricerca Vuota</button>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:8px 12px;background:#0a0f14;border-radius:8px;border:1px solid #1e2937;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">💡 Perché è importante segnalare anche le ricerche vuote?</div>
+        <div style="font-size:12px;">I dati negativi sono cruciali per addestrare il modello ML. Aiutano a identificare condizioni che <em>sembrano</em> favorevoli ma non producono funghi.</div>
+      </div>
+    </div>
+
+    <!-- Eventi + Rains -->
     <div class="grid g2">
       <div class="panel section events">
-        <h3>Eventi piovosi & lag</h3>
+        <h3>🌧️ Eventi Piovosi & Lag</h3>
         <div id="events">—</div>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted);">
+          🔄 <strong>Novità:</strong> Soglie dinamiche adattate a SMI, stagione e quota
+        </div>
       </div>
       <div class="panel section">
-        <h3>Piogge</h3>
+        <h3>💧 Piogge</h3>
         <div class="grid g2">
           <div>
             <div class="muted">Ultimi 15 giorni</div>
@@ -150,24 +252,70 @@
       </div>
     </div>
 
-    <!-- Long dynamic analysis -->
+    <!-- Statistiche validazione -->
     <div class="panel section">
-      <h3>Analisi modello (estesa)</h3>
+      <h3>📊 Statistiche Crowd-Sourcing</h3>
+      <div class="stats-grid" id="validationStatsGrid">
+        <div class="stat-item">
+          <div class="stat-value" id="stat-positive">—</div>
+          <div class="stat-label">Ritrovamenti</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-negative">—</div>
+          <div class="stat-label">Ricerche vuote</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-total">—</div>
+          <div class="stat-label">Totale dati</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-ml-ready">—</div>
+          <div class="stat-label">Ready per ML</div>
+        </div>
+      </div>
+      <div id="topSpecies" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
+    </div>
+
+    <!-- Analisi estesa -->
+    <div class="panel section">
+      <h3>🧠 Analisi Modello (Estesa)</h3>
       <div id="analysis" class="muted">—</div>
     </div>
 
-    <!-- Raw JSON -->
+    <!-- Diagnostica tecnica -->
     <details class="panel section">
-      <summary>JSON di diagnostica</summary>
-      <pre id="raw" class="mono" style="white-space:pre-wrap;word-break:break-word"></pre>
+      <summary>🔧 Diagnostica Tecnica & JSON</summary>
+      <div style="margin-top:12px;">
+        <h4>Parametri diagnostici</h4>
+        <div id="diagnostics" class="muted mono" style="background:#0a0f14;padding:10px;border-radius:6px;font-size:11px;white-space:pre-wrap;"></div>
+        <h4 style="margin-top:16px;">JSON completo</h4>
+        <pre id="raw" class="mono" style="white-space:pre-wrap;word-break:break-word;background:#0a0f14;padding:10px;border-radius:6px;font-size:10px;"></pre>
+      </div>
     </details>
 
-    <footer>© Trova Porcini — UI estesa. Suggerimenti benvenuti.</footer>
+    <footer>
+      © 2025 Trova Porcini v2.4 — Modello scientifico con IA • Crowd-sourcing • Auto-miglioramento
+    </footer>
   </div>
+
+  <!-- Notification container -->
+  <div id="notification" class="notification"></div>
 
   <script>
     const $ = sel => document.querySelector(sel);
     const fmt = n => (n===null||n===undefined||isNaN(n)) ? "—" : (Math.round(n*10)/10).toString().replace('.',',');
+
+    // Notification system
+    function showNotification(message, type = 'success') {
+      const notif = $('#notification');
+      notif.textContent = message;
+      notif.className = `notification ${type}`;
+      notif.classList.add('show');
+      setTimeout(() => notif.classList.remove('show'), 3000);
+    }
+
+    // Load validation stats on startup
+    loadValidationStats();
 
     $('#btnGeo').addEventListener('click', async () => {
       const q = $('#q').value.trim();
@@ -178,7 +326,10 @@
         const j = await r.json();
         $('#lat').value = (j.lat || j.latitude || '').toFixed(4);
         $('#lon').value = (j.lon || j.longitude || '').toFixed(4);
-      }catch(e){ alert('Geocoding non riuscito.'); }
+        showNotification('Località trovata!');
+      }catch(e){ 
+        showNotification('Geocoding non riuscito', 'error');
+      }
     });
 
     $('#btnRun').addEventListener('click', async () => {
@@ -188,7 +339,10 @@
       const habitat = ($('#habitat').value||'').trim();
       const autohabitat = habitat ? 0 : 1;
 
-      if (isNaN(lat) || isNaN(lon)) { alert('Inserisci latitudine e longitudine.'); return; }
+      if (isNaN(lat) || isNaN(lon)) { 
+        showNotification('Inserisci latitudine e longitudine', 'error');
+        return; 
+      }
 
       const url = new URL('/api/score', window.location.origin);
       url.searchParams.set('lat',lat);
@@ -198,15 +352,119 @@
       if(habitat) url.searchParams.set('habitat', habitat);
 
       try{
+        $('#btnRun').textContent = '⏳ Analizzando...';
+        $('#btnRun').disabled = true;
+        
         const r = await fetch(url.toString());
         if(!r.ok){ throw new Error('fetch'); }
         const j = await r.json();
         renderAll(j);
+        showNotification('Analisi completata!');
       }catch(e){
         console.error(e);
-        alert('Errore durante l’analisi.');
+        showNotification('Errore durante l\'analisi', 'error');
+      } finally {
+        $('#btnRun').textContent = '📈 Analizza';
+        $('#btnRun').disabled = false;
       }
     });
+
+    // Report sighting
+    $('#btnReportFound').addEventListener('click', async () => {
+      const lat = parseFloat($('#lat').value);
+      const lon = parseFloat($('#lon').value);
+      if (isNaN(lat) || isNaN(lon)) {
+        showNotification('Inserisci prima latitudine e longitudine', 'error');
+        return;
+      }
+      
+      const species = $('#foundSpecies').value;
+      const quantity = parseInt($('#foundQuantity').value) || 1;
+      const notes = $('#foundNotes').value;
+      
+      try {
+        const response = await fetch('/api/report-sighting', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat, lon, species, quantity, notes })
+        });
+        
+        if (response.ok) {
+          showNotification('🍄 Segnalazione registrata! Grazie per il contributo.');
+          $('#foundNotes').value = '';
+          loadValidationStats();
+        } else {
+          throw new Error('Errore server');
+        }
+      } catch (e) {
+        showNotification('Errore durante la segnalazione', 'error');
+      }
+    });
+
+    // Report no findings
+    $('#btnReportSearch').addEventListener('click', async () => {
+      const lat = parseFloat($('#lat').value);
+      const lon = parseFloat($('#lon').value);
+      if (isNaN(lat) || isNaN(lon)) {
+        showNotification('Inserisci prima latitudine e longitudine', 'error');
+        return;
+      }
+      
+      const searched_hours = parseInt($('#searchedHours').value);
+      const notes = $('#searchNotes').value;
+      
+      try {
+        const response = await fetch('/api/report-no-findings', {
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat, lon, searched_hours, notes })
+        });
+        
+        if (response.ok) {
+          showNotification('📊 Feedback registrato! I dati negativi sono preziosi.');
+          $('#searchNotes').value = '';
+          loadValidationStats();
+        } else {
+          throw new Error('Errore server');
+        }
+      } catch (e) {
+        showNotification('Errore durante la segnalazione', 'error');
+      }
+    });
+
+    // Load validation statistics
+    async function loadValidationStats() {
+      try {
+        const response = await fetch('/api/validation-stats');
+        const stats = await response.json();
+        
+        if (stats.error) {
+          $('#stat-positive').textContent = '?';
+          $('#stat-negative').textContent = '?';
+          $('#stat-total').textContent = '?';
+          $('#stat-ml-ready').textContent = '?';
+          return;
+        }
+        
+        $('#stat-positive').textContent = stats.positive_sightings || 0;
+        $('#stat-negative').textContent = stats.negative_reports || 0;
+        $('#stat-total').textContent = stats.total_validations || 0;
+        $('#stat-ml-ready').textContent = stats.ready_for_ml ? 'SÌ' : 'NO';
+        $('#stat-ml-ready').style.color = stats.ready_for_ml ? 'var(--ok)' : 'var(--warn)';
+        
+        if (stats.top_species && Object.keys(stats.top_species).length > 0) {
+          const speciesText = Object.entries(stats.top_species)
+            .map(([sp, count]) => `${sp} (${count})`)
+            .join(', ');
+          $('#topSpecies').innerHTML = `<strong>Specie più segnalate:</strong> ${speciesText}`;
+        } else {
+          $('#topSpecies').textContent = 'Nessuna segnalazione ancora';
+        }
+        
+      } catch (e) {
+        console.error('Error loading stats:', e);
+      }
+    }
 
     function setChip(el, label, value, mode='neutral'){
       el.textContent = `${label}: ${value}`;
@@ -217,27 +475,35 @@
     }
 
     function renderAll(j){
-      // KPIs
+      // Main KPIs
       $('#k-index').textContent = j.index ?? '—';
       if (j.best_window){
         $('#k-window').textContent = `giorni ${j.best_window.start+1}–${j.best_window.end+1} (media≈${j.best_window.mean})`;
-      } else { $('#k-window').textContent = '—'; }
+      } else { 
+        $('#k-window').textContent = '—'; 
+      }
 
-      const rel = Number(j.reliability ?? 0);
-      const conf = Number(j.model_confidence ?? 0);
-      const vpd = (j.vpd_today_hpa==null) ? null : Number(j.vpd_today_hpa);
+      // Version and validations indicators
+      $('#k-model-version').textContent = `v${j.model_version || '2.4.0'}`;
+      $('#k-has-validations').textContent = `validazioni: ${j.has_local_validations ? 'SÌ' : 'NO'}`;
+      $('#k-has-validations').className = j.has_local_validations ? 'chip ok' : 'chip warn';
 
-      setChip($('#k-reliab'), 'reliability', rel.toFixed(2),
-        rel>=0.75 ? 'ok' : rel>=0.55 ? 'warn' : 'bad');
-      setChip($('#k-conf'), 'model confidence', conf,
-        conf>=75 ? 'ok' : conf>=55 ? 'warn' : 'bad');
-      if(vpd==null) setChip($('#k-vpd'),'VPD','—','warn');
-      else setChip($('#k-vpd'),'VPD', `${vpd.toFixed(1)} hPa`,
-        vpd<=6? 'ok' : vpd<10? 'warn' : 'bad');
-
-      const diag = j.diagnostics || {};
-      $('#k-diag').textContent = `SMI: ${diag.smi_source || '—'} (thr ${fmt(diag.smi_threshold)}) • `
-        + `TWI ${fmt(diag.twi_proxy)} • Energy ${fmt(diag.energy_index)} • Habitat: ${String(j.habitat_used||'—')}`;
+      // Detailed confidence (NEW in v2.4)
+      if (j.confidence_detailed) {
+        const conf = j.confidence_detailed;
+        $('#conf-met').textContent = conf.meteorological?.toFixed(2) || '—';
+        $('#conf-eco').textContent = conf.ecological?.toFixed(2) || '—';
+        $('#conf-hydro').textContent = conf.hydrological?.toFixed(2) || '—';
+        $('#conf-atmo').textContent = conf.atmospheric?.toFixed(2) || '—';
+        $('#conf-emp').textContent = conf.empirical?.toFixed(2) || '—';
+        $('#conf-overall').textContent = conf.overall?.toFixed(2) || '—';
+        
+        // Color-code overall confidence
+        const overall = parseFloat(conf.overall || 0);
+        if (overall >= 0.7) $('#conf-overall').style.color = 'var(--ok)';
+        else if (overall >= 0.5) $('#conf-overall').style.color = 'var(--warn)';
+        else $('#conf-overall').style.color = 'var(--danger)';
+      }
 
       // Size / Harvest
       $('#k-size').textContent = `${fmt(j.size_cm)} cm (${j.size_class || '—'})`;
@@ -247,8 +513,9 @@
 
       // Events
       const evs = j.flush_events || [];
-      if(!evs.length){ $('#events').innerHTML = '<span class="muted">Nessun evento utile</span>'; }
-      else{
+      if(!evs.length){ 
+        $('#events').innerHTML = '<span class="muted">Nessun evento utile</span>'; 
+      } else {
         const ul = document.createElement('ul');
         evs.forEach(e=>{
           const li = document.createElement('li');
@@ -256,7 +523,8 @@
           li.textContent = `${e.event_when}: ${e.event_mm} mm → flush ~${e.lag_days} gg (${obs})`;
           ul.appendChild(li);
         });
-        $('#events').innerHTML = ''; $('#events').appendChild(ul);
+        $('#events').innerHTML = ''; 
+        $('#events').appendChild(ul);
       }
 
       // Rains tables
@@ -266,83 +534,6 @@
       // Chart
       drawChart($('#chart'), j.forecast || []);
 
-      // Analysis (extended HTML from backend)
-      $('#analysis').innerHTML = j.dynamic_explanation || '<span class="muted">—</span>';
-
-      // Raw JSON
-      $('#raw').textContent = JSON.stringify(j, null, 2);
-    }
-
-    function fillTable(tbody, obj){
-      tbody.innerHTML = '';
-      if(!obj){ return; }
-      const rows = Object.entries(obj);
-      rows.forEach(([d, v])=>{
-        const tr = document.createElement('tr');
-        const td1 = document.createElement('td'); td1.textContent = d;
-        const td2 = document.createElement('td'); td2.textContent = v;
-        tr.appendChild(td1); tr.appendChild(td2);
-        tbody.appendChild(tr);
-      });
-    }
-
-    function drawChart(canvas, arr){
-      const W = canvas.clientWidth || 800;
-      const H = canvas.clientHeight || 160;
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = W*dpr; canvas.height = H*dpr;
-      const ctx = canvas.getContext('2d');
-      ctx.scale(dpr, dpr);
-      ctx.clearRect(0,0,W,H);
-
-      // axes
-      ctx.strokeStyle = '#233245'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(30, H-24); ctx.lineTo(W-10, H-24); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(30, 10); ctx.lineTo(30, H-24); ctx.stroke();
-
-      const n = Math.max(1, arr.length);
-      const maxV = Math.max(100, ...arr);
-      const x0 = 34, x1 = W - 16;
-      const y0 = H - 26, y1 = 14;
-      const sx = (x1 - x0) / Math.max(1, n-1);
-      const sy = (y0 - y1) / maxV;
-
-      // grid
-      ctx.strokeStyle = 'rgba(255,255,255,.06)';
-      [20,40,60,80,100].forEach(v=>{
-        const y = y0 - v*sy;
-        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
-        ctx.fillStyle = '#6f859b'; ctx.font = '11px system-ui';
-        ctx.fillText(String(v), 4, y+4);
-      });
-
-      // line
-      ctx.beginPath();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#8bb7ff';
-      arr.forEach((v,i)=>{
-        const x = x0 + i*sx;
-        const y = y0 - v*sy;
-        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-      });
-      ctx.stroke();
-
-      // points
-      ctx.fillStyle = '#62d5b4';
-      arr.forEach((v,i)=>{
-        const x = x0 + i*sx;
-        const y = y0 - v*sy;
-        ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
-      });
-
-      // x labels
-      ctx.fillStyle = '#8aa0b6'; ctx.font = '11px system-ui';
-      for(let i=0;i<n;i++){
-        const x = x0 + i*sx;
-        ctx.fillText(String(i+1), x-3, H-8);
-      }
-    }
-  </script>
-</body>
-</html>
+      // Extended analysis
+      $('#analysis').innerHTML = j.dynamic_explanation || '<span class="muted">—
 
