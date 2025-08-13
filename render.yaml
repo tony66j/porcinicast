@@ -11,14 +11,44 @@ services:
         value: "1"
       - key: PYTHONDONTWRITEBYTECODE
         value: "1"
-      # Aggiungi qui le tue API keys se necessarie
-      # - key: OPENWEATHER_API_KEY
-      #   value: "your_key_here"
-      # - key: CDS_API_KEY
-      #   value: "your_cds_key"
+      # === CHIAVI API (dalle tue credenziali) ===
+      - key: OPENWEATHER_API_KEY
+        value: "2bdef99f19b45ae8df83062ea6ed5848"  # La tua chiave OpenWeather
+      - key: CDS_API_KEY
+        value: "b9bd9c49-99a6-40d9-81bb-f96f10aafe3b"  # La tua chiave CDS
+      - key: CDS_API_URL
+        value: "https://cds.climate.copernicus.eu/api"
+      - key: NOMINATIM_EMAIL
+        value: "thejampy4@gmail.com"  # La tua email per Nominatim
     healthCheckPath: /api/health
     
-    # Configurazioni di scaling per performance
+    # Storage per database
+    disk:
+      name: porcini-data
+      sizeGB: 1
+      mountPath: /app/dataservices:
+  - type: web
+    name: porcinicast-api-advanced
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeploy: true
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      # === CHIAVI API NECESSARIE ===
+      - key: OPENWEATHER_API_KEY
+        sync: false  # Dovrai inserire la tua chiave nel dashboard Render
+      - key: CDS_API_KEY
+        sync: false  # Dovrai inserire la tua chiave CDS se ce l'hai
+      - key: NOMINATIM_EMAIL
+        value: "info@trovaporcini.com"  # Email per Nominatim (può essere questa)
+    healthCheckPath: /api/health
+    
+    # Storage per database
     disk:
       name: porcini-data
       sizeGB: 1
