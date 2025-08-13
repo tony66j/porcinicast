@@ -1,35 +1,6 @@
-# Requirements ottimizzati per Render.com - Risolve errori setuptools
-# Versioni testate e stabili per deployment cloud
-
-# === CORE WEB FRAMEWORK ===
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-
-# === HTTP CLIENT ===
 httpx==0.25.2
-
-# === CORE SCIENTIFIC COMPUTING ===
-# Versioni più vecchie ma stabili per evitare errori wheel building
 numpy==1.24.4
-
-# === OPTIONAL SCIENTIFIC (commentate per build stabile) ===
-# scipy==1.10.1                    # Solo se necessario - può causare errori build
-# cdsapi==0.6.7                    # Solo se hai accesso CDS/ERA5
-# netCDF4==1.6.2                   # Solo se usi ERA5-Land
-
-# === UTILITIES ===
 python-multipart==0.0.6
 pydantic==2.5.2
-
-# === GEOSPATIAL (opzionale) ===
- geohash2==1.1                    # Per clustering spaziale avanzato
-
-# === MONITORING & LOGGING ===
- python-json-logger==2.0.7        # Per logging strutturato
-
-# === DATABASE ===
-# Nessuna dipendenza esterna - usa SQLite built-in
-
-# === NOTE PER SVILUPPO LOCALE ===
-# Per sviluppo locale, puoi decommettare scipy e altre librerie
-# Ma per Render, mantieni solo le dipendenze essenziali
