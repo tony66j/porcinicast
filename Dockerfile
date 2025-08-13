@@ -1,4 +1,57 @@
-# Dockerfile per Trova Porcini API v2.5.0 SUPER AVANZATO
+# Dockerfile OTTIMIZZATO per Render - Risolve tutti i conflitti
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /app
+
+# Installa dipendenze di sistema per numpy/scipy
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gfortran \
+    libopenblas-dev \
+    liblapack-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Aggiorna pip e tools
+RUN pip install --upgrade pip==23.3.1 setuptools==68.2.2 wheel==0.41.2
+
+# Installa numpy e scipy PRIMA con versioni specifiche
+RUN pip install --only-binary=all --no-deps numpy==1.24.4
+RUN pip install --only-binary=all --no-deps scipy==1.10.1
+
+# Installa le dipendenze principali una per volta per evitare conflitti
+RUN pip install fastapi==0.104.1
+RUN pip install uvicorn[standard]==0.24.0
+RUN pip install httpx==0.25.2
+RUN pip install python-multipart==0.0.5
+RUN pip install cdsapi==0.6.7
+RUN pip install netCDF4==1.6.2
+RUN pip install python-json-logger==2.0.4
+RUN pip install geohash2==1.1
+RUN pip install uvloop==0.17.0
+RUN pip install httptools==0.5.0
+
+# Copia il codice
+COPY main.py .
+
+# Crea directory necessarie
+RUN mkdir -p data logs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
+    CMD python -c "import requests; requests.get(f'http://localhost:{os.environ.get(\"PORT\", 8787)}/api/health', timeout=10)" || exit 1
+
+# Porta dinamica
+EXPOSE $PORT
+
+# Comando ottimizzato per produzione
+CMD uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1# Dockerfile per Trova Porcini API v2.5.0 SUPER AVANZATO
 # Risolve problemi Render mantenendo TUTTE le funzionalità avanzate
 
 FROM python:3.11-slim
