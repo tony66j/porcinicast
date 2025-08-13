@@ -22,10 +22,10 @@ python-multipart==0.0.6
 pydantic==2.5.2
 
 # === GEOSPATIAL (opzionale) ===
-# geohash2==1.1                    # Per clustering spaziale avanzato
+ geohash2==1.1                    # Per clustering spaziale avanzato
 
 # === MONITORING & LOGGING ===
-# python-json-logger==2.0.7        # Per logging strutturato
+ python-json-logger==2.0.7        # Per logging strutturato
 
 # === DATABASE ===
 # Nessuna dipendenza esterna - usa SQLite built-in
